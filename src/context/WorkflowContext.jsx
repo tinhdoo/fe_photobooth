@@ -1,0 +1,237 @@
+import { createContext, useContext, useState, useEffect } from 'react';
+import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
+const WorkflowContext = createContext();
+
+export const WorkflowProvider = ({ children }) => {
+    const [currentStep, setCurrentStep] = useState(1);
+    const [sessionData, setSessionData] = useState({
+        layout: null,
+        photos: [],
+        paymentMethod: null, // 'cash', 'qr', 'code'
+        paymentStatus: 'pending', // 'pending', 'completed'
+        selectedFilters: {},
+        finalImage: null,
+        printQuantity: 1,
+        printPrice: 60000,
+        capturedPhotos: [], // Stable inventory of all taken photos
+        activeSlot: null, // Track which slot is being edited
+        source: null, // 'camera' or 'upload' - Bổ sung nguồn ảnh
+    });
+
+
+    // Dynamic Configs
+    const [configs, setConfigs] = useState({
+        price: 60000,
+        print_price: 20000,
+        mobile_price: 30000,
+        mobile_print_price: 10000,
+        session_timeout: 600,
+        mobile_session_timeout: 300,
+        countdown: 5,
+        camera_mode: 'webcam',
+        hot_folder: 'C:/Photobooth_Input'
+    });
+
+    const fetchConfigs = async () => {
+        try {
+            const res = await fetch('/api/config');
+            if (res.ok) {
+                const data = await res.json();
+                setConfigs({
+                    price: parseInt(data.price) || 60000,
+                    print_price: parseInt(data.print_price) || 20000,
+                    mobile_price: parseInt(data.mobile_price) || 30000,
+                    mobile_print_price: parseInt(data.mobile_print_price) || 10000,
+                    session_timeout: parseInt(data.session_timeout) || 600,
+                    mobile_session_timeout: parseInt(data.mobile_session_timeout) || 300,
+                    countdown: parseInt(data.countdown) || 5,
+                    camera_mode: data.camera_mode || 'webcam',
+                    hot_folder: data.hot_folder || 'C:/Photobooth_Input'
+                });
+            }
+        } catch (error) {
+            console.error("Failed to load configs:", error);
+        }
+    };
+
+    useEffect(() => {
+        // Fetch ngay lần đầu
+        fetchConfigs();
+        // Polling mỗi 10 giây: admin chỉnh config → booth tự cập nhật mà không cần restart
+        const configInterval = setInterval(fetchConfigs, 10000);
+        return () => clearInterval(configInterval);
+    }, []);
+
+    // Initialize mode from localStorage (fallback)
+    const [isEventMode, setIsEventMode] = useState(false);
+
+    // Device Management
+    useEffect(() => {
+        // Only run device heartbeat for Photobooth and Admin, not public viewers/uploaders
+        const ignorePaths = ['/album/', '/m/upload/'];
+        if (ignorePaths.some(p => window.location.pathname.startsWith(p))) {
+            return;
+        }
+
+        const syncDevice = async () => {
+            const deviceId = getDeviceId();
+
+            let deviceName = getDeviceName();
+            if (!deviceName) {
+                deviceName = prompt("Vui lòng đặt tên cho máy này (VD: Máy Chụp 1, Máy Chỉnh Sửa, Máy In):", "Máy Chụp 1");
+                if (deviceName) {
+                    setDeviceName(deviceName);
+                }
+            }
+
+            try {
+                // Initial registration / sync
+                const res = await fetch('/api/devices/heartbeat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, name: deviceName })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    setIsEventMode(data.mode === 'event');
+                }
+            } catch (error) {
+                console.error("Device sync failed:", error);
+                // Fallback to local setting if offline
+                setIsEventMode(localStorage.getItem('BOOTH_MODE') === 'event');
+            }
+        };
+
+        syncDevice();
+        // Optional: Poll every 30 seconds to keep updated?
+        const interval = setInterval(syncDevice, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const toggleEventMode = () => {
+        // This is now just a local optimistic update, 
+        // ideally real toggle happens via Admin API
+        const newMode = !isEventMode;
+        setIsEventMode(newMode);
+        localStorage.setItem('BOOTH_MODE', newMode ? 'event' : 'payment');
+    };
+
+    const nextStep = () => {
+        setCurrentStep((prev) => {
+            // Từ Welcome (1) -> Source Selection (1.5)
+            if (prev === 1) return 1.5;
+
+            // Từ Source Selection (1.5) -> Layout Selection (2)
+            if (prev === 1.5) return 2;
+
+            // Payment Mode: Insert Quantity step between Layout (2) and Payment (3)
+            if (!isEventMode && prev === 2) return 2.5; // Go to Quantity
+            if (!isEventMode && prev === 2.5) return 3; // Go to Payment
+
+            // Event Mode: Skip both Quantity and Payment
+            if (isEventMode && prev === 2) return 4; // Skip directly to Capture
+
+            // Upload flow: Skip Review (step 5), go directly to Edit (step 6)
+            if (prev === 4 && sessionData.source === 'upload') return 6;
+
+            return Math.min(prev + 1, 7);
+        });
+    };
+
+    const prevStep = () => {
+        setCurrentStep((prev) => {
+            // Payment Mode: Handle Quantity step
+            if (!isEventMode && prev === 3) return 2.5; // From Payment back to Quantity
+            if (!isEventMode && prev === 2.5) return 2; // From Quantity back to Layout
+
+            // Event Mode: Skip back over quantity and payment
+            if (isEventMode && prev === 4) return 2; // From Capture back to Layout
+
+            // Từ Layout (2) quay lại Source Selection (1.5)
+            if (prev === 2) return 1.5;
+            // Từ Source Selection (1.5) quay lại Welcome (1)
+            if (prev === 1.5) return 1;
+
+            return Math.max(prev - 1, 1);
+        });
+    };
+
+    const goToStep = (step) => setCurrentStep(step);
+
+    // Session Timer
+    const SESSION_DURATION = sessionData.source === 'upload'
+        ? configs.mobile_session_timeout
+        : configs.session_timeout;
+    const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
+    const [isSessionActive, setIsSessionActive] = useState(false);
+
+    // Start timer when payment is completed — read configs fresh at this moment
+    useEffect(() => {
+        if (sessionData.paymentStatus === 'completed' && !isSessionActive) {
+            const freshDuration = sessionData.source === 'upload'
+                ? configs.mobile_session_timeout
+                : configs.session_timeout;
+            setIsSessionActive(true);
+            setTimeLeft(freshDuration);
+        }
+    }, [sessionData.paymentStatus]);
+
+    // Timer Countdown
+    useEffect(() => {
+        let interval;
+        if (isSessionActive && timeLeft > 0) {
+            // Check if we are at step 1 or completed (scary if we reset automatically!)
+            // Actually, we only want to count down during the active flow (Steps 4-6 mainly)
+            // But user said "after payment", so it runs.
+            interval = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(interval);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else if (timeLeft === 0 && isSessionActive) {
+            // Timeout reached!
+            // We can set a flag here or handle specific logic.
+            // The components will verify timeLeft === 0 and act.
+            setIsSessionActive(false); // Stop timer
+        }
+        return () => clearInterval(interval);
+    }, [isSessionActive, timeLeft]);
+
+    const resetSession = () => {
+        // Tự động tải lại trang để làm mới toàn bộ cài đặt (giá tiền, khung ảnh) và dọn dẹp bộ nhớ
+        window.location.reload();
+    };
+
+    const updateSessionData = (key, value) => {
+        setSessionData((prev) => ({ ...prev, [key]: value }));
+    };
+
+    return (
+        <WorkflowContext.Provider
+            value={{
+                currentStep,
+                sessionData,
+                nextStep,
+                prevStep,
+                goToStep,
+                resetSession,
+                updateSessionData,
+                isEventMode,
+                toggleEventMode,
+                timeLeft, // Expose timer
+                isSessionActive,
+                SESSION_DURATION,
+                configs // Expose generic configs
+            }}
+        >
+            {children}
+        </WorkflowContext.Provider>
+    );
+};
+
+export const useWorkflow = () => useContext(WorkflowContext);

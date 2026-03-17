@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Check</title>
+</head>
+<body>
+    <h1>CORS Check</h1>
+    <button onclick="check()">Check CORS</button>
+    <div id="result"></div>
+    <script>
+        async function check() {
+            try {
+                const res = await fetch('http://localhost:5000/api/codes/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: 10000, quantity: 1, duration: 60 })
+                });
+                const data = await res.json();
+                document.getElementById('result').innerText = 'Success: ' + JSON.stringify(data);
+            } catch (e) {
+                document.getElementById('result').innerText = 'Error: ' + e;
+            }
+        }
+    </script>
+</body>
+</html>

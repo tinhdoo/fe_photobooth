@@ -1,0 +1,959 @@
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { useWorkflow } from '../../context/WorkflowContext';
+import axios from 'axios';
+import { drawImageCover } from '../../utils/canvasUtils';
+import { Monitor, Edit2, ArrowLeft } from 'lucide-react';
+import QRCodeStyling from 'qr-code-styling';
+import logoTomato from '../../assets/images/logo_tomato.png';
+import { LAYOUTS } from '../../data/layouts';
+
+// Cấu hình URL API (Nên đưa vào biến môi trường)
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+const FILTERS = [
+    { id: 'normal', name: 'Gốc', filter: null },
+    {
+        id: 'bw',
+        name: 'Đen Trắng',
+        filter: (ctx, w, h) => {
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                data[i] = data[i + 1] = data[i + 2] = avg;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+    },
+    {
+        id: 'vintage',
+        name: 'Cổ Điển',
+        filter: (ctx, w, h) => {
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                data[i] = Math.min(255, (r * 0.393 + g * 0.769 + b * 0.189) * 1.25);
+                data[i + 1] = Math.min(255, (r * 0.349 + g * 0.686 + b * 0.168) * 1.25);
+                data[i + 2] = Math.min(255, (r * 0.272 + g * 0.534 + b * 0.131) * 1.25);
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+    },
+    { id: 'korean', name: 'Da Hàn Quốc', type: 'backend', description: 'Trắng hồng, da căng bóng' },
+    { id: 'baby_soft', name: 'Da Em Bé', type: 'backend', description: 'Mịn nhẹ, hồng hào' },
+    { id: 'natural', name: 'Da Tự Nhiên', type: 'backend', description: 'Mịn da tự nhiên' },
+    { id: 'men', name: 'Da Nam', type: 'backend', description: 'Mịn nhẹ, giữ chi tiết' }
+];
+
+const DraggablePhotoSlot = ({ photo, box, index, position, onUpdatePosition, frameConfig }) => {
+    const handlePan = (event, info) => {
+        // Natural dragging
+        const SENSITIVITY = 0.002;
+        const deltaX = info.delta.x;
+        const deltaY = info.delta.y;
+
+        const rot = box.innerRotation || 0;
+        const rad = (rot * Math.PI) / 180;
+
+        // Inverse rotate deltas to match image's local coordinate system
+        const adjustedDx = Math.cos(rad) * deltaX + Math.sin(rad) * deltaY;
+        const adjustedDy = -Math.sin(rad) * deltaX + Math.cos(rad) * deltaY;
+
+        const newX = Math.max(0, Math.min(1, position.x - (adjustedDx * SENSITIVITY)));
+        const newY = Math.max(0, Math.min(1, position.y - (adjustedDy * SENSITIVITY)));
+
+        onUpdatePosition(index, { x: newX, y: newY });
+    };
+
+    return (
+        <div
+            className="absolute overflow-hidden bg-gray-200"
+            style={{
+                left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`,
+                transform: `rotate(${box.rotation}deg)`, borderRadius: `${frameConfig?.borderRadius || 0}px`,
+                containerType: 'size'
+            }}
+        >
+            {photo && (
+                <>
+                    <div style={{
+                        position: 'absolute', top: '50%', left: '50%',
+                        width: (box.innerRotation === 90 || box.innerRotation === -90 || box.innerRotation === 270 || box.innerRotation === -270) ? '100cqh' : '100%',
+                        height: (box.innerRotation === 90 || box.innerRotation === -90 || box.innerRotation === 270 || box.innerRotation === -270) ? '100cqw' : '100%',
+                        transform: `translate(-50%, -50%) rotate(${box.innerRotation || 0}deg)`,
+                        pointerEvents: 'none'
+                    }}>
+                        <img
+                            src={photo}
+                            className="w-full h-full object-cover select-none"
+                            alt="print"
+                            style={{
+                                objectPosition: `${position.x * 100}% ${position.y * 100}%`
+                            }}
+                        />
+                    </div>
+                    {/* Invisible Overlay for Dragging */}
+                    <motion.div
+                        className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing hover:bg-black/5 transition-colors"
+                        onPan={handlePan}
+                        title="Kéo để căn chỉnh ảnh"
+                    />
+                </>
+            )}
+        </div>
+    );
+};
+
+const Edit = () => {
+    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft } = useWorkflow();
+    const captureRef = useRef(null);
+    // --- STATE ---
+    // Tối ưu: Sử dụng useMemo để tránh tạo tham chiếu mới mỗi lần render gây lặp vô tận
+    const photos = useMemo(() => {
+        const rawPhotos = (sessionData.photos?.length > 0 ? sessionData.photos : sessionData.selectedPhotos) || [];
+        return rawPhotos.map(p => (typeof p === 'object' && p?.url) ? p.url : p).filter(Boolean);
+    }, [sessionData.photos, sessionData.selectedPhotos]);
+
+    // Positions state for panning (Array of {x, y})
+    // Initialize with 0.5 (center) for all logical slots
+    const [photoPositions, setPhotoPositions] = useState(() =>
+        Array(10).fill({ x: 0.5, y: 0.5 })
+    );
+
+    const startPositionsRef = useRef(null); // Track pan start
+
+    const updatePhotoPosition = (index, pos) => {
+        setPhotoPositions(prev => {
+            const next = [...prev];
+            next[index] = pos;
+            return next;
+        });
+    };
+
+    const sessionLayout = sessionData.layout || { id: 'strip_4' };
+    const layout = LAYOUTS.find(l => l.id === sessionLayout.id) || sessionLayout;
+
+    const [selectedFilter, setSelectedFilter] = useState(FILTERS[0]);
+    const [filteredPhotos, setFilteredPhotos] = useState(photos); // Init with original photos
+    const [frames, setFrames] = useState([]);
+    const [selectedFrame, setSelectedFrame] = useState({ id: 'none', name: 'None', color: '#ffffff', image: null });
+    const selectedFrameRef = useRef(selectedFrame);
+    const [frameConfig, setFrameConfig] = useState({ boxes: [] });
+    const [isUploading, setIsUploading] = useState(false);
+    const [isFiltering, setIsFiltering] = useState(false);
+
+    // Preview QR Code State
+    const [previewQrUrl, setPreviewQrUrl] = useState(null);
+
+    // DEBUG: Log on mount to verify photos data
+    useEffect(() => {
+        console.log('===== EDIT COMPONENT MOUNT DEBUG =====');
+        console.log('1. sessionData.photos:', sessionData.photos);
+        console.log('2. sessionData.selectedPhotos:', sessionData.selectedPhotos);
+        console.log('3. photos constant:', photos);
+        console.log('4. photos length:', photos.length);
+        console.log('5. filteredPhotos state:', filteredPhotos);
+        console.log('6. layout:', layout);
+        console.log('=====================================');
+    }, []);
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(0);
+    const ITEMS_PER_PAGE = 10;
+    const totalPages = Math.ceil(frames.length / ITEMS_PER_PAGE);
+    const displayedFrames = frames.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
+
+    const nextPage = () => setCurrentPage((prev) => (prev + 1) % totalPages);
+    const prevPage = () => setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages);
+
+    // Overlays
+    const [qrSettings, setQrSettings] = useState({ show: false, x: 50, y: 50, size: 15 });
+    const [dateSettings, setDateSettings] = useState({ show: false, x: 90, y: 90, fontSize: 14, color: '#000000' });
+
+    // --- EFFECTS ---
+
+    // 1. Fetch Frames
+    useEffect(() => {
+        const fetchFrames = async () => {
+            try {
+                const layoutId = layout.id || 'strip_4';
+                const res = await axios.get(`${API_URL}/api/frames`, { params: { layout: layoutId } });
+                const allFrames = res.data || [];
+                setFrames(allFrames);
+
+                if (allFrames.length > 0) {
+                    handleSelectFrame(allFrames[0]);
+                }
+            } catch (error) {
+                console.error("Error fetching frames:", error);
+                setFrames([]);
+            }
+        };
+        fetchFrames();
+    }, [layout.id]);
+
+    useEffect(() => {
+        selectedFrameRef.current = selectedFrame;
+    }, [selectedFrame]);
+
+    // 2. Generate Preview QR Code (Local generation instead of external API)
+    useEffect(() => {
+        if (qrSettings.show) {
+            const qrCode = new QRCodeStyling({
+                width: 200,
+                height: 200,
+                data: 'PREVIEW-DATA',
+                image: logoTomato,
+                margin: 10,
+                qrOptions: { errorCorrectionLevel: 'L' },
+                dotsOptions: { color: "#000000", type: "rounded" },
+                imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.2 }
+            });
+            qrCode.getRawData("png").then((buffer) => {
+                const url = URL.createObjectURL(buffer);
+                setPreviewQrUrl(url);
+            }).catch(err => console.error(err));
+        }
+    }, [qrSettings.show]);
+
+    // 3. Filter Logic
+    useEffect(() => {
+        let isMounted = true;
+        const applyFilterToPhotos = async () => {
+            if (selectedFilter.id === 'normal') {
+                if (isMounted) setFilteredPhotos(photos);
+                return;
+            }
+
+            // Client-side Filters
+            if (selectedFilter.filter) {
+                const filtered = await Promise.all(photos.map(async (photoSrc) => {
+                    if (!photoSrc) return null;
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous'; // Important for CORS
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+                            selectedFilter.filter(ctx, canvas.width, canvas.height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.95));
+                        };
+                        img.onerror = () => resolve(photoSrc);
+                        img.src = photoSrc;
+                    });
+                }));
+                if (isMounted) setFilteredPhotos(filtered);
+                return;
+            }
+
+            // Backend Filters
+            if (selectedFilter.type === 'backend') {
+                setIsFiltering(true);
+                try {
+                    const filtered = await Promise.all(photos.map(async (photoSrc, index) => {
+                        if (!photoSrc) return null;
+                        try {
+                            const response = await fetch(photoSrc);
+                            const blob = await response.blob();
+                            const formData = new FormData();
+                            formData.append('photo', blob, `photo_${index}.jpg`);
+                            formData.append('filter_type', selectedFilter.id);
+
+                            const res = await axios.post(`${API_URL}/api/enhance`, formData, {
+                                headers: { 'Content-Type': 'multipart/form-data' }
+                            });
+                            return `${res.data.url}?t=${Date.now()}`;
+                        } catch (e) {
+                            console.error("Backend filter error", e);
+                            return photoSrc;
+                        }
+                    }));
+                    if (isMounted) setFilteredPhotos(filtered);
+                } catch (err) {
+                    console.error("Backend filter failed", err);
+                } finally {
+                    if (isMounted) setIsFiltering(false);
+                }
+            }
+        };
+
+        applyFilterToPhotos();
+        return () => { isMounted = false; };
+    }, [selectedFilter, photos]);
+
+    // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
+    const isPrintingRef = useRef(false);
+    useEffect(() => {
+        if (isSessionActive && timeLeft === 0 && !isPrintingRef.current) {
+            console.log("Timeout: Auto-printing...");
+            isPrintingRef.current = true;
+            const autoFinish = async () => {
+                const currentFrame = selectedFrameRef.current;
+                if ((!currentFrame || currentFrame.id === 'none') && frames.length > 0) {
+                    await handleSelectFrame(frames[0]);
+                    setTimeout(handlePrint, 500); // Wait for state update
+                } else {
+                    handlePrint();
+                }
+            };
+            autoFinish();
+        }
+    }, [timeLeft, isSessionActive, frames]);
+
+
+    // --- HANDLERS ---
+
+    // FIX RACE CONDITION: Sử dụng biến kiểm tra ID để đảm bảo config khớp với frame đang chọn
+    const handleSelectFrame = async (frame) => {
+        setSelectedFrame(frame);
+        selectedFrameRef.current = frame;
+
+        // Reset config trước khi fetch mới để tránh layout cũ hiện đè lên
+        setFrameConfig({ boxes: [] });
+        // NOTE: We do NOT reset photoPositions here, user might want to keep centering
+        // But if aspect ratio changes drastically, center is safer. 
+        // Let's keep positions. 0.5 is always safe.
+
+        if (frame.url && frame.layout && frame.name) {
+            try {
+                const res = await axios.get(`${API_URL}/api/frames/${frame.layout}/${frame.name}/config`);
+
+                // Chỉ update nếu frame đang chọn vẫn là frame này (tránh race condition)
+                if (selectedFrameRef.current.id === frame.id) {
+                    if (res.data) {
+                        setFrameConfig(res.data);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching config:", error);
+            }
+        }
+    };
+
+    const handleDrag = (e, type) => {
+        // e.preventDefault(); // Có thể gây lỗi trên một số thiết bị touch, cân nhắc bỏ nếu không cần thiết
+        const container = captureRef.current;
+        if (!container) return;
+
+        const rect = container.getBoundingClientRect();
+
+        // Support both mouse and touch
+        const getClientPos = (evt) => {
+            if (evt.touches && evt.touches.length > 0) return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+            return { x: evt.clientX, y: evt.clientY };
+        };
+
+        const moveHandler = (moveEvent) => {
+            const pos = getClientPos(moveEvent);
+            let newX = ((pos.x - rect.left) / rect.width) * 100;
+            let newY = ((pos.y - rect.top) / rect.height) * 100;
+
+            // Clamp 0-100
+            newX = Math.max(0, Math.min(100, newX));
+            newY = Math.max(0, Math.min(100, newY));
+
+            if (type === 'qr') setQrSettings(p => ({ ...p, x: newX, y: newY }));
+            else setDateSettings(p => ({ ...p, x: newX, y: newY }));
+        };
+
+        const upHandler = () => {
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+            document.removeEventListener('touchmove', moveHandler);
+            document.removeEventListener('touchend', upHandler);
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+        document.addEventListener('touchmove', moveHandler, { passive: false });
+        document.addEventListener('touchend', upHandler);
+    };
+
+    const uploadFile = async (blob) => {
+        const formData = new FormData();
+        formData.append('file', blob, `capture_${Date.now()}.png`);
+        const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return { url: res.data.url, public_id: res.data.public_id };
+    };
+
+    const handlePrint = async () => {
+        if (isUploading) return;
+        setIsUploading(true);
+
+        try {
+            // 1. Generate Session ID (UUID) frontend-side for QR Code
+            const sessionId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : `session-${Math.random().toString(36).substring(2, 11)}`;
+            const downloadUrl = `${window.location.origin}/album/${sessionId}`;
+
+            // 2. Setup Canvas
+            const canvas = document.createElement('canvas');
+            const TARGET_HEIGHT = 1800;
+            const isStrip = layout.type === 'strip';
+            const isHorizontal = layout.type && layout.type.includes('horizontal');
+            const ratio = isStrip ? 1 / 3 : (isHorizontal ? 3 / 2 : 2 / 3);
+            canvas.height = TARGET_HEIGHT;
+            canvas.width = TARGET_HEIGHT * ratio;
+
+            const ctx = canvas.getContext('2d');
+
+            // 3. Background
+            if (selectedFrame.color && !selectedFrame.url && !selectedFrame.image) {
+                ctx.fillStyle = selectedFrame.color;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Helper to load image securely
+            const loadImage = (src) => new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous'; // CRITICAL for toBlob
+                img.onload = () => resolve(img);
+                img.onerror = (e) => { console.warn("Load failed", src); resolve(null); };
+                img.src = src;
+            });
+
+            const photosToDraw = filteredPhotos.length > 0 ? filteredPhotos : photos;
+
+            // 4. Draw Photos (Custom vs Grid)
+            if (frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0) {
+                let implicitPhotoIndex = 0;
+                for (const box of frameConfig.boxes) {
+                    if (box.type === 'qr') continue; // Handled by manual overlay
+
+                    const targetIdx = box.photoIndex !== undefined ? box.photoIndex : (implicitPhotoIndex % photosToDraw.length);
+                    if (box.photoIndex === undefined) implicitPhotoIndex++;
+
+                    const photoSrc = photosToDraw[targetIdx];
+                    const position = photoPositions[targetIdx] || { x: 0.5, y: 0.5 }; // Get position per photo
+                    if (!photoSrc) continue;
+
+                    const img = await loadImage(photoSrc);
+                    if (img) {
+                        const x = (box.x / 100) * canvas.width;
+                        const y = (box.y / 100) * canvas.height;
+                        const w = (box.width / 100) * canvas.width;
+                        const h = (box.height / 100) * canvas.height;
+
+                        ctx.save();
+                        if (box.rotation) {
+                            // Rotate around center of box
+                            ctx.translate(x + w / 2, y + h / 2);
+                            ctx.rotate((box.rotation * Math.PI) / 180);
+                            ctx.translate(-(x + w / 2), -(y + h / 2));
+                        }
+
+                        if (frameConfig.borderRadius > 0) {
+                            ctx.beginPath();
+                            ctx.rect(x, y, w, h); // Clip in rotated space
+                            ctx.clip();
+                        }
+
+                        if (box.innerRotation) {
+                            ctx.save();
+                            ctx.translate(x + w / 2, y + h / 2);
+                            ctx.rotate((box.innerRotation * Math.PI) / 180);
+
+                            let drawW = w;
+                            let drawH = h;
+                            const isRt = box.innerRotation === 90 || box.innerRotation === -90 || box.innerRotation === 270 || box.innerRotation === -270;
+                            if (isRt) {
+                                drawW = h;
+                                drawH = w;
+                            }
+
+                            drawImageCover(ctx, img, -drawW / 2, -drawH / 2, drawW, drawH, position.x, position.y);
+                            ctx.restore();
+                        } else {
+                            // PASS OFFSET ANCHORS HERE
+                            drawImageCover(ctx, img, x, y, w, h, position.x, position.y);
+                        }
+
+                        ctx.restore();
+                    }
+                }
+            } else {
+                // Default Grid
+                const cols = layout.cols || 1;
+                const rows = layout.rows || 1;
+                const padding = 48;
+                const gap = 36;
+                const totalGapW = (cols - 1) * gap;
+                const cellW = (canvas.width - (padding * 2) - totalGapW) / cols;
+                const totalGapH = (rows - 1) * gap;
+                const cellH = (canvas.height - (padding * 2) - totalGapH) / rows;
+
+                for (let i = 0; i < (cols * rows); i++) {
+                    const mappedIndex = i % (photosToDraw.length || 1);
+                    if (!photosToDraw[mappedIndex]) continue;
+                    const img = await loadImage(photosToDraw[mappedIndex]);
+                    const position = photoPositions[mappedIndex] || { x: 0.5, y: 0.5 };
+
+                    if (img) {
+                        const col = i % cols;
+                        const row = Math.floor(i / cols);
+                        const x = padding + col * (cellW + gap);
+                        const y = padding + row * (cellH + gap);
+                        drawImageCover(ctx, img, x, y, cellW, cellH, position.x, position.y);
+                    }
+                }
+            }
+
+            // 5. Draw Frame Overlay
+            if (selectedFrame.url || selectedFrame.image) {
+                const frameImg = await loadImage(selectedFrame.url || selectedFrame.image);
+                if (frameImg) ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+            }
+
+            // 6. Draw QR Code (Manual)
+            if (qrSettings.show) {
+                const qrW = (qrSettings.size / 100) * canvas.width;
+                const qrX = (qrSettings.x / 100) * canvas.width - (qrW / 2);
+                const qrY = (qrSettings.y / 100) * canvas.height - (qrW / 2); // Square center
+
+                try {
+                    const qrCode = new QRCodeStyling({
+                        width: 500,
+                        height: 500,
+                        data: downloadUrl,
+                        image: logoTomato,
+                        margin: 25,
+                        qrOptions: { errorCorrectionLevel: 'L' },
+                        dotsOptions: { color: "#000000", type: "rounded" },
+                        backgroundOptions: { color: "#ffffff" },
+                        imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.2 }
+                    });
+                    const buffer = await qrCode.getRawData("png");
+                    const qrDataUrl = URL.createObjectURL(buffer);
+                    const qrImg = await loadImage(qrDataUrl);
+                    if (qrImg) {
+                        ctx.drawImage(qrImg, qrX, qrY, qrW, qrW);
+                    }
+                } catch (e) { console.warn("QR Gen failed", e); }
+            }
+
+            // 7. Draw Date
+            if (dateSettings.show) {
+                const today = new Date();
+                const dateStr = `${String(today.getDate()).padStart(2, '0')} . ${String(today.getMonth() + 1).padStart(2, '0')} . ${today.getFullYear()}`;
+                const fontSize = (dateSettings.fontSize / 1000) * canvas.height;
+                const x = (dateSettings.x / 100) * canvas.width;
+                const y = (dateSettings.y / 100) * canvas.height;
+
+                ctx.save();
+                ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+                ctx.fillStyle = dateSettings.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(dateStr, x, y);
+                ctx.restore();
+            }
+
+            // 8. Upload & Create Session
+            canvas.toBlob(async (blob) => {
+                if (!blob) { setIsUploading(false); return; }
+                try {
+                    const compositeData = await uploadFile(blob);
+                    const compositeUrl = compositeData.url;
+                    const compositePublicId = compositeData.public_id;
+
+                    // Upload originals and videos
+                    // Upload originals and videos
+                    const rawSource = sessionData.photos || [];
+                    const uploadedPhotos = await Promise.all(photos.map(async (photoUrl, index) => {
+                        let finalPhotoUrl = photoUrl;
+                        let finalVideoUrl = null;
+                        const originalData = rawSource[index];
+
+                        try {
+                            // 1. Upload Photo if it's a blob or temporary local URL
+                            if (photoUrl) {
+                                // If it's a blob OR it's a local LAN URL (not Cloudinary), upload it to Cloudinary
+                                const isBlob = photoUrl.startsWith('blob:');
+                                const isLocalHttp = photoUrl.startsWith('http') && !photoUrl.includes('res.cloudinary.com');
+
+                                if (isBlob || isLocalHttp) {
+                                    console.log(`☁️ Uploading photo to cloud: ${photoUrl}`);
+                                    const f = await fetch(photoUrl);
+                                    const b = await f.blob();
+                                    const uploadData = await uploadFile(b);
+                                    finalPhotoUrl = uploadData.url;
+                                }
+                            }
+
+                            // 2. Upload Video if available
+                            if (originalData && typeof originalData === 'object' && originalData.videoUrl && originalData.videoUrl.startsWith('blob:')) {
+                                console.log(`🎥 Uploading video for slot ${index}:`, originalData.videoUrl);
+                                const f = await fetch(originalData.videoUrl);
+                                const b = await f.blob();
+                                const formData = new FormData();
+                                formData.append('file', b, `motion_${Date.now()}.webm`);
+                                const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                });
+                                finalVideoUrl = res.data.url;
+                                console.log(`✅ Video uploaded:`, finalVideoUrl);
+                            } else {
+                                console.log(`ℹ️ No video pending for slot ${index}`);
+                            }
+
+                            return {
+                                url: finalPhotoUrl,
+                                video_url: finalVideoUrl,
+                                type: 'raw'
+                            };
+                        } catch (e) {
+                            console.error("Upload failed for item " + index, e);
+                            // Return photo at least so session is valid
+                            return {
+                                url: finalPhotoUrl,
+                                video_url: null,
+                                type: 'raw'
+                            };
+                        }
+                    }));
+
+                    const sessionRes = await axios.post(`${API_URL}/api/sessions`, {
+                        layout_id: layout.id || 'strip_4',
+                        composite_url: compositeUrl,
+                        composite_public_id: compositePublicId, // Send Public ID
+                        photos: uploadedPhotos.filter(Boolean),
+                        payment_method: sessionData.paymentMethod || 'cash',
+                        amount: sessionData.printPrice || 60000,
+                        session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
+                        meta_data: {
+                            frame_url: selectedFrame.url || selectedFrame.image,
+                            frame_config: frameConfig,
+                            photo_positions: photoPositions,
+                        }
+                    });
+
+                    updateSessionData('finalImage', compositeUrl);
+                    updateSessionData('sessionId', sessionRes.data.uuid || sessionId);
+
+                    nextStep();
+                } catch (err) {
+                    console.error("Upload process failed:", err);
+                    alert("Có lỗi khi lưu ảnh, vui lòng thử lại.");
+                } finally {
+                    setIsUploading(false);
+                }
+            }, 'image/png');
+
+        } catch (error) {
+            console.error("Print logic failed:", error);
+            setIsUploading(false);
+        }
+    };
+
+    // --- RENDER HELPERS ---
+
+    const renderPreviewBoxes = () => {
+        if (!frameConfig || !frameConfig.boxes || frameConfig.boxes.length === 0) return null;
+
+        let implicitPhotoIndex = 0;
+        return frameConfig.boxes.map((box, i) => {
+            if (box.type === 'qr') {
+                return (
+                    <div key={`box-${i}`}
+                        className="absolute bg-white/50 border border-dashed border-gray-600 flex items-center justify-center pointer-events-none"
+                        style={{
+                            left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`,
+                            transform: `rotate(${box.rotation}deg)`, borderRadius: `${frameConfig.borderRadius}px`, zIndex: 10
+                        }}>
+                        <span className="text-[10px] font-bold">QR PLACEHOLDER</span>
+                    </div>
+                );
+            }
+
+            const targetIdx = box.photoIndex !== undefined ? box.photoIndex : (implicitPhotoIndex % (filteredPhotos.length || photos.length || 1));
+            if (box.photoIndex === undefined) implicitPhotoIndex++;
+            const photo = filteredPhotos[targetIdx] || photos[targetIdx];
+
+            return (
+                <DraggablePhotoSlot
+                    key={`box-${i}`}
+                    photo={photo}
+                    box={box}
+                    index={targetIdx}
+                    position={photoPositions[targetIdx] || { x: 0.5, y: 0.5 }}
+                    onUpdatePosition={updatePhotoPosition}
+                    frameConfig={frameConfig}
+                />
+            );
+        });
+    };
+
+    return (
+        <div className="flex flex-col h-full w-full p-6 bg-[#F9FAF7] relative">
+            {/* Back Button */}
+            <button
+                onClick={prevStep}
+                className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-[#52796f] rounded-full transition-all font-serif font-bold shadow-sm hover:shadow-md border border-[#A8B5A0]/20 z-20"
+            >
+                <ArrowLeft size={24} />
+                <span>Quay Lại</span>
+            </button>
+
+            <motion.h2
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-5xl font-serif text-[#52796f] text-center mb-12 tracking-wider uppercase"
+            >
+                Chọn Màu & Khung Ảnh
+            </motion.h2>
+
+            <div className="flex-1 flex gap-8 overflow-hidden px-4">
+                {/* LEFT: Preview */}
+                <div className="w-5/12 flex items-center justify-center p-8 bg-[#A8B5A0]/20 rounded-3xl ml-4">
+                    <div ref={captureRef}
+                        className="shadow-2xl relative transition-all duration-300"
+                        style={{
+                            // FIX SCALE:
+                            // Vertical layouts (Strip/Grid 2:3) -> Limit by Height (height=100%, width=auto) to prevent vertical overflow
+                            // Horizontal layouts (3:2) -> Limit by Width (width=100%, height=auto)
+                            height: (layout.type === 'strip' || !layout.type?.includes('horizontal')) ? '100%' : 'auto',
+                            width: (layout.type === 'strip' || !layout.type?.includes('horizontal')) ? 'auto' : '100%',
+                            maxHeight: '100%', maxWidth: '100%',
+                            backgroundColor: (selectedFrame.url || selectedFrame.image) ? 'transparent' : (selectedFrame.color || '#ffffff'),
+                            aspectRatio: layout.type === 'strip' ? '1/3' : (layout.type?.includes('horizontal') ? '3/2' : '2/3'),
+                        }}
+                    >
+                        {/* 1. Photos Layer */}
+                        {frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0 ? (
+                            <div className="w-full h-full relative">
+                                {renderPreviewBoxes()}
+                            </div>
+                        ) : (
+                            <div className="w-full h-full grid p-4 gap-3"
+                                style={{ gridTemplateColumns: `repeat(${layout.cols || 1}, 1fr)`, gridTemplateRows: `repeat(${layout.rows || 1}, 1fr)` }}>
+                                {Array.from({ length: (layout.rows || 1) * (layout.cols || 1) }).map((_, i) => {
+                                    const mappedIndex = i % (filteredPhotos.length || photos.length || 1);
+                                    const photoSrc = filteredPhotos[mappedIndex] || photos[mappedIndex];
+                                    if (!photoSrc) return <div key={i} className="w-full h-full overflow-hidden bg-gray-200" />;
+
+                                    // For generic grid, calculate relative box
+                                    const box = {
+                                        x: 0, y: 0,
+                                        width: 100, height: 100,
+                                        rotation: 0
+                                    };
+
+                                    return (
+                                        <div key={i} className="w-full h-full relative overflow-hidden bg-gray-200">
+                                            <DraggablePhotoSlot
+                                                photo={photoSrc}
+                                                box={box}
+                                                index={mappedIndex}
+                                                position={photoPositions[mappedIndex] || { x: 0.5, y: 0.5 }}
+                                                onUpdatePosition={updatePhotoPosition}
+                                                frameConfig={{ borderRadius: 0 }}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* 2. Frame Overlay */}
+                        {(selectedFrame.url || selectedFrame.image) && (
+                            <div className="absolute inset-0 z-30 pointer-events-none">
+                                <img src={selectedFrame.url || selectedFrame.image} className="w-full h-full object-fill" alt="Frame" onError={(e) => e.target.style.display = 'none'} />
+                            </div>
+                        )}
+
+                        {/* 3. Draggable Overlays */}
+                        {isFiltering && (
+                            <div className="absolute inset-0 z-50 bg-white/40 backdrop-blur-[2px] flex items-center justify-center transition-all duration-300">
+                                <div className="p-4 bg-white/90 rounded-2xl shadow-lg flex flex-col items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full border-4 border-[#A8B5A0]/30 border-t-[#52796f] animate-spin" />
+                                    <span className="text-xs font-serif font-bold text-[#52796f] uppercase tracking-wider">Đang áp dụng...</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {qrSettings.show && (
+                            <div className="absolute cursor-move z-50 hover:ring-2 ring-blue-400"
+                                style={{
+                                    left: `${qrSettings.x}%`, top: `${qrSettings.y}%`,
+                                    width: `${qrSettings.size}%`, aspectRatio: '1/1',
+                                    transform: 'translate(-50%, -50%)'
+                                }}
+                                onMouseDown={(e) => handleDrag(e, 'qr')}
+                                onTouchStart={(e) => handleDrag(e, 'qr')}
+                            >
+                                <img src={previewQrUrl || null} className="w-full h-full border-2 border-white bg-white" alt="QR" draggable={false} />
+                            </div>
+                        )}
+
+                        {dateSettings.show && (
+                            <div className="absolute cursor-move z-50 hover:ring-2 ring-blue-400 whitespace-nowrap select-none"
+                                style={{
+                                    left: `${dateSettings.x}%`, top: `${dateSettings.y}%`,
+                                    transform: 'translate(-50%, -50%)',
+                                    fontSize: `${dateSettings.fontSize / 10}cqh`, // Fallback could be needed
+                                    fontWeight: 'bold', fontFamily: 'Arial', color: dateSettings.color
+                                }}
+                                onMouseDown={(e) => handleDrag(e, 'date')}
+                                onTouchStart={(e) => handleDrag(e, 'date')}
+                            >
+                                {(() => {
+                                    const t = new Date();
+                                    return `${String(t.getDate()).padStart(2, '0')} . ${String(t.getMonth() + 1).padStart(2, '0')} . ${t.getFullYear()}`;
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* RIGHT: Controls */}
+                <div className="flex-1 flex flex-col justify-center gap-6 items-center pl-8">
+                    {/* Filter List */}
+                    <div className="bg-[#A8B5A0]/40 p-4 rounded-[2rem] w-full max-w-4xl shadow-sm flex flex-col gap-4">
+                        <div className="grid grid-cols-7 gap-2">
+                            {FILTERS.map((filter) => (
+                                <motion.div key={filter.id} whileHover={{ scale: isFiltering ? 1 : 1.05 }} whileTap={{ scale: isFiltering ? 1 : 0.95 }}
+                                    onClick={() => !isFiltering && setSelectedFilter(filter)}
+                                    className={`aspect-[4/5] rounded-xl flex flex-col items-center justify-center border-2 transition-all 
+                                    ${isFiltering ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                                    ${selectedFilter.id === filter.id ? 'border-[#52796f] bg-[#E8EAE6]' : 'border-transparent bg-[#E5E7E2]/60'}`}>
+                                    <span className="font-lora text-[#52796f] font-bold text-[0.6rem] uppercase text-center px-1">{filter.name}</span>
+                                </motion.div>
+                            ))}
+                        </div>
+                        {/* Options - Compact Side-by-Side Design */}
+                        <div className="flex gap-3 pt-5 w-full border-t border-[#52796f]/20">
+
+                            {/* QR Code Card */}
+                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${qrSettings.show ? 'bg-[#52796f]/5 border-[#52796f]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
+                                <div className="flex items-center justify-between px-2.5 py-2 cursor-pointer" onClick={() => setQrSettings({ ...qrSettings, show: !qrSettings.show })}>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className={`p-1 rounded-md transition-colors ${qrSettings.show ? 'bg-[#52796f] text-white' : 'bg-gray-400 text-white'}`}>
+                                            <Monitor size={12} />
+                                        </div>
+                                        <span className={`font-bold text-[10px] ${qrSettings.show ? 'text-[#52796f]' : 'text-gray-500'}`}>MÃ QR</span>
+                                    </div>
+                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${qrSettings.show ? 'bg-[#52796f]' : 'bg-gray-300'}`}>
+                                        <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all shadow-sm`} style={{ left: qrSettings.show ? 'calc(100% - 2.5px - 10px)' : '2px' }} />
+                                    </div>
+                                </div>
+
+                                <div className={`px-2.5 pb-2 transition-all duration-300 flex-1 flex flex-col justify-center ${!qrSettings.show ? 'pointer-events-none' : ''}`}>
+                                    <div className="flex items-center gap-2 pt-1.5 border-t border-[#52796f]/10">
+                                        <span className="text-[8px] font-bold text-[#52796f]/70 w-5">SIZE</span>
+                                        <input
+                                            type="range" min="5" max="30" value={qrSettings.size}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => setQrSettings({ ...qrSettings, size: Number(e.target.value) })}
+                                            className="flex-1 h-0.5 bg-[#52796f]/20 rounded-lg appearance-none cursor-pointer accent-[#52796f]"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Date Stamp Card */}
+                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${dateSettings.show ? 'bg-[#52796f]/5 border-[#52796f]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
+                                <div className="flex items-center justify-between px-2.5 py-2 cursor-pointer" onClick={() => setDateSettings({ ...dateSettings, show: !dateSettings.show })}>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className={`p-1 rounded-md transition-colors ${dateSettings.show ? 'bg-[#52796f] text-white' : 'bg-gray-400 text-white'}`}>
+                                            <Edit2 size={12} />
+                                        </div>
+                                        <span className={`font-bold text-[10px] ${dateSettings.show ? 'text-[#52796f]' : 'text-gray-500'}`}>NGÀY</span>
+                                    </div>
+                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${dateSettings.show ? 'bg-[#52796f]' : 'bg-gray-300'}`}>
+                                        <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all shadow-sm`} style={{ left: dateSettings.show ? 'calc(100% - 2.5px - 10px)' : '2px' }} />
+                                    </div>
+                                </div>
+
+                                <div className={`px-2.5 pb-2 transition-all duration-300 flex-1 flex flex-col justify-center gap-1.5 ${!dateSettings.show ? 'pointer-events-none' : ''}`}>
+                                    <div className="flex items-center justify-between pt-1.5 border-t border-[#52796f]/10">
+                                        <span className="text-[8px] font-bold text-[#52796f]/70">MÀU</span>
+                                        <div className="flex gap-1">
+                                            {['#000000', '#ffffff', '#52796f', '#e63946', '#457b9d', '#d4af37'].map(color => (
+                                                <button
+                                                    key={color}
+                                                    onClick={(e) => { e.stopPropagation(); setDateSettings(p => ({ ...p, color })) }}
+                                                    className={`w-3.5 h-3.5 rounded-full border border-gray-200 transition-transform ${dateSettings.color === color ? 'scale-110 ring-1 ring-[#52796f] ring-offset-1' : ''}`}
+                                                    style={{ backgroundColor: color }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[8px] font-bold text-[#52796f]/70 w-5">SIZE</span>
+                                        <input
+                                            type="range" min="10" max="40" value={dateSettings.fontSize}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => setDateSettings({ ...dateSettings, fontSize: Number(e.target.value) })}
+                                            className="flex-1 h-0.5 bg-[#52796f]/20 rounded-lg appearance-none cursor-pointer accent-[#52796f]"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Frame Selector */}
+                    <div className="flex items-center justify-center w-full gap-4">
+                        <button onClick={prevPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#52796f] text-4xl font-bold p-2">‹</button>
+                        <div className="grid grid-cols-5 grid-rows-2 gap-4 min-h-[208px]">
+                            {displayedFrames.map((frame) => (
+                                <motion.div key={frame.id} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleSelectFrame(frame)}
+                                    className={`w-24 h-24 rounded-full border-[4px] cursor-pointer overflow-hidden ${selectedFrame.id === frame.id ? 'border-[#52796f]' : 'border-gray-300'}`}
+                                    style={{ backgroundColor: frame.color || '#fff' }}
+                                >
+                                    {(frame.icon_url || frame.url) && (
+                                        <img src={frame.icon_url || frame.url} className="w-full h-full object-cover" alt="frame" />
+                                    )}
+                                </motion.div>
+                            ))}
+                        </div>
+                        <button onClick={nextPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#52796f] text-4xl font-bold p-2">›</button>
+                    </div>
+
+                    <motion.button
+                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                        onClick={handlePrint}
+                        disabled={isUploading}
+                        className={`bg-[#A8B5A0] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest ${isUploading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-[#84a98c]'}`}
+                    >
+                        {isUploading ? "Đang xử lý..." : "In Ảnh"}
+                    </motion.button>
+                </div>
+            </div>
+
+            {/* Fullscreen block overlay while printing */}
+            {isUploading && (
+                <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#F9FAF7]/80 backdrop-blur-md rounded-3xl">
+                    <div className="flex flex-col items-center gap-5 bg-white/90 rounded-3xl px-16 py-12 shadow-2xl border border-[#A8B5A0]/30">
+                        {/* Pulsing logo ring */}
+                        <div className="relative flex items-center justify-center">
+                            <div className="absolute w-24 h-24 rounded-full bg-[#52796f]/10 animate-ping" />
+                            <div className="w-16 h-16 rounded-full border-4 border-[#A8B5A0]/30 border-t-[#52796f] animate-spin" />
+                        </div>
+                        <p className="text-[#2f3e46] text-2xl font-serif font-bold tracking-widest uppercase mt-2">Đang in ảnh</p>
+                        <div className="flex gap-1.5">
+                            {[0, 1, 2].map(i => (
+                                <div key={i} className="w-2 h-2 rounded-full bg-[#52796f]"
+                                    style={{ animation: `bounce 1s ease-in-out ${i * 0.2}s infinite` }} />
+                            ))}
+                        </div>
+                        <p className="text-[#52796f]/60 text-sm font-medium text-center w-full px-4 leading-relaxed whitespace-nowrap">Vui lòng không chạm vào màn hình</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default Edit;
