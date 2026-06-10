@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Lock, User, ArrowRight } from 'lucide-react';
+import { useWorkflow } from '../context/WorkflowContext';
 
 const AdminLogin = () => {
+    const { configs } = useWorkflow();
+    const logoUrl = configs?.logo_main || '/logo_tomato.png';
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
@@ -13,8 +16,6 @@ const AdminLogin = () => {
     const handleLogin = (e) => {
         e.preventDefault();
 
-        // Simple client-side hardcoded authentication for now
-        // In a real production app, this should call a backend API
         if (username === 'admin' && password === 'admin@photobooth') {
             if (rememberMe) {
                 localStorage.setItem('isAuthenticated', 'true');
@@ -28,18 +29,22 @@ const AdminLogin = () => {
     };
 
     return (
-        <div className="min-h-screen flexitems-center justify-center bg-[#F0F2E9] p-6 relative overflow-hidden flex flex-col pt-32">
-            {/* Background elements */}
-            <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-[#A8B5A0]/20 rounded-full blur-3xl" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-[#9BAD99]/20 rounded-full blur-3xl" />
+        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#F0F2E9] p-6 pt-24">
+            <div className="absolute left-[-10%] top-[-10%] h-96 w-96 rounded-full bg-[#A8B5A0]/20 blur-3xl" />
+            <div className="absolute bottom-[-10%] right-[-10%] h-96 w-96 rounded-full bg-[#9BAD99]/20 blur-3xl" />
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden relative z-10 p-10 border border-white/50 mx-auto"
+                className="relative z-10 mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/50 bg-white p-10 shadow-xl"
             >
-                <div className="text-center mb-10">
-                    <h1 className="text-4xl font-serif text-[#2f3e46] mb-3">Tomato Admin</h1>
+                <div className="mb-10 text-center">
+                    <img
+                        src={logoUrl}
+                        alt="Tomato Photobooth"
+                        className="mx-auto mb-4 h-20 w-20 rounded-full object-contain"
+                    />
+                    <h1 className="mb-3 font-serif text-4xl font-extrabold text-[#2f3e46]">Tomato Admin</h1>
                     <p className="text-[#52796f]">Đăng nhập để quản lý hệ thống</p>
                 </div>
 
@@ -47,7 +52,7 @@ const AdminLogin = () => {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-red-50 text-red-600 text-sm p-4 rounded-xl mb-6 text-center border border-red-100 font-medium"
+                        className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-center text-sm font-medium text-red-600"
                     >
                         {error}
                     </motion.div>
@@ -55,16 +60,16 @@ const AdminLogin = () => {
 
                 <form onSubmit={handleLogin} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Tên đăng nhập</label>
+                        <label className="mb-2 block text-sm font-bold text-gray-700">Tên đăng nhập</label>
                         <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
                                 <User size={18} />
                             </div>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20 outline-none transition-all"
+                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20"
                                 placeholder="Nhập tên đăng nhập"
                                 required
                             />
@@ -72,16 +77,16 @@ const AdminLogin = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Mật khẩu</label>
+                        <label className="mb-2 block text-sm font-bold text-gray-700">Mật khẩu</label>
                         <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
                                 <Lock size={18} />
                             </div>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20 outline-none transition-all"
+                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20"
                                 placeholder="Nhập mật khẩu"
                                 required
                             />
@@ -94,19 +99,19 @@ const AdminLogin = () => {
                             type="checkbox"
                             checked={rememberMe}
                             onChange={(e) => setRememberMe(e.target.checked)}
-                            className="h-4 w-4 text-[#52796f] focus:ring-[#52796f] border-gray-300 rounded cursor-pointer"
+                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-[#52796f] focus:ring-[#52796f]"
                         />
-                        <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 cursor-pointer select-none font-medium">
+                        <label htmlFor="remember-me" className="ml-2 block cursor-pointer select-none text-sm font-medium text-gray-700">
                             Ghi nhớ đăng nhập
                         </label>
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-[#52796f] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#3f6154] transition-colors shadow-lg shadow-[#52796f]/20 mt-4 group"
+                        className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#52796f] py-4 font-bold text-white shadow-lg shadow-[#52796f]/20 transition-colors hover:bg-[#3f6154]"
                     >
                         Đăng nhập
-                        <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
                     </button>
                 </form>
             </motion.div>

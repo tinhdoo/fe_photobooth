@@ -1,18 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Lalezar&display=swap');
 
 @theme {
-  --font-serif: 'Lalezar', cursive;
+  --font-serif: 'Baloo 2', sans-serif;
 }
-
 
 :root {
   --color-bg-primary: #cad2c5;
-  /* Sage Green Lighter */
   --color-bg-secondary: #84a98c;
-  /* Sage Green Darker */
   --color-text-primary: #2f3e46;
-  /* Dark slate for text */
   --color-accent: #52796f;
   --color-cream: #f9f9f9;
 }
@@ -48,8 +44,29 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Baloo 2', 'Inter', sans-serif;
   overflow: hidden;
   background-color: var(--color-cream);
   color: var(--color-text-primary);
+}
+
+h1,
+h2,
+h3,
+.ptb-title {
+  font-weight: 800;
+}
+
+@media (hover: none), (pointer: coarse) {
+  [class*="hover:"],
+  [class*="group-hover:"] {
+    transition-duration: 0ms !important;
+  }
+
+  [class*="hover:"]:hover,
+  [class*="active:"]:active,
+  .group:hover [class*="group-hover:"] {
+    transform: none !important;
+    filter: none !important;
+  }
 }

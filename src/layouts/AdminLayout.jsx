@@ -1,10 +1,29 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Layout, Home, Camera, DollarSign, TrendingUp, Settings, Monitor, Banknote, Menu, X, LogOut } from 'lucide-react';
+import { Layout, DollarSign, TrendingUp, Settings, Banknote, Menu, X, LogOut, Palette } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWorkflow } from '../context/WorkflowContext';
+
+const BrandHeader = ({ compact = false, logoUrl = '/logo_tomato.png' }) => (
+    <div className="flex items-center gap-3">
+        <img
+            src={logoUrl}
+            alt="Tomato Photobooth"
+            className={`${compact ? 'h-9 w-9' : 'h-11 w-11'} rounded-full object-contain`}
+        />
+        <div>
+            <h1 className={`font-serif font-extrabold leading-tight text-[#2f3e46] ${compact ? 'text-lg' : 'text-xl'}`}>
+                Tomato Photobooth
+            </h1>
+            {!compact && <p className="text-xs font-semibold text-[#52796f]/75">Admin</p>}
+        </div>
+    </div>
+);
 
 const AdminLayout = () => {
     const location = useLocation();
+    const { configs } = useWorkflow();
+    const logoUrl = configs?.logo_main || '/logo_tomato.png';
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -15,23 +34,24 @@ const AdminLayout = () => {
         { to: '/admin', icon: <Layout size={20} />, label: 'Khung hình' },
         { to: '/admin/revenue', icon: <TrendingUp size={20} />, label: 'Doanh thu' },
         { to: '/admin/bill-settings', icon: <Banknote size={20} />, label: 'Đầu đọc tiền' },
+        { to: '/admin/branding', icon: <Palette size={20} />, label: 'Giao diện & Branding' },
         { to: '/admin/settings', icon: <Settings size={20} />, label: 'Cài đặt' },
     ];
 
     return (
         <div className="flex h-screen bg-[#F0F2E9]">
-            {/* Mobile Header (Only on small screens) */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-40">
-                <h1 className="text-xl font-serif text-[#2f3e46]">Tomato Admin</h1>
+            <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 lg:hidden">
+                <BrandHeader compact logoUrl={logoUrl} />
                 <button
+                    type="button"
                     onClick={toggleSidebar}
-                    className="p-2 text-[#52796f] hover:bg-gray-100 rounded-lg transition-colors"
+                    className="rounded-lg p-2 text-[#52796f] transition-colors hover:bg-gray-100"
+                    aria-label="Mở menu"
                 >
                     {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
             </div>
 
-            {/* Sidebar Backdrop Overlay (Mobile only) */}
             <AnimatePresence>
                 {isSidebarOpen && (
                     <motion.div
@@ -39,64 +59,60 @@ const AdminLayout = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={closeSidebar}
-                        className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
                     />
                 )}
             </AnimatePresence>
 
-            {/* Sidebar */}
-            <div className={`
-                fixed lg:relative inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex flex-col z-50 transform transition-transform duration-300 ease-in-out
-                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            `}>
-                <div className="p-6 border-b border-gray-100 hidden lg:block">
-                    <h1 className="text-2xl font-serif text-[#2f3e46]">Tomato Admin</h1>
+            <div
+                className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out lg:relative ${
+                    isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                }`}
+            >
+                <div className="hidden border-b border-gray-100 p-6 lg:block">
+                    <BrandHeader logoUrl={logoUrl} />
                 </div>
 
-                {/* Mobile Sidebar Brand Info */}
-                <div className="p-6 border-b border-gray-100 lg:hidden flex items-center justify-between">
-                    <h1 className="text-xl font-serif text-[#2f3e46]">Tomato Admin</h1>
-                    <button onClick={closeSidebar} className="p-2 text-gray-400">
+                <div className="flex items-center justify-between border-b border-gray-100 p-6 lg:hidden">
+                    <BrandHeader compact logoUrl={logoUrl} />
+                    <button type="button" onClick={closeSidebar} className="p-2 text-gray-400" aria-label="Đóng menu">
                         <X size={20} />
                     </button>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                <nav className="flex-1 space-y-2 overflow-y-auto p-4">
                     {menuItems.map((item) => (
                         <Link
                             key={item.to}
                             to={item.to}
                             onClick={closeSidebar}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${location.pathname === item.to
-                                ? 'bg-[#A8B5A0] text-white'
-                                : 'text-[#52796f] hover:bg-[#F9FAF7]'
-                                }`}
+                            className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
+                                location.pathname === item.to
+                                    ? 'bg-[#A8B5A0] text-white'
+                                    : 'text-[#52796f] hover:bg-[#F9FAF7]'
+                            }`}
                         >
                             {item.icon}
                             <span className="font-medium">{item.label}</span>
                         </Link>
                     ))}
                     <button
+                        type="button"
                         onClick={() => {
                             localStorage.removeItem('isAuthenticated');
                             sessionStorage.removeItem('isAuthenticated');
-                            // Use window.location.href or a navigate hook. Since we are in a router, we should use useNavigate hook.
-                            // I will add useNavigate to the imports and use it.
                             window.location.href = '/admin/login';
                         }}
-                        className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-xl text-[#e63946] hover:bg-red-50 mt-8 border-t border-gray-50 pt-8 transition-colors"
+                        className="mt-8 flex w-full items-center justify-start gap-3 rounded-xl border-t border-gray-50 px-4 py-3 pt-8 text-[#e63946] transition-colors hover:bg-red-50"
                     >
                         <LogOut size={20} />
                         <span className="font-medium">Đăng xuất</span>
                     </button>
                 </nav>
 
-                <div className="p-6 border-t border-gray-100 text-xs text-gray-400">
-                    v1.0.0
-                </div>
+                <div className="border-t border-gray-100 p-6 text-xs text-gray-400">v1.0.0</div>
             </div>
 
-            {/* Main Content */}
             <div className="flex-1 overflow-auto pt-16 lg:pt-0">
                 <main className="p-4 md:p-8">
                     <Outlet />

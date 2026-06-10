@@ -17,7 +17,7 @@ export const CameraService = {
         } catch (error) {
             console.error("Camera trigger error:", error);
             // Giả lập cho dev environment nếu không có camera thật
-            if (process.env.NODE_ENV === 'development') {
+            if (import.meta.env.DEV) {
                 console.warn("Running in DEV mode, returning mock data");
                 return { success: true, mock: true };
             }
@@ -30,7 +30,7 @@ export const CameraService = {
         try {
             await fetch(DIGICAM_API);
             return true;
-        } catch (e) {
+        } catch {
             return false;
         }
     }

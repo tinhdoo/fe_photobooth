@@ -103,7 +103,7 @@ const PhotoView = () => {
             </div>
 
             <div className="mt-12 text-[#52796f] text-sm font-sans">
-                Scan via QR Code • Tomato Photobooth
+                Quét mã QR để tải ảnh
             </div>
 
         </div>

@@ -37,7 +37,9 @@ export const WorkflowProvider = ({ children }) => {
             const res = await fetch('/api/config');
             if (res.ok) {
                 const data = await res.json();
-                setConfigs({
+                setConfigs(prev => ({
+                    ...prev,
+                    ...data,
                     price: parseInt(data.price) || 60000,
                     print_price: parseInt(data.print_price) || 20000,
                     mobile_price: parseInt(data.mobile_price) || 30000,
@@ -47,7 +49,7 @@ export const WorkflowProvider = ({ children }) => {
                     countdown: parseInt(data.countdown) || 5,
                     camera_mode: data.camera_mode || 'webcam',
                     hot_folder: data.hot_folder || 'C:/Photobooth_Input'
-                });
+                }));
             }
         } catch (error) {
             console.error("Failed to load configs:", error);
@@ -226,7 +228,8 @@ export const WorkflowProvider = ({ children }) => {
                 timeLeft, // Expose timer
                 isSessionActive,
                 SESSION_DURATION,
-                configs // Expose generic configs
+                configs, // Expose generic configs
+                refreshConfigs: fetchConfigs
             }}
         >
             {children}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { CameraService } from '../../services/CameraService';
@@ -7,6 +7,8 @@ import { FirebaseService } from '../../services/FirebaseService';
 
 const Capture = () => {
     const { nextStep, sessionData, updateSessionData, timeLeft, isSessionActive, configs } = useWorkflow();
+    const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
+    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const [countdown, setCountdown] = useState(null);
     // Initialize with existing photos if any (for retake feature)
     const [photosTaken, setPhotosTaken] = useState(sessionData.photos || []);
@@ -381,10 +383,13 @@ const Capture = () => {
     };
 
     return (
-        <div className="relative w-full h-full flex items-center justify-center bg-[#F9FAF7] p-4 md:p-8">
+        <div
+            className="relative w-full h-full flex items-center justify-center bg-[#FFF8E7] p-4 md:p-8 bg-cover bg-center"
+            style={{ backgroundImage: configs?.['bg_preview-when'] ? `url('${configs['bg_preview-when']}')` : 'none' }}
+        >
 
             {/* Main Capture Card */}
-            <div className="relative w-full max-w-6xl aspect-[16/9] bg-[#B5C1B0] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="relative w-full max-w-6xl aspect-[16/9] bg-[#F7E8CF] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
 
                 {/* Live View Area */}
                 <div className="flex-1 relative overflow-hidden">
@@ -421,8 +426,8 @@ const Capture = () => {
 
                     {/* Loading Overlay */}
                     {!cameraReady && !cameraError && (
-                        <div className="absolute inset-0 bg-[#B5C1B0] flex items-center justify-center">
-                            <p className="text-[#85937F] text-xl">Đang khởi động camera...</p>
+                        <div className="absolute inset-0 bg-[#F7E8CF] flex items-center justify-center">
+                            <p className="text-xl" style={{ color: primaryTextColor }}>Đang khởi động camera...</p>
                         </div>
                     )}
 
@@ -459,9 +464,10 @@ const Capture = () => {
                                     initial={{ scale: 0.9, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
                                     exit={{ scale: 1.1, opacity: 0 }}
-                                    className="w-64 h-64 rounded-full border border-[#85937F] flex items-center justify-center"
+                                    className="w-64 h-64 rounded-full border flex items-center justify-center"
+                                    style={{ borderColor: primaryTextColor }}
                                 >
-                                    <span className="text-[100px] font-serif text-[#85937F] font-light">
+                                    <span className="text-[100px] font-serif font-light" style={{ color: primaryTextColor }}>
                                         {countdown}
                                     </span>
                                 </motion.div>
@@ -492,7 +498,7 @@ const Capture = () => {
                                     transition={{ delay: i * 0.1 }}
                                     className={`
                                     w-24 h-20 md:w-32 md:h-24 rounded-lg flex items-center justify-center text-2xl font-serif transition-all duration-300 overflow-hidden shadow-lg border-2
-                                    ${photoUrl ? 'bg-[#9BA896] border-[#fff]/50' : 'bg-[#9BA896]/50 border-transparent text-[#6A7865]'}
+                                    ${photoUrl ? 'bg-[#D5B895] border-[#fff]/50' : 'bg-[#D5B895]/50 border-transparent text-[#8E6B4D]'}
                                     ${isCurrent ? 'scale-110 border-[#fff] shadow-xl ring-2 ring-[#fff]/30' : ''}
                                 `}
                                 >

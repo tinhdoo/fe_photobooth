@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
 import { Monitor, Edit2, ArrowLeft } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
-import logoTomato from '../../assets/images/logo_tomato.png';
 import { LAYOUTS } from '../../data/layouts';
 
 // Cấu hình URL API (Nên đưa vào biến môi trường)
@@ -26,23 +25,9 @@ const FILTERS = [
             ctx.putImageData(imageData, 0, 0);
         }
     },
-    {
-        id: 'vintage',
-        name: 'Cổ Điển',
-        filter: (ctx, w, h) => {
-            const imageData = ctx.getImageData(0, 0, w, h);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i + 1], b = data[i + 2];
-                data[i] = Math.min(255, (r * 0.393 + g * 0.769 + b * 0.189) * 1.25);
-                data[i + 1] = Math.min(255, (r * 0.349 + g * 0.686 + b * 0.168) * 1.25);
-                data[i + 2] = Math.min(255, (r * 0.272 + g * 0.534 + b * 0.131) * 1.25);
-            }
-            ctx.putImageData(imageData, 0, 0);
-        }
-    },
+    { id: 'makeup_light', name: 'Makeup nhẹ', type: 'backend', description: 'Cà da nhẹ, sáng trong tự nhiên' },
+    { id: 'makeup_soft', name: 'Makeup mềm', type: 'backend', description: 'Môi, má và mắt nhẹ tự nhiên' },
     { id: 'korean', name: 'Da Hàn Quốc', type: 'backend', description: 'Trắng hồng, da căng bóng' },
-    { id: 'baby_soft', name: 'Da Em Bé', type: 'backend', description: 'Mịn nhẹ, hồng hào' },
     { id: 'natural', name: 'Da Tự Nhiên', type: 'backend', description: 'Mịn da tự nhiên' },
     { id: 'men', name: 'Da Nam', type: 'backend', description: 'Mịn nhẹ, giữ chi tiết' }
 ];
@@ -96,7 +81,7 @@ const DraggablePhotoSlot = ({ photo, box, index, position, onUpdatePosition, fra
                     </div>
                     {/* Invisible Overlay for Dragging */}
                     <motion.div
-                        className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing hover:bg-black/5 transition-colors"
+                        className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing transition-none"
                         onPan={handlePan}
                         title="Kéo để căn chỉnh ảnh"
                     />
@@ -107,7 +92,9 @@ const DraggablePhotoSlot = ({ photo, box, index, position, onUpdatePosition, fra
 };
 
 const Edit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft } = useWorkflow();
+    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, configs } = useWorkflow();
+    const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
+    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const captureRef = useRef(null);
     // --- STATE ---
     // Tối ưu: Sử dụng useMemo để tránh tạo tham chiếu mới mỗi lần render gây lặp vô tận
@@ -205,11 +192,11 @@ const Edit = () => {
                 width: 200,
                 height: 200,
                 data: 'PREVIEW-DATA',
-                image: logoTomato,
                 margin: 10,
                 qrOptions: { errorCorrectionLevel: 'L' },
-                dotsOptions: { color: "#000000", type: "rounded" },
-                imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.2 }
+                dotsOptions: { color: "#000000", type: "square" },
+                cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
+                cornersDotOptions: { type: "dot", color: "#000000" }
             });
             qrCode.getRawData("png").then((buffer) => {
                 const url = URL.createObjectURL(buffer);
@@ -377,10 +364,28 @@ const Edit = () => {
     const uploadFile = async (blob) => {
         const formData = new FormData();
         formData.append('file', blob, `capture_${Date.now()}.png`);
-        const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+        try {
+            const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            return { url: res.data.url, public_id: res.data.public_id };
+        } catch (error) {
+            const message = error.response?.data?.error || error.message || 'Không rõ lỗi upload';
+            throw new Error(message);
+        }
+    };
+
+    const sendToPrinter = async (blob, copies = 1) => {
+        const formData = new FormData();
+        formData.append('file', blob, `TomatoPhotobooth_print_${Date.now()}.png`);
+        formData.append('copies', String(Math.max(1, parseInt(copies, 10) || 1)));
+
+        const res = await axios.post(`${API_URL}/api/print`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 30000,
         });
-        return { url: res.data.url, public_id: res.data.public_id };
+
+        return res.data;
     };
 
     const handlePrint = async () => {
@@ -525,12 +530,12 @@ const Edit = () => {
                         width: 500,
                         height: 500,
                         data: downloadUrl,
-                        image: logoTomato,
                         margin: 25,
                         qrOptions: { errorCorrectionLevel: 'L' },
-                        dotsOptions: { color: "#000000", type: "rounded" },
-                        backgroundOptions: { color: "#ffffff" },
-                        imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.2 }
+                        dotsOptions: { color: "#000000", type: "square" },
+                        cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
+                        cornersDotOptions: { type: "dot", color: "#000000" },
+                        backgroundOptions: { color: "#ffffff" }
                     });
                     const buffer = await qrCode.getRawData("png");
                     const qrDataUrl = URL.createObjectURL(buffer);
@@ -571,7 +576,9 @@ const Edit = () => {
                     const rawSource = sessionData.photos || [];
                     const uploadedPhotos = await Promise.all(photos.map(async (photoUrl, index) => {
                         let finalPhotoUrl = photoUrl;
+                        let finalPhotoPublicId = null;
                         let finalVideoUrl = null;
+                        let finalVideoPublicId = null;
                         const originalData = rawSource[index];
 
                         try {
@@ -587,6 +594,7 @@ const Edit = () => {
                                     const b = await f.blob();
                                     const uploadData = await uploadFile(b);
                                     finalPhotoUrl = uploadData.url;
+                                    finalPhotoPublicId = uploadData.public_id;
                                 }
                             }
 
@@ -601,6 +609,7 @@ const Edit = () => {
                                     headers: { 'Content-Type': 'multipart/form-data' }
                                 });
                                 finalVideoUrl = res.data.url;
+                                finalVideoPublicId = res.data.public_id;
                                 console.log(`✅ Video uploaded:`, finalVideoUrl);
                             } else {
                                 console.log(`ℹ️ No video pending for slot ${index}`);
@@ -609,6 +618,8 @@ const Edit = () => {
                             return {
                                 url: finalPhotoUrl,
                                 video_url: finalVideoUrl,
+                                public_id: finalPhotoPublicId,
+                                video_public_id: finalVideoPublicId,
                                 type: 'raw'
                             };
                         } catch (e) {
@@ -617,6 +628,8 @@ const Edit = () => {
                             return {
                                 url: finalPhotoUrl,
                                 video_url: null,
+                                public_id: finalPhotoPublicId,
+                                video_public_id: null,
                                 type: 'raw'
                             };
                         }
@@ -639,6 +652,18 @@ const Edit = () => {
 
                     updateSessionData('finalImage', compositeUrl);
                     updateSessionData('sessionId', sessionRes.data.uuid || sessionId);
+
+                    try {
+                        const printResult = await sendToPrinter(blob, sessionData.printQuantity || 1);
+                        console.log('Print job queued:', printResult);
+                    } catch (printError) {
+                        const data = printError.response?.data;
+                        const available = data?.available_printers?.length
+                            ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
+                            : '';
+                        const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
+                        alert(`${message}${available}`);
+                    }
 
                     nextStep();
                 } catch (err) {
@@ -694,11 +719,15 @@ const Edit = () => {
     };
 
     return (
-        <div className="flex flex-col h-full w-full p-6 bg-[#F9FAF7] relative">
+        <div
+            className="flex flex-col h-full w-full p-6 bg-[#FFF8E7] relative bg-cover bg-center"
+            style={{ backgroundImage: configs?.['bg_filter-adjustment'] ? `url('${configs['bg_filter-adjustment']}')` : 'none' }}
+        >
             {/* Back Button */}
             <button
                 onClick={prevStep}
-                className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-[#52796f] rounded-full transition-all font-serif font-bold shadow-sm hover:shadow-md border border-[#A8B5A0]/20 z-20"
+                className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white rounded-full transition-none font-serif font-bold shadow-sm border border-[#D5B895]/20 z-20 active:scale-95"
+                style={{ color: primaryTextColor }}
             >
                 <ArrowLeft size={24} />
                 <span>Quay Lại</span>
@@ -707,14 +736,15 @@ const Edit = () => {
             <motion.h2
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-5xl font-serif text-[#52796f] text-center mb-12 tracking-wider uppercase"
+                className="text-5xl font-serif text-center mb-12 tracking-wider uppercase"
+                style={{ color: primaryTextColor }}
             >
                 Chọn Màu & Khung Ảnh
             </motion.h2>
 
             <div className="flex-1 flex gap-8 overflow-hidden px-4">
                 {/* LEFT: Preview */}
-                <div className="w-5/12 flex items-center justify-center p-8 bg-[#A8B5A0]/20 rounded-3xl ml-4">
+                <div className="w-5/12 flex items-center justify-center p-8 bg-[#F6E6C9]/55 rounded-3xl ml-4">
                     <div ref={captureRef}
                         className="shadow-2xl relative transition-all duration-300"
                         style={{
@@ -775,14 +805,14 @@ const Edit = () => {
                         {isFiltering && (
                             <div className="absolute inset-0 z-50 bg-white/40 backdrop-blur-[2px] flex items-center justify-center transition-all duration-300">
                                 <div className="p-4 bg-white/90 rounded-2xl shadow-lg flex flex-col items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full border-4 border-[#A8B5A0]/30 border-t-[#52796f] animate-spin" />
-                                    <span className="text-xs font-serif font-bold text-[#52796f] uppercase tracking-wider">Đang áp dụng...</span>
+                                    <div className="w-8 h-8 rounded-full border-4 border-[#D5B895]/30 border-t-[#7B5E43] animate-spin" />
+                                    <span className="text-xs font-serif font-bold text-[#7B5E43] uppercase tracking-wider">Đang áp dụng...</span>
                                 </div>
                             </div>
                         )}
 
                         {qrSettings.show && (
-                            <div className="absolute cursor-move z-50 hover:ring-2 ring-blue-400"
+                            <div className="absolute cursor-move z-50 ring-blue-400"
                                 style={{
                                     left: `${qrSettings.x}%`, top: `${qrSettings.y}%`,
                                     width: `${qrSettings.size}%`, aspectRatio: '1/1',
@@ -796,7 +826,7 @@ const Edit = () => {
                         )}
 
                         {dateSettings.show && (
-                            <div className="absolute cursor-move z-50 hover:ring-2 ring-blue-400 whitespace-nowrap select-none"
+                            <div className="absolute cursor-move z-50 ring-blue-400 whitespace-nowrap select-none"
                                 style={{
                                     left: `${dateSettings.x}%`, top: `${dateSettings.y}%`,
                                     transform: 'translate(-50%, -50%)',
@@ -818,71 +848,71 @@ const Edit = () => {
                 {/* RIGHT: Controls */}
                 <div className="flex-1 flex flex-col justify-center gap-6 items-center pl-8">
                     {/* Filter List */}
-                    <div className="bg-[#A8B5A0]/40 p-4 rounded-[2rem] w-full max-w-4xl shadow-sm flex flex-col gap-4">
+                    <div className="bg-[#F6E6C9]/70 p-4 rounded-[2rem] w-full max-w-4xl shadow-sm flex flex-col gap-4">
                         <div className="grid grid-cols-7 gap-2">
                             {FILTERS.map((filter) => (
-                                <motion.div key={filter.id} whileHover={{ scale: isFiltering ? 1 : 1.05 }} whileTap={{ scale: isFiltering ? 1 : 0.95 }}
+                                <motion.div key={filter.id}
                                     onClick={() => !isFiltering && setSelectedFilter(filter)}
                                     className={`aspect-[4/5] rounded-xl flex flex-col items-center justify-center border-2 transition-all 
                                     ${isFiltering ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                                    ${selectedFilter.id === filter.id ? 'border-[#52796f] bg-[#E8EAE6]' : 'border-transparent bg-[#E5E7E2]/60'}`}>
-                                    <span className="font-lora text-[#52796f] font-bold text-[0.6rem] uppercase text-center px-1">{filter.name}</span>
+                                    ${selectedFilter.id === filter.id ? 'border-[#7B5E43] bg-[#FFF1D6]' : 'border-transparent bg-[#FFF4E3]/60'}`}>
+                                    <span className="font-lora text-[#7B5E43] font-bold text-[0.6rem] uppercase text-center px-1">{filter.name}</span>
                                 </motion.div>
                             ))}
                         </div>
                         {/* Options - Compact Side-by-Side Design */}
-                        <div className="flex gap-3 pt-5 w-full border-t border-[#52796f]/20">
+                        <div className="flex gap-3 pt-5 w-full border-t border-[#7B5E43]/20">
 
                             {/* QR Code Card */}
-                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${qrSettings.show ? 'bg-[#52796f]/5 border-[#52796f]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
+                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${qrSettings.show ? 'bg-[#7B5E43]/5 border-[#7B5E43]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
                                 <div className="flex items-center justify-between px-2.5 py-2 cursor-pointer" onClick={() => setQrSettings({ ...qrSettings, show: !qrSettings.show })}>
                                     <div className="flex items-center gap-1.5">
-                                        <div className={`p-1 rounded-md transition-colors ${qrSettings.show ? 'bg-[#52796f] text-white' : 'bg-gray-400 text-white'}`}>
+                                        <div className={`p-1 rounded-md transition-colors ${qrSettings.show ? 'bg-[#7B5E43] text-white' : 'bg-gray-400 text-white'}`}>
                                             <Monitor size={12} />
                                         </div>
-                                        <span className={`font-bold text-[10px] ${qrSettings.show ? 'text-[#52796f]' : 'text-gray-500'}`}>MÃ QR</span>
+                                        <span className={`font-bold text-[10px] ${qrSettings.show ? 'text-[#7B5E43]' : 'text-gray-500'}`}>MÃ QR</span>
                                     </div>
-                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${qrSettings.show ? 'bg-[#52796f]' : 'bg-gray-300'}`}>
+                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${qrSettings.show ? 'bg-[#7B5E43]' : 'bg-gray-300'}`}>
                                         <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all shadow-sm`} style={{ left: qrSettings.show ? 'calc(100% - 2.5px - 10px)' : '2px' }} />
                                     </div>
                                 </div>
 
                                 <div className={`px-2.5 pb-2 transition-all duration-300 flex-1 flex flex-col justify-center ${!qrSettings.show ? 'pointer-events-none' : ''}`}>
-                                    <div className="flex items-center gap-2 pt-1.5 border-t border-[#52796f]/10">
-                                        <span className="text-[8px] font-bold text-[#52796f]/70 w-5">SIZE</span>
+                                    <div className="flex items-center gap-2 pt-1.5 border-t border-[#7B5E43]/10">
+                                        <span className="text-[8px] font-bold text-[#7B5E43]/70 w-5">SIZE</span>
                                         <input
                                             type="range" min="5" max="30" value={qrSettings.size}
                                             onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => setQrSettings({ ...qrSettings, size: Number(e.target.value) })}
-                                            className="flex-1 h-0.5 bg-[#52796f]/20 rounded-lg appearance-none cursor-pointer accent-[#52796f]"
+                                            className="flex-1 h-0.5 bg-[#7B5E43]/20 rounded-lg appearance-none cursor-pointer accent-[#7B5E43]"
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             {/* Date Stamp Card */}
-                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${dateSettings.show ? 'bg-[#52796f]/5 border-[#52796f]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
+                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${dateSettings.show ? 'bg-[#7B5E43]/5 border-[#7B5E43]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
                                 <div className="flex items-center justify-between px-2.5 py-2 cursor-pointer" onClick={() => setDateSettings({ ...dateSettings, show: !dateSettings.show })}>
                                     <div className="flex items-center gap-1.5">
-                                        <div className={`p-1 rounded-md transition-colors ${dateSettings.show ? 'bg-[#52796f] text-white' : 'bg-gray-400 text-white'}`}>
+                                        <div className={`p-1 rounded-md transition-colors ${dateSettings.show ? 'bg-[#7B5E43] text-white' : 'bg-gray-400 text-white'}`}>
                                             <Edit2 size={12} />
                                         </div>
-                                        <span className={`font-bold text-[10px] ${dateSettings.show ? 'text-[#52796f]' : 'text-gray-500'}`}>NGÀY</span>
+                                        <span className={`font-bold text-[10px] ${dateSettings.show ? 'text-[#7B5E43]' : 'text-gray-500'}`}>NGÀY</span>
                                     </div>
-                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${dateSettings.show ? 'bg-[#52796f]' : 'bg-gray-300'}`}>
+                                    <div className={`w-7 h-3.5 rounded-full relative transition-colors ${dateSettings.show ? 'bg-[#7B5E43]' : 'bg-gray-300'}`}>
                                         <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all shadow-sm`} style={{ left: dateSettings.show ? 'calc(100% - 2.5px - 10px)' : '2px' }} />
                                     </div>
                                 </div>
 
                                 <div className={`px-2.5 pb-2 transition-all duration-300 flex-1 flex flex-col justify-center gap-1.5 ${!dateSettings.show ? 'pointer-events-none' : ''}`}>
-                                    <div className="flex items-center justify-between pt-1.5 border-t border-[#52796f]/10">
-                                        <span className="text-[8px] font-bold text-[#52796f]/70">MÀU</span>
+                                    <div className="flex items-center justify-between pt-1.5 border-t border-[#7B5E43]/10">
+                                        <span className="text-[8px] font-bold text-[#7B5E43]/70">MÀU</span>
                                         <div className="flex gap-1">
-                                            {['#000000', '#ffffff', '#52796f', '#e63946', '#457b9d', '#d4af37'].map(color => (
+                                            {['#000000', '#ffffff', '#7B5E43', '#e63946', '#457b9d', '#d4af37'].map(color => (
                                                 <button
                                                     key={color}
                                                     onClick={(e) => { e.stopPropagation(); setDateSettings(p => ({ ...p, color })) }}
-                                                    className={`w-3.5 h-3.5 rounded-full border border-gray-200 transition-transform ${dateSettings.color === color ? 'scale-110 ring-1 ring-[#52796f] ring-offset-1' : ''}`}
+                                                    className={`w-3.5 h-3.5 rounded-full border border-gray-200 transition-transform ${dateSettings.color === color ? 'scale-110 ring-1 ring-[#7B5E43] ring-offset-1' : ''}`}
                                                     style={{ backgroundColor: color }}
                                                 />
                                             ))}
@@ -890,12 +920,12 @@ const Edit = () => {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[8px] font-bold text-[#52796f]/70 w-5">SIZE</span>
+                                        <span className="text-[8px] font-bold text-[#7B5E43]/70 w-5">SIZE</span>
                                         <input
                                             type="range" min="10" max="40" value={dateSettings.fontSize}
                                             onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => setDateSettings({ ...dateSettings, fontSize: Number(e.target.value) })}
-                                            className="flex-1 h-0.5 bg-[#52796f]/20 rounded-lg appearance-none cursor-pointer accent-[#52796f]"
+                                            className="flex-1 h-0.5 bg-[#7B5E43]/20 rounded-lg appearance-none cursor-pointer accent-[#7B5E43]"
                                         />
                                     </div>
                                 </div>
@@ -905,11 +935,11 @@ const Edit = () => {
 
                     {/* Frame Selector */}
                     <div className="flex items-center justify-center w-full gap-4">
-                        <button onClick={prevPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#52796f] text-4xl font-bold p-2">‹</button>
+                        <button onClick={prevPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#7B5E43] text-4xl font-bold p-2">‹</button>
                         <div className="grid grid-cols-5 grid-rows-2 gap-4 min-h-[208px]">
                             {displayedFrames.map((frame) => (
-                                <motion.div key={frame.id} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleSelectFrame(frame)}
-                                    className={`w-24 h-24 rounded-full border-[4px] cursor-pointer overflow-hidden ${selectedFrame.id === frame.id ? 'border-[#52796f]' : 'border-gray-300'}`}
+                                <motion.div key={frame.id} onClick={() => handleSelectFrame(frame)}
+                                    className={`w-24 h-24 rounded-full border-[4px] cursor-pointer overflow-hidden ${selectedFrame.id === frame.id ? 'border-[#7B5E43]' : 'border-gray-300'}`}
                                     style={{ backgroundColor: frame.color || '#fff' }}
                                 >
                                     {(frame.icon_url || frame.url) && (
@@ -918,14 +948,13 @@ const Edit = () => {
                                 </motion.div>
                             ))}
                         </div>
-                        <button onClick={nextPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#52796f] text-4xl font-bold p-2">›</button>
+                        <button onClick={nextPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#7B5E43] text-4xl font-bold p-2">›</button>
                     </div>
 
                     <motion.button
-                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                         onClick={handlePrint}
                         disabled={isUploading}
-                        className={`bg-[#A8B5A0] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest ${isUploading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-[#84a98c]'}`}
+                        className={`bg-[#D5B895] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest transition-none ${isUploading ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
                     >
                         {isUploading ? "Đang xử lý..." : "In Ảnh"}
                     </motion.button>
@@ -934,21 +963,21 @@ const Edit = () => {
 
             {/* Fullscreen block overlay while printing */}
             {isUploading && (
-                <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#F9FAF7]/80 backdrop-blur-md rounded-3xl">
-                    <div className="flex flex-col items-center gap-5 bg-white/90 rounded-3xl px-16 py-12 shadow-2xl border border-[#A8B5A0]/30">
+                <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#FFF8E7]/80 backdrop-blur-md rounded-3xl">
+                    <div className="flex flex-col items-center gap-5 bg-white/90 rounded-3xl px-16 py-12 shadow-2xl border border-[#D5B895]/30">
                         {/* Pulsing logo ring */}
                         <div className="relative flex items-center justify-center">
-                            <div className="absolute w-24 h-24 rounded-full bg-[#52796f]/10 animate-ping" />
-                            <div className="w-16 h-16 rounded-full border-4 border-[#A8B5A0]/30 border-t-[#52796f] animate-spin" />
+                            <div className="absolute w-24 h-24 rounded-full bg-[#7B5E43]/10 animate-ping" />
+                            <div className="w-16 h-16 rounded-full border-4 border-[#D5B895]/30 border-t-[#7B5E43] animate-spin" />
                         </div>
-                        <p className="text-[#2f3e46] text-2xl font-serif font-bold tracking-widest uppercase mt-2">Đang in ảnh</p>
+                        <p className="text-[#3F3127] text-2xl font-serif font-bold tracking-widest uppercase mt-2">Đang in ảnh</p>
                         <div className="flex gap-1.5">
                             {[0, 1, 2].map(i => (
-                                <div key={i} className="w-2 h-2 rounded-full bg-[#52796f]"
+                                <div key={i} className="w-2 h-2 rounded-full bg-[#7B5E43]"
                                     style={{ animation: `bounce 1s ease-in-out ${i * 0.2}s infinite` }} />
                             ))}
                         </div>
-                        <p className="text-[#52796f]/60 text-sm font-medium text-center w-full px-4 leading-relaxed whitespace-nowrap">Vui lòng không chạm vào màn hình</p>
+                        <p className="text-[#7B5E43]/60 text-sm font-medium text-center w-full px-4 leading-relaxed whitespace-nowrap">Vui lòng không chạm vào màn hình</p>
                     </div>
                 </div>
             )}

@@ -1,70 +1,101 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useWorkflow } from '../../context/WorkflowContext';
 import { Camera, Smartphone } from 'lucide-react';
+import { useWorkflow } from '../../context/WorkflowContext';
+
+const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
 
 const SourceSelection = () => {
-    const { nextStep, updateSessionData } = useWorkflow();
+    const { nextStep, updateSessionData, configs } = useWorkflow();
+    const backgroundUrl = configs?.['bg_source-selection'];
+    const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
+    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 
     const handleSelectSource = (source) => {
-        updateSessionData('source', source); // 'camera' or 'upload'
+        updateSessionData('source', source);
         nextStep();
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center space-y-8 bg-[#F9FAF7] p-8">
+        <div className="relative flex h-full w-full flex-col items-center justify-center space-y-8 overflow-hidden bg-[#FFF8E7] p-8">
+            {backgroundUrl && (
+                isVideoUrl(backgroundUrl) ? (
+                    <video
+                        src={backgroundUrl}
+                        className="absolute -inset-6 z-0 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover"
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        preload="auto"
+                    />
+                ) : (
+                    <div
+                        className="absolute -inset-6 z-0 bg-cover bg-center"
+                        style={{ backgroundImage: `url('${backgroundUrl}')` }}
+                    />
+                )
+            )}
+
             <motion.h2
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl md:text-5xl font-serif text-[#6A7865] mb-8 text-center drop-shadow-sm"
+                className="relative z-10 mb-8 text-center font-serif text-4xl drop-shadow-sm md:text-5xl"
+                style={{ color: primaryTextColor }}
             >
                 Bạn muốn sử dụng ảnh từ đâu?
             </motion.h2>
 
-            <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl justify-center">
-
-                {/* Option 1: Camera */}
+            <div className="relative z-10 flex w-full max-w-4xl flex-col justify-center gap-8 md:flex-row">
                 <motion.div
                     initial={{ opacity: 0, x: -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="flex-1 flex"
+                    className="flex flex-1"
                 >
-                    <div
+                    <button
+                        type="button"
                         onClick={() => handleSelectSource('camera')}
-                        className="w-full bg-white rounded-2xl shadow-xl overflow-hidden cursor-pointer group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-2 border-transparent hover:border-[#85937F] flex flex-col"
+                        className="flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 border-transparent bg-white text-left shadow-xl transition-none active:scale-95"
                     >
-                        <div className="h-64 bg-[#B5C1B0] flex items-center justify-center group-hover:bg-[#9BA896] transition-colors duration-300">
-                            <Camera size={80} className="text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex h-64 items-center justify-center bg-[#F7E8CF] transition-none">
+                            <Camera size={80} className="text-white drop-shadow-md transition-none" />
                         </div>
-                        <div className="p-8 text-center bg-white flex-1">
-                            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Chụp tại quầy</h3>
-                            <p className="text-gray-500 text-lg">Sử dụng máy ảnh chuyên nghiệp của chúng tôi</p>
+                        <div className="flex-1 bg-white p-8 text-center">
+                            <h3 className="mb-2 text-2xl font-semibold" style={{ color: primaryTextColor }}>
+                                Chụp tại quầy
+                            </h3>
+                            <p className="text-lg" style={{ color: secondaryTextColor }}>
+                                Sử dụng máy ảnh chuyên nghiệp của chúng tôi
+                            </p>
                         </div>
-                    </div>
+                    </button>
                 </motion.div>
 
-                {/* Option 2: Phone Upload */}
                 <motion.div
                     initial={{ opacity: 0, x: 50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="flex-1 flex"
+                    className="flex flex-1"
                 >
-                    <div
+                    <button
+                        type="button"
                         onClick={() => handleSelectSource('upload')}
-                        className="w-full bg-white rounded-2xl shadow-xl overflow-hidden cursor-pointer group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-2 border-transparent hover:border-[#85937F] flex flex-col"
+                        className="flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 border-transparent bg-white text-left shadow-xl transition-none active:scale-95"
                     >
-                        <div className="h-64 bg-[#D4C3B3] flex items-center justify-center group-hover:bg-[#C4B3A3] transition-colors duration-300">
-                            <Smartphone size={80} className="text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex h-64 items-center justify-center bg-[#F1DDBE] transition-none">
+                            <Smartphone size={80} className="text-white drop-shadow-md transition-none" />
                         </div>
-                        <div className="p-8 text-center bg-white flex-1">
-                            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Tải từ điện thoại</h3>
-                            <p className="text-gray-500 text-lg">Quét mã QR để chọn ảnh đẹp sẵn có của bạn</p>
+                        <div className="flex-1 bg-white p-8 text-center">
+                            <h3 className="mb-2 text-2xl font-semibold" style={{ color: primaryTextColor }}>
+                                Tải từ điện thoại
+                            </h3>
+                            <p className="text-lg" style={{ color: secondaryTextColor }}>
+                                Quét mã QR để chọn ảnh đẹp sẵn có của bạn
+                            </p>
                         </div>
-                    </div>
+                    </button>
                 </motion.div>
-
             </div>
         </div>
     );

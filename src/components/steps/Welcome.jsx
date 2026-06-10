@@ -1,18 +1,33 @@
-import { useWorkflow } from '../../context/WorkflowContext';
+﻿import { useWorkflow } from '../../context/WorkflowContext';
+
+const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
 
 const Welcome = () => {
-    const { nextStep } = useWorkflow();
+    const { nextStep, configs } = useWorkflow();
+    const backgroundUrl = configs?.bg_welcome || '/1.png';
 
     return (
         <div
-            className="w-full h-full flex flex-col items-center justify-center cursor-pointer relative overflow-hidden"
+            className="relative flex h-full w-full cursor-pointer flex-col items-center justify-center overflow-hidden bg-[#FFF8E7]"
             onClick={nextStep}
         >
-            {/* Background Image Only */}
-            <div
-                className="absolute inset-0 bg-cover bg-center z-0"
-                style={{ backgroundImage: "url('/1.png')" }}
-            />
+            {isVideoUrl(backgroundUrl) ? (
+                <video
+                    src={backgroundUrl}
+                    className="absolute inset-0 z-0 h-full w-full object-cover"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="auto"
+                />
+            ) : (
+                <div
+                    className="absolute inset-0 z-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url('${backgroundUrl}')` }}
+                />
+            )}
+
         </div>
     );
 };

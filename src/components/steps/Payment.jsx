@@ -1,351 +1,468 @@
-import { useState, useEffect } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
-import { Banknote, QrCode, Hash, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
-import { io } from "socket.io-client";
-import { getDeviceId } from "../../utils/deviceId";
+import { getDeviceId } from '../../utils/deviceId';
+
+const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
 
 const Payment = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData } = useWorkflow();
-    const [method, setMethod] = useState(null); // 'cash', 'qr', 'code'
+    const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
+    const [method, setMethod] = useState(null);
     const [loading, setLoading] = useState(false);
     const [cashInserted, setCashInserted] = useState(0);
     const [code, setCode] = useState('');
+    const [voucher, setVoucher] = useState(null);
+    const [qrOrder, setQrOrder] = useState(null);
+    const [qrError, setQrError] = useState('');
     const [errorModal, setErrorModal] = useState({ show: false, message: '' });
-    const PRICE = sessionData.printPrice || 60000;
-    const printQuantity = sessionData.printQuantity || 1;
 
-    const handleCodePayment = async () => {
+    const price = sessionData.printPrice || 60000;
+    const printQuantity = sessionData.printQuantity || 1;
+    const voucherValue = Math.min(voucher?.value || 0, price);
+    const remainingAmount = Math.max(price - voucherValue, 0);
+    const cashProgressTotal = remainingAmount || price;
+    const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
+    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
+
+    const finalPaymentMethod = useCallback((baseMethod, activeVoucher = voucher) => {
+        if (!activeVoucher) return baseMethod;
+        return baseMethod === 'code' ? 'code' : `code+${baseMethod}`;
+    }, [voucher]);
+
+    const handlePaymentSuccess = useCallback((baseMethod, extraData = {}) => {
+        const activeVoucher = extraData.voucher || voucher;
+        const activeVoucherValue = Math.min(activeVoucher?.value || 0, price);
+        setLoading(true);
+        setTimeout(async () => {
+            if (activeVoucher?.id && !activeVoucher.used) {
+                try {
+                    await axios.post(`/api/codes/${activeVoucher.id}/use`);
+                    setVoucher((prev) => prev?.id === activeVoucher.id ? { ...prev, used: true } : prev);
+                } catch (error) {
+                    setLoading(false);
+                    setErrorModal({
+                        show: true,
+                        message: error.response?.data?.message || 'Không thể sử dụng mã thanh toán. Vui lòng thử lại.'
+                    });
+                    return;
+                }
+            }
+
+            setLoading(false);
+            updateSessionData('paymentMethod', finalPaymentMethod(baseMethod || method, activeVoucher));
+            updateSessionData('paymentStatus', 'completed');
+            updateSessionData('paymentTotal', price);
+            updateSessionData('paymentPaidAmount', price);
+            if (activeVoucher) {
+                updateSessionData('paymentCode', activeVoucher.code);
+                updateSessionData('paymentCodeValue', activeVoucher.value);
+                updateSessionData('paymentCodeApplied', activeVoucherValue);
+            }
+            if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
+            if (extraData.orderCode) updateSessionData('sepayOrderCode', extraData.orderCode);
+            nextStep();
+        }, 500);
+    }, [cashInserted, finalPaymentMethod, method, nextStep, price, updateSessionData, voucher]);
+
+    const applyCode = async () => {
+        if (code.length !== 6 || voucher || loading) return;
+
         setLoading(true);
         try {
             const res = await axios.post('/api/codes/validate', { code });
-            if (res.data.valid) {
-                if (res.data.value >= PRICE) {
-                    await axios.post(`/api/codes/${res.data.id}/use`);
-                    handlePaymentSuccess('code');
-                } else {
-                    setErrorModal({
-                        show: true,
-                        message: `Mã có giá trị ${res.data.value.toLocaleString()}₫ thấp hơn yêu cầu ${PRICE.toLocaleString()}₫`
-                    });
-                    setLoading(false);
-                }
+            if (!res.data.valid || res.data.value <= 0) {
+                setErrorModal({ show: true, message: 'Mã không hợp lệ hoặc không còn giá trị.' });
+                return;
+            }
+
+            const appliedVoucher = {
+                id: res.data.id,
+                code,
+                value: res.data.value,
+                used: false
+            };
+            setVoucher(appliedVoucher);
+            updateSessionData('paymentCode', code);
+            updateSessionData('paymentCodeValue', res.data.value);
+            updateSessionData('paymentCodeApplied', Math.min(res.data.value, price));
+            setCode('');
+            setMethod(null);
+            setCashInserted(0);
+            setQrOrder(null);
+            setQrError('');
+
+            if (res.data.value >= price) {
+                handlePaymentSuccess('code', { voucher: appliedVoucher });
             }
         } catch (error) {
-            console.error("Payment Error:", error);
-            if (error.response) {
-                // Server returned error (4xx, 5xx)
-                setErrorModal({
-                    show: true,
-                    message: error.response.data.message || "Lỗi xử lý thanh toán"
-                });
-            } else if (error.request) {
-                // Network error (no response)
-                setErrorModal({
-                    show: true,
-                    message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng."
-                });
-            } else {
-                // Other errors
-                setErrorModal({
-                    show: true,
-                    message: "Đã có lỗi xảy ra. Vui lòng thử lại."
-                });
-            }
+            setErrorModal({
+                show: true,
+                message: error.response?.data?.message || 'Không thể xử lý mã thanh toán. Vui lòng thử lại.'
+            });
+        } finally {
             setLoading(false);
         }
     };
 
-    const handlePaymentSuccess = async (paymentMethod) => {
-        setLoading(true);
-        setTimeout(() => {
-            setLoading(false);
-            updateSessionData('paymentMethod', paymentMethod || method);
-            updateSessionData('paymentStatus', 'completed');
-            nextStep();
-        }, 1000);
-    };
-
-    // Mock Cash Insertion & Real Bill Acceptor Listener
     useEffect(() => {
-        // Socket for Bill Acceptor
-        // Socket for Bill Acceptor
         const socket = io('/', {
-            transports: ['polling'], // Force polling to avoid Invalid frame header on Windows threading backend
+            transports: ['polling'],
             reconnectionAttempts: 5,
             auth: { deviceId: getDeviceId() }
         });
 
         socket.on('connect_error', (err) => {
-            console.warn("Socket connection error:", err.message);
+            console.warn('Socket connection error:', err.message);
         });
 
         socket.on('money_inserted', (data) => {
-            console.log("💰 Money Inserted:", data.amount);
-            // If user hasn't selected a method yet, auto-select cash?
-            // Or just update balance regardless.
             if (!method || method === 'cash') {
                 if (method !== 'cash') setMethod('cash');
-                setCashInserted(prev => {
-                    const newValue = prev + data.amount;
-                    return newValue;
-                });
+                setCashInserted((prev) => prev + data.amount);
+            }
+        });
+
+        socket.on('sepay_payment_success', (data) => {
+            if (data.order_code && data.order_code === qrOrder?.code) {
+                handlePaymentSuccess('qr', { orderCode: data.order_code });
             }
         });
 
         return () => socket.disconnect();
-    }, [method]);
+    }, [handlePaymentSuccess, method, qrOrder?.code]);
 
-    // Check Balance for Success
     useEffect(() => {
-        if (method === 'cash' && cashInserted >= PRICE) {
+        if (method === 'cash' && remainingAmount > 0 && cashInserted >= remainingAmount) {
             handlePaymentSuccess('cash');
         }
-    }, [method, cashInserted, PRICE]);
+    }, [cashInserted, handlePaymentSuccess, method, remainingAmount]);
 
-    // Mock Simulation (Keep for testing without hardware)
     useEffect(() => {
-        // Only run mock if explicitly enabled or maybe keypress? 
-        // Let's remove auto-mock to avoid confusion with real money, 
-        // OR make it slower/require manual trigger. 
-        // For now, I'll Comment out the auto-increment mock to rely on real hardware or manual simulation.
-        /*
-        if (method === 'cash' && cashInserted < PRICE) {
-            const interval = setInterval(() => {
-                setCashInserted(prev => Math.min(prev + 10000, PRICE));
-            }, 1500);
-            return () => clearInterval(interval);
+        if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;
+
+        let cancelled = false;
+        const createOrder = async () => {
+            setLoading(true);
+            try {
+                const res = await axios.post('/api/sepay/orders', { amount: remainingAmount });
+                if (!cancelled) setQrOrder(res.data);
+            } catch (error) {
+                if (!cancelled) {
+                    setQrError(error.response?.data?.error || 'Không thể tạo mã QR Sepay.');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        createOrder();
+        return () => {
+            cancelled = true;
+        };
+    }, [method, qrOrder, qrError, remainingAmount]);
+
+    useEffect(() => {
+        if (method !== 'qr' || !qrOrder?.code) return undefined;
+
+        let stopped = false;
+        const checkStatus = async () => {
+            try {
+                const res = await axios.get(`/api/sepay/orders/${qrOrder.code}/status`);
+                if (!stopped && res.data.status === 'paid') {
+                    handlePaymentSuccess('qr', { orderCode: qrOrder.code });
+                }
+            } catch (error) {
+                console.warn('Sepay status check failed:', error.message);
+            }
+        };
+
+        checkStatus();
+        const interval = setInterval(checkStatus, 3000);
+        return () => {
+            stopped = true;
+            clearInterval(interval);
+        };
+    }, [handlePaymentSuccess, method, qrOrder?.code]);
+
+    const methods = useMemo(() => [
+        { id: 'cash', icon: Banknote, label: 'Tiền mặt' },
+        { id: 'qr', icon: QrCode, label: 'Chuyển khoản' },
+        { id: 'code', icon: Hash, label: voucher ? 'Mã đã áp dụng' : 'Nhập mã' }
+    ], [voucher]);
+
+    const appendCode = (value) => {
+        if (code.length < 6) setCode(`${code}${value}`);
+    };
+
+    const selectMethod = (selectedMethod) => {
+        if (selectedMethod === 'code' && voucher) return;
+        setMethod(selectedMethod);
+        if (selectedMethod !== 'qr') {
+            setQrOrder(null);
+            setQrError('');
         }
-        */
-    }, [method]);
+    };
 
-    const renderContent = () => {
-        if (!method) {
-            const methods = [
-                { id: 'cash', icon: <Banknote size={56} className="text-[#52796f]" />, label: 'Tiền mặt' },
-                { id: 'qr', icon: <QrCode size={56} className="text-[#52796f]" />, label: 'Chuyển khoản' },
-                { id: 'code', icon: <Hash size={56} className="text-[#52796f]" />, label: 'Nhập mã' },
-            ];
+    const goBack = () => {
+        if (method) {
+            setMethod(null);
+            setCashInserted(0);
+            setQrOrder(null);
+            setQrError('');
+        } else {
+            prevStep();
+        }
+    };
 
-            return (
-                <div className="flex flex-col items-center w-full max-w-4xl mx-auto relative">
-                    {/* Header */}
-                    <motion.h2
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-5xl font-serif text-[#52796f] text-center mb-12 tracking-wider uppercase"
-                    >
-                        THANH TOÁN
-                    </motion.h2>
-
-                    {/* Price Card */}
-                    <motion.div
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-8 w-full max-w-md text-center mb-10 relative"
-                    >
-                        <h2 className="text-5xl font-bold text-[#354f52] font-serif mb-2 tracking-tight">
-                            {PRICE.toLocaleString()}₫
-                        </h2>
-                        <div className="w-full h-px bg-gray-200 my-4"></div>
-                        <p className="text-xl text-[#52796f] font-serif opacity-80">Số lượng: {printQuantity}</p>
-                    </motion.div>
-
-                    {/* Divider */}
-                    <div className="flex items-center gap-4 w-full max-w-lg mb-10 opacity-60">
-                        <div className="h-[1px] bg-[#A8B5A0] flex-1 rounded-full"></div>
-                        <span className="text-[#52796f] font-serif text-lg italic whitespace-nowrap">Chọn phương thức thanh toán</span>
-                        <div className="h-[1px] bg-[#A8B5A0] flex-1 rounded-full"></div>
+    const renderSummary = () => (
+        <div className="mb-10 w-full max-w-md rounded-3xl bg-white/90 p-8 text-center shadow-md">
+            <h2 className="mb-2 text-5xl font-bold tracking-tight" style={{ color: secondaryTextColor }}>{formatVnd(price)}</h2>
+            <div className="my-4 h-px w-full" style={{ backgroundColor: `${primaryTextColor}26` }} />
+            <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Số lượng: {printQuantity}</p>
+            {voucher && (
+                <div className="mt-5 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
+                    <div className="flex justify-between">
+                        <span>Mã {voucher.code}</span>
+                        <strong>-{formatVnd(voucherValue)}</strong>
                     </div>
-
-                    {/* Method Cards Grid */}
-                    <div className="grid grid-cols-3 gap-6 w-full max-w-3xl">
-                        {methods.map((m, i) => (
-                            <motion.button
-                                key={m.id}
-                                initial={{ y: 20, opacity: 0 }}
-                                animate={{ y: 0, opacity: 1 }}
-                                transition={{ delay: i * 0.1 }}
-                                whileHover={{ scale: 1.03, y: -5 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => setMethod(m.id)}
-                                className="bg-white rounded-[2rem] shadow-sm hover:shadow-xl border border-gray-100 p-6 flex flex-col items-center justify-center gap-4 aspect-square transition-all group"
-                            >
-                                <div className="p-4 bg-[#F9FAF7] rounded-full group-hover:bg-[#ebf2e8] transition-colors">
-                                    {/* Resize icons implicitly or explicitly if needed, but p-4 reduces container size */}
-                                    {m.id === 'cash' && <Banknote size={40} className="text-[#52796f]" />}
-                                    {m.id === 'qr' && <QrCode size={40} className="text-[#52796f]" />}
-                                    {m.id === 'code' && <Hash size={40} className="text-[#52796f]" />}
-                                </div>
-                                <span className="text-xl font-bold text-[#52796f] font-serif group-hover:text-[#354f52] transition-colors">
-                                    {m.label}
-                                </span>
-                            </motion.button>
-                        ))}
+                    <div className="mt-2 flex justify-between text-lg">
+                        <span>Còn lại</span>
+                        <strong>{formatVnd(remainingAmount)}</strong>
                     </div>
                 </div>
-            );
-        }
+            )}
+        </div>
+    );
+
+    const renderMethodSelection = () => (
+        <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center">
+            <h2 className="mb-10 text-center text-5xl font-bold uppercase tracking-wide" style={{ color: primaryTextColor }}>
+                Thanh toán
+            </h2>
+
+            {renderSummary()}
+
+            <div className="mb-10 flex w-full max-w-lg items-center gap-4 opacity-80">
+                <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
+                <span className="whitespace-nowrap text-lg font-semibold italic" style={{ color: primaryTextColor }}>
+                    {remainingAmount > 0 ? 'Chọn phương thức' : 'Mã đã thanh toán đủ'}
+                </span>
+                <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
+            </div>
+
+            <div className="grid w-full max-w-3xl grid-cols-3 gap-6">
+                {methods.map((item) => {
+                    const Icon = item.icon;
+                    const disabled = item.id === 'code' && Boolean(voucher);
+                    return (
+                        <button
+                            type="button"
+                            key={item.id}
+                            onClick={() => selectMethod(item.id)}
+                            disabled={disabled}
+                            className="flex aspect-square flex-col items-center justify-center gap-4 rounded-3xl border border-[#F6E6C9] bg-white/90 p-6 shadow-md disabled:opacity-60"
+                        >
+                            <div className="rounded-full bg-[#F6E6C9]/55 p-4">
+                                <Icon size={42} style={{ color: primaryTextColor }} />
+                            </div>
+                            <span className="text-xl font-bold" style={{ color: primaryTextColor }}>{item.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    const renderCash = () => (
+        <div className="flex flex-col items-center gap-6">
+            <Banknote size={80} style={{ color: primaryTextColor }} />
+            <h3 className="text-3xl font-bold" style={{ color: primaryTextColor }}>Đưa tiền vào khe bên dưới</h3>
+            {voucher && <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Mã đã trừ {formatVnd(voucherValue)}</p>}
+            <div className="h-6 w-full overflow-hidden rounded-full bg-[#F6E6C9]">
+                <div
+                    className="h-full bg-[#C8A47A]"
+                    style={{ width: `${Math.min((cashInserted / cashProgressTotal) * 100, 100)}%` }}
+                />
+            </div>
+            <p className="text-2xl font-bold" style={{ color: primaryTextColor }}>
+                {formatVnd(cashInserted)} / {formatVnd(remainingAmount)}
+            </p>
+        </div>
+    );
+
+    const renderQr = () => (
+        <div className="flex flex-col items-center gap-5">
+            <QrCode size={72} style={{ color: primaryTextColor }} />
+            <h3 className="text-3xl font-bold" style={{ color: primaryTextColor }}>Quét mã QR</h3>
+            {voucher && <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Cần thanh toán thêm {formatVnd(remainingAmount)}</p>}
+
+            {qrError ? (
+                <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-red-700">
+                    <p className="font-bold">Chưa tạo được QR Sepay</p>
+                    <p className="mt-2 text-sm">{qrError}</p>
+                </div>
+            ) : qrOrder ? (
+                <>
+                    <img
+                        src={qrOrder.qr_url}
+                        alt="QR thanh toán Sepay"
+                        className="h-64 w-64 rounded-2xl border-2 border-[#F6E6C9] bg-white p-3 shadow-inner"
+                    />
+                    <div className="w-full max-w-md rounded-2xl bg-[#F6E6C9]/35 p-4 text-left" style={{ color: secondaryTextColor }}>
+                        <div className="flex justify-between gap-4">
+                            <span>Ngân hàng</span>
+                            <strong>{qrOrder.bank}</strong>
+                        </div>
+                        <div className="mt-2 flex justify-between gap-4">
+                            <span>Số tài khoản</span>
+                            <strong>{qrOrder.account_number}</strong>
+                        </div>
+                        <div className="mt-2 flex justify-between gap-4">
+                            <span>Nội dung</span>
+                            <strong>{qrOrder.content}</strong>
+                        </div>
+                    </div>
+                    <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Đang chờ Sepay xác nhận tự động...</p>
+                </>
+            ) : (
+                <div className="flex h-64 w-64 items-center justify-center rounded-2xl border-2 border-[#F6E6C9] bg-white">
+                    <Loader2 size={44} className="animate-spin" style={{ color: primaryTextColor }} />
+                </div>
+            )}
+        </div>
+    );
+
+    const renderCode = () => (
+        <div className="flex flex-col items-center gap-6">
+            <Hash size={80} style={{ color: primaryTextColor }} />
+            <h3 className="text-3xl font-bold" style={{ color: primaryTextColor }}>Nhập mã</h3>
+            <p className="max-w-md text-center text-lg font-semibold" style={{ color: primaryTextColor }}>
+                Mã có thể dùng như voucher. Nếu mã thấp hơn tổng tiền, khách thanh toán thêm phần còn lại.
+            </p>
+
+            <div className="mb-4 flex gap-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="flex h-16 w-12 items-center justify-center rounded-xl border-2 border-[#F6E6C9] bg-white text-2xl font-bold"
+                        style={{ color: primaryTextColor }}
+                    >
+                        {code[index] || ''}
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid w-full max-w-xs grid-cols-3 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <button
+                        type="button"
+                        key={num}
+                        onClick={() => appendCode(num)}
+                        className="rounded-xl border-2 border-[#F6E6C9] bg-white py-4 text-2xl font-bold"
+                        style={{ color: primaryTextColor }}
+                    >
+                        {num}
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => setCode('')}
+                    className="rounded-xl border-2 border-red-300 bg-red-100 py-4 text-lg font-bold text-red-600"
+                >
+                    Xóa
+                </button>
+                <button
+                    type="button"
+                    onClick={() => appendCode(0)}
+                    className="rounded-xl border-2 border-[#F6E6C9] bg-white py-4 text-2xl font-bold"
+                    style={{ color: primaryTextColor }}
+                >
+                    0
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setCode(code.slice(0, -1))}
+                    className="rounded-xl border-2 border-yellow-300 bg-yellow-100 py-4 text-lg font-bold text-yellow-700"
+                >
+                    Lùi
+                </button>
+            </div>
+
+            <button
+                type="button"
+                onClick={applyCode}
+                disabled={loading || code.length !== 6}
+                className="mt-4 rounded-full bg-[#D5B895] px-8 py-3 font-bold text-white shadow-lg disabled:opacity-50"
+            >
+                Áp dụng mã
+            </button>
+        </div>
+    );
+
+    const renderContent = () => {
+        if (!method) return renderMethodSelection();
 
         return (
-            <div className="bg-white border-2 border-[#A8B5A0] p-12 rounded-3xl w-full max-w-2xl text-center relative shadow-xl">
-                {/* Back button removed from here as it is now global */}
-
-                {method === 'cash' && (
-                    <div className="flex flex-col items-center gap-6">
-                        <Banknote size={80} className="text-[#84a98c] animate-bounce" />
-                        <h3 className="text-3xl font-bold text-[#52796f]">Đưa tiền vào khe bên dưới</h3>
-                        <div className="w-full bg-[#CAD2C5] h-6 rounded-full overflow-hidden">
-                            <motion.div
-                                className="bg-[#A8B5A0] h-full"
-                                initial={{ width: 0 }}
-                                animate={{ width: `${(cashInserted / PRICE) * 100}%` }}
-                            />
-                        </div>
-                        <p className="text-2xl font-bold text-[#52796f]">
-                            {cashInserted.toLocaleString()} / {PRICE.toLocaleString()}₫
-                        </p>
-                    </div>
-                )}
-
-                {
-                    method === 'qr' && (
-                        <div className="flex flex-col items-center gap-6">
-                            <QrCode size={80} className="text-[#A8B5A0]" />
-                            <h3 className="text-3xl font-bold text-[#52796f]">Quét mã QR</h3>
-                            <div className="w-64 h-64 bg-white border-2 border-[#A8B5A0] flex items-center justify-center rounded-lg">
-                                <p className="text-[#52796f]">Mã QR ở đây</p>
-                            </div>
-                            <button
-                                onClick={() => handlePaymentSuccess('qr')}
-                                className="bg-blue-600 px-8 py-3 rounded-full font-bold hover:bg-blue-500"
-                            >
-                                Simulate Payment Success
-                            </button>
-                        </div>
-                    )
-                }
-
-                {
-                    method === 'code' && (
-                        <div className="flex flex-col items-center gap-6">
-                            <Hash size={80} className="text-[#A8B5A0]" />
-                            <h3 className="text-3xl font-bold text-[#52796f]">Nhập mã</h3>
-
-                            {/* Code Display */}
-                            <div className="flex gap-2 mb-4">
-                                {[...Array(6)].map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className="w-12 h-16 bg-[#CAD2C5] border-2 border-[#A8B5A0] rounded-lg flex items-center justify-center text-2xl font-bold text-[#52796f]"
-                                    >
-                                        {code[i] || ''}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Numeric Keypad */}
-                            <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                                    <button
-                                        key={num}
-                                        onClick={() => code.length < 6 && setCode(code + num)}
-                                        className="bg-[#CAD2C5] hover:bg-[#A8B5A0] hover:text-white border-2 border-[#A8B5A0] rounded-xl py-4 text-2xl font-bold transition-all active:scale-95 text-[#52796f]"
-                                    >
-                                        {num}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={() => setCode('')}
-                                    className="bg-red-100 hover:bg-red-200 border-2 border-red-300 text-red-600 rounded-xl py-4 text-lg font-bold transition-all active:scale-95"
-                                >
-                                    Xóa
-                                </button>
-                                <button
-                                    onClick={() => code.length < 6 && setCode(code + '0')}
-                                    className="bg-[#CAD2C5] hover:bg-[#A8B5A0] hover:text-white border-2 border-[#A8B5A0] rounded-xl py-4 text-2xl font-bold transition-all active:scale-95 text-[#52796f]"
-                                >
-                                    0
-                                </button>
-                                <button
-                                    onClick={() => setCode(code.slice(0, -1))}
-                                    className="bg-yellow-100 hover:bg-yellow-200 border-2 border-yellow-300 text-yellow-700 rounded-xl py-4 text-lg font-bold transition-all active:scale-95"
-                                >
-                                    ⌫
-                                </button>
-                            </div>
-
-                            <button
-                                onClick={handleCodePayment}
-                                disabled={loading || code.length !== 6}
-                                className="bg-[#A8B5A0] text-white px-8 py-3 rounded-full font-bold hover:bg-[#84a98c] disabled:opacity-50 mt-4 shadow-lg"
-                            >
-                                Xác nhận
-                            </button>
-                        </div>
-                    )
-                }
-            </div >
+            <div className="relative w-full max-w-2xl rounded-3xl bg-white/90 p-12 text-center shadow-md">
+                {method === 'cash' && renderCash()}
+                {method === 'qr' && renderQr()}
+                {method === 'code' && renderCode()}
+            </div>
         );
     };
 
-    if (loading) {
+    if (loading && method !== 'qr') {
         return (
-            <div className="flex flex-col items-center justify-center h-full gap-4">
-                <Loader2 size={64} className="animate-spin text-[#52796f]" />
-                <p className="text-xl text-[#52796f]">Đang xử lý thanh toán...</p>
+            <div
+                className="flex h-full flex-col items-center justify-center gap-4 bg-[#FFF8E7] bg-cover bg-center font-serif"
+                style={{ backgroundImage: configs?.['bg_payment-wait'] ? `url('${configs['bg_payment-wait']}')` : 'none' }}
+            >
+                <Loader2 size={64} className="animate-spin" style={{ color: primaryTextColor }} />
+                <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Đang xử lý thanh toán...</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-full w-full flex flex-col items-center justify-center p-8 bg-[#F9FAF7] relative">
-            {/* Back Button - Only show if not in sub-flow (method selection) or if needed universally */}
-            {/* User requested Back button for Payment screen top-left like PrintQuantity */}
+        <div
+            className="relative flex min-h-full w-full flex-col items-center justify-center bg-[#FFF8E7] bg-cover bg-center p-8 font-serif"
+            style={{ backgroundImage: configs?.['bg_payment'] ? `url('${configs['bg_payment']}')` : 'none' }}
+        >
             <button
-                onClick={() => {
-                    if (method) {
-                        setMethod(null);
-                        setCashInserted(0);
-                    } else {
-                        prevStep();
-                    }
-                }}
-                className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-[#52796f] rounded-full transition-all font-serif font-bold shadow-sm hover:shadow-md border border-[#A8B5A0]/20 z-10"
+                type="button"
+                onClick={goBack}
+                className="absolute left-6 top-6 z-10 flex items-center gap-2 rounded-full bg-white/80 px-6 py-3 font-bold shadow-sm backdrop-blur"
+                style={{ color: primaryTextColor }}
             >
                 <ArrowLeft size={24} />
-                <span>Quay Lại</span>
+                <span>Quay lại</span>
             </button>
 
-            {/* Main Content Area */}
-            <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
+            <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
                 {renderContent()}
             </div>
 
-            {/* Error Modal */}
             {errorModal.show && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-                    <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="bg-white/90 backdrop-blur-md border border-red-200 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl"
-                    >
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="mx-4 w-full max-w-md rounded-3xl border border-red-200 bg-white/95 p-8 shadow-2xl">
                         <div className="text-center">
-                            <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                            <h3 className="text-2xl font-bold mb-4 text-[#354f52]">Lỗi thanh toán</h3>
-                            <p className="text-lg mb-8 text-[#52796f]">{errorModal.message}</p>
+                            <div className="mb-4 text-6xl text-red-500">!</div>
+                            <h3 className="mb-4 text-2xl font-bold" style={{ color: secondaryTextColor }}>Lỗi thanh toán</h3>
+                            <p className="mb-8 text-lg" style={{ color: primaryTextColor }}>{errorModal.message}</p>
                             <button
+                                type="button"
                                 onClick={() => {
                                     setErrorModal({ show: false, message: '' });
                                     setCode('');
                                 }}
-                                className="bg-[#52796f] text-white px-8 py-3 rounded-full font-bold hover:bg-[#354f52] transition-all shadow-lg"
+                                className="rounded-full bg-[#D5B895] px-8 py-3 font-bold text-white shadow-lg"
                             >
                                 Đóng
                             </button>
                         </div>
-                    </motion.div>
+                    </div>
                 </div>
             )}
         </div>

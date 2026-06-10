@@ -13,6 +13,8 @@ const Settings = () => {
         session_timeout: '600',
         mobile_session_timeout: '300',
         countdown: '5',
+        printer_name: 'RX1HS',
+        printer_copies: '1',
         camera_mode: 'webcam',
         hot_folder: 'C:/Photobooth_Input',
         trigger_key: '{F8}'
@@ -160,6 +162,21 @@ const Settings = () => {
                                                         <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
                                                     </div>
                                                 </div>
+                                            </div>
+
+                                            <div className="group">
+                                                <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                    Tên máy in Windows
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="printer_name"
+                                                    value={configs.printer_name}
+                                                    onChange={handleChange}
+                                                    placeholder="RX1HS hoặc tên printer trong Windows"
+                                                    className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-sm focus:border-[#52796f]"
+                                                />
+                                                <p className="mt-2 text-xs text-gray-400">Ví dụ: RX1HS, DNP DS-RX1HS, DS-RX1.</p>
                                             </div>
                                         </div>
 

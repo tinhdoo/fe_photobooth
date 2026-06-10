@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { useWorkflow } from '../../context/WorkflowContext';
+﻿import { useEffect, useRef, useState } from 'react';
 import QRCodeStyling from 'qr-code-styling';
-import { QrCode, Download } from 'lucide-react';
-import logoTomato from '../../assets/images/logo_tomato.png';
+import { CheckCircle2, QrCode } from 'lucide-react';
+import { useWorkflow } from '../../context/WorkflowContext';
 
 const Result = () => {
-    const { resetSession, sessionData } = useWorkflow();
+    const { resetSession, sessionData, configs } = useWorkflow();
     const finalImage = sessionData.finalImage;
     const sessionId = sessionData.sessionId;
-
+    const logoUrl = configs?.logo_main || '/logo_tomato.png';
+    const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
+    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const [viewUrl, setViewUrl] = useState('');
     const qrRef = useRef(null);
 
@@ -20,22 +20,15 @@ const Result = () => {
                 width: 200,
                 height: 200,
                 data: viewUrl,
-                image: logoTomato,
                 margin: 10,
                 qrOptions: { errorCorrectionLevel: 'L' },
-                dotsOptions: {
-                    color: "#000000",
-                    type: "rounded"
-                },
-                imageOptions: {
-                    crossOrigin: "anonymous",
-                    margin: 4,
-                    imageSize: 0.2
-                }
+                dotsOptions: { color: secondaryTextColor, type: 'square' },
+                cornersSquareOptions: { type: 'extra-rounded', color: primaryTextColor },
+                cornersDotOptions: { type: 'dot', color: '#C8A47A' }
             });
             qrCode.append(qrRef.current);
         }
-    }, [viewUrl]);
+    }, [viewUrl, primaryTextColor, secondaryTextColor]);
 
     useEffect(() => {
         const fetchViewUrl = async () => {
@@ -53,7 +46,7 @@ const Result = () => {
                     setViewUrl(`${window.location.origin}/album/${sessionId}`);
                 }
             } catch (error) {
-                console.error("Failed to get LAN IP", error);
+                console.error('Failed to get LAN IP', error);
                 setViewUrl(`${window.location.origin}/album/${sessionId}`);
             }
         };
@@ -61,55 +54,53 @@ const Result = () => {
     }, [sessionId, finalImage]);
 
     return (
-        <div className="flex flex-col items-center justify-center h-full w-full bg-[#F9FAF7] p-8">
+        <div
+            className="flex h-full w-full flex-col items-center justify-center bg-[#FFF8E7] bg-cover bg-center p-8 font-serif"
+            style={{ backgroundImage: configs?.['bg_qr-photo'] ? `url('${configs['bg_qr-photo']}')` : 'none' }}
+        >
+            <div className="flex w-full max-w-lg flex-col items-center rounded-3xl bg-white/90 p-12 text-center shadow-md">
+                <div className="mb-5 flex items-center gap-4">
+                    <img
+                        src={logoUrl}
+                        alt="Tomato Photobooth"
+                        className="h-16 w-16 rounded-full object-contain"
+                    />
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F6E6C9]/70 shadow-sm">
+                        <CheckCircle2 size={34} style={{ color: primaryTextColor }} />
+                    </div>
+                </div>
 
-            <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-white p-12 rounded-2xl shadow-xl flex flex-col items-center max-w-lg w-full text-center border border-[#A8B5A0]/20"
-            >
-                <motion.h2
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-5xl font-serif text-[#52796f] text-center mb-12 tracking-wider uppercase"
-                >
-                    Hoàn tất!
-                </motion.h2>
+                <h2 className="mb-3 text-center text-5xl font-bold uppercase tracking-wide" style={{ color: primaryTextColor }}>
+                    Ảnh đã sẵn sàng
+                </h2>
+                <p className="mb-8 max-w-md text-center text-xl font-semibold leading-relaxed" style={{ color: primaryTextColor }}>
+                    Quét QR để mang những khoảnh khắc đáng yêu này về nhé ❤️
+                </p>
 
-                <div className="bg-white p-4 rounded-xl mb-4 border border-gray-100 shadow-inner">
+                <div className="mb-4 rounded-2xl border border-[#F6E6C9] bg-white p-4 shadow-inner">
                     {viewUrl ? (
                         <div ref={qrRef} />
                     ) : (
-                        <div className="w-[200px] h-[200px] flex items-center justify-center bg-gray-100 rounded text-gray-400">
+                        <div className="flex h-[200px] w-[200px] items-center justify-center rounded bg-[#F6E6C9]/35" style={{ color: `${primaryTextColor}80` }}>
                             <QrCode size={64} />
                         </div>
                     )}
                 </div>
 
-                {viewUrl && (
-                    <a
-                        href={viewUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#52796f] mb-8 font-serif italic hover:underline flex items-center gap-2"
-                    >
-                        <Download size={16} /> Nhấn để mở ảnh
-                    </a>
-                )}
-
                 {!viewUrl && (
-                    <p className="text-red-400 mb-8 font-serif italic text-sm">Ảnh không có sẵn</p>
+                    <p className="mb-8 text-sm italic text-red-400">Ảnh chưa sẵn sàng</p>
                 )}
 
                 <button
+                    type="button"
                     onClick={resetSession}
-                    className="w-full bg-[#A8B5A0] text-white py-4 rounded-xl text-xl hover:bg-[#97a290] transition-colors shadow-md"
+                    className="w-full rounded-xl bg-[#D5B895] py-4 text-xl font-bold text-white shadow-lg transition-none active:scale-95"
                 >
-                    Kết thúc
+                    Về trang chủ
                 </button>
-            </motion.div>
-
+            </div>
         </div>
     );
 };
+
 export default Result;

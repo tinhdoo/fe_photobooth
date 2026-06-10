@@ -1,31 +1,42 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { WorkflowProvider, useWorkflow } from './context/WorkflowContext';
 import MainLayout from './layouts/MainLayout';
-import AdminLayout from './layouts/AdminLayout';
 
-// Steps
 import Welcome from './components/steps/Welcome';
-import LayoutSelection from './components/steps/LayoutSelection';
-import Capture from './components/steps/Capture';
-import Edit from './components/steps/Edit';
-import Review from './components/steps/Review';
-import Payment from './components/steps/Payment';
-import Result from './components/steps/Result';
-import ViewPage from './pages/ViewPage';
 import SourceSelection from './components/steps/SourceSelection';
-import MobileUploadCapture from './components/steps/MobileUploadCapture';
-import MobileUploadClient from './pages/MobileUploadClient';
-
-// Admin
-import FrameManager from './components/admin/FrameManager';
-import CodeManager from './components/admin/CodeManager';
-import RevenueDashboard from './components/admin/RevenueDashboard';
-import DeviceManager from './components/admin/DeviceManager';
-import Settings from './components/admin/Settings';
-import BillSettings from './components/admin/BillSettings'; // Added
+import LayoutSelection from './components/steps/LayoutSelection';
 import PrintQuantity from './components/steps/PrintQuantity';
-import AdminLogin from './pages/AdminLogin';
-import { Navigate } from 'react-router-dom';
+import Payment from './components/steps/Payment';
+
+const Capture = lazy(() => import('./components/steps/Capture'));
+const Edit = lazy(() => import('./components/steps/Edit'));
+const Review = lazy(() => import('./components/steps/Review'));
+const Result = lazy(() => import('./components/steps/Result'));
+const MobileUploadCapture = lazy(() => import('./components/steps/MobileUploadCapture'));
+
+const ViewPage = lazy(() => import('./pages/ViewPage'));
+const MobileUploadClient = lazy(() => import('./pages/MobileUploadClient'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
+const FrameManager = lazy(() => import('./components/admin/FrameManager'));
+const CodeManager = lazy(() => import('./components/admin/CodeManager'));
+const RevenueDashboard = lazy(() => import('./components/admin/RevenueDashboard'));
+const Settings = lazy(() => import('./components/admin/Settings'));
+const BillSettings = lazy(() => import('./components/admin/BillSettings'));
+const BrandingSettings = lazy(() => import('./components/admin/BrandingSettings'));
+
+const LoadingScreen = () => (
+    <div className="flex h-full min-h-screen w-full items-center justify-center bg-[#F9FAF7] font-serif text-xl font-bold text-[#52796f]">
+        Đang tải...
+    </div>
+);
+
+const StepSuspense = ({ children }) => (
+    <Suspense fallback={<LoadingScreen />}>
+        {children}
+    </Suspense>
+);
 
 const ProtectedRoute = ({ children }) => {
     const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true' || sessionStorage.getItem('isAuthenticated') === 'true';
@@ -50,13 +61,29 @@ const StepContent = () => {
         case 3:
             return <Payment />;
         case 4:
-            return sessionData.source === 'upload' ? <MobileUploadCapture /> : <Capture />;
+            return (
+                <StepSuspense>
+                    {sessionData.source === 'upload' ? <MobileUploadCapture /> : <Capture />}
+                </StepSuspense>
+            );
         case 5:
-            return <Review />;
+            return (
+                <StepSuspense>
+                    <Review />
+                </StepSuspense>
+            );
         case 6:
-            return <Edit />;
+            return (
+                <StepSuspense>
+                    <Edit />
+                </StepSuspense>
+            );
         case 7:
-            return <Result />;
+            return (
+                <StepSuspense>
+                    <Result />
+                </StepSuspense>
+            );
         default:
             return <Welcome />;
     }
@@ -66,34 +93,37 @@ const App = () => {
     return (
         <BrowserRouter>
             <WorkflowProvider>
-                <Routes>
-                    {/* Main User Flow */}
-                    <Route path="/" element={
-                        <MainLayout>
-                            <StepContent />
-                        </MainLayout>
-                    } />
+                <Suspense fallback={<LoadingScreen />}>
+                    <Routes>
+                        <Route
+                            path="/"
+                            element={
+                                <MainLayout>
+                                    <StepContent />
+                                </MainLayout>
+                            }
+                        />
 
-                    {/* View Page (Public) */}
-                    <Route path="/album/:id" element={<ViewPage />} />
-
-                    {/* Mobile Upload Route (Public/LAN) */}
-                    <Route path="/m/upload/:sessionId" element={<MobileUploadClient />} />
-
-                    {/* Admin Dashboard */}
-                    <Route path="/admin/login" element={<AdminLogin />} />
-                    <Route path="/admin" element={
-                        <ProtectedRoute>
-                            <AdminLayout />
-                        </ProtectedRoute>
-                    }>
-                        <Route index element={<FrameManager />} />
-                        <Route path="codes" element={<CodeManager />} />
-                        <Route path="revenue" element={<RevenueDashboard />} />
-                        <Route path="settings" element={<Settings />} />
-                        <Route path="bill-settings" element={<BillSettings />} />
-                    </Route>
-                </Routes>
+                        <Route path="/album/:id" element={<ViewPage />} />
+                        <Route path="/m/upload/:sessionId" element={<MobileUploadClient />} />
+                        <Route path="/admin/login" element={<AdminLogin />} />
+                        <Route
+                            path="/admin"
+                            element={
+                                <ProtectedRoute>
+                                    <AdminLayout />
+                                </ProtectedRoute>
+                            }
+                        >
+                            <Route index element={<FrameManager />} />
+                            <Route path="codes" element={<CodeManager />} />
+                            <Route path="revenue" element={<RevenueDashboard />} />
+                            <Route path="settings" element={<Settings />} />
+                            <Route path="bill-settings" element={<BillSettings />} />
+                            <Route path="branding" element={<BrandingSettings />} />
+                        </Route>
+                    </Routes>
+                </Suspense>
             </WorkflowProvider>
         </BrowserRouter>
     );
