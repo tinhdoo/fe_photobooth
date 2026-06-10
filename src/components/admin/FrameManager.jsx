@@ -40,7 +40,7 @@ const FrameManager = () => {
         const fetchTopFrames = async () => {
             try {
                 const res = await axios.get('/api/stats/top-frames', { params: { limit: 5 } });
-                setTopFrames(res.data || []);
+                setTopFrames(Array.isArray(res.data) ? res.data : []);
             } catch (err) {
                 console.error('Failed to fetch top frames', err);
             } finally {
@@ -55,7 +55,7 @@ const FrameManager = () => {
             const res = await axios.get('/api/frames', {
                 params: { layout: selectedLayout }
             });
-            setFrames(res.data);
+            setFrames(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Error fetching frames:", error);
         }

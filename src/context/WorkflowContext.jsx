@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 const WorkflowContext = createContext();
+const API_URL = import.meta.env.VITE_API_URL || '';
+const isLocalApp = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const apiPath = (path) => `${API_URL}${path}`;
 
 export const WorkflowProvider = ({ children }) => {
     const [currentStep, setCurrentStep] = useState(1);
@@ -34,7 +37,8 @@ export const WorkflowProvider = ({ children }) => {
 
     const fetchConfigs = async () => {
         try {
-            const res = await fetch('/api/config');
+            if (!API_URL && !isLocalApp()) return;
+            const res = await fetch(apiPath('/api/config'));
             if (res.ok) {
                 const data = await res.json();
                 setConfigs(prev => ({
@@ -76,6 +80,7 @@ export const WorkflowProvider = ({ children }) => {
         }
 
         const syncDevice = async () => {
+            if (!API_URL && !isLocalApp()) return;
             const deviceId = getDeviceId();
 
             let deviceName = getDeviceName();
@@ -88,7 +93,7 @@ export const WorkflowProvider = ({ children }) => {
 
             try {
                 // Initial registration / sync
-                const res = await fetch('/api/devices/heartbeat', {
+                const res = await fetch(apiPath('/api/devices/heartbeat'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, name: deviceName })

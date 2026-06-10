@@ -3,6 +3,9 @@ import { Upload, Image as ImageIcon, Loader2, Palette, CheckCircle2, AlertCircle
 import toast from 'react-hot-toast';
 import { useWorkflow } from '../../context/WorkflowContext';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+const apiPath = (path) => `${API_URL}${path}`;
+
 const pageBackgrounds = [
     { id: 'source-selection', label: 'Chọn nguồn ảnh (source-selection)' },
     { id: 'choose-slot', label: 'Chọn loại khung (choose-slot)' },
@@ -87,7 +90,7 @@ const BrandingSettings = () => {
     };
 
     const saveConfigs = async (payload, successMessage = 'Đã cập nhật cấu hình.') => {
-        const response = await fetch('/api/config', {
+        const response = await fetch(apiPath('/api/config'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -120,7 +123,7 @@ const BrandingSettings = () => {
         formData.append('key', key);
 
         try {
-            const response = await fetch('/api/upload/branding', {
+            const response = await fetch(apiPath('/api/upload/branding'), {
                 method: 'POST',
                 body: formData,
             });
