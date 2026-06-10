@@ -70,18 +70,18 @@ const BillSettings = () => {
                 axios.get('/api/devices')
             ]);
 
-            const localId = statusRes.data.device_id;
+            const localId = statusRes.data?.device_id || getDeviceId();
             setCurrentDeviceId(localId);
             setSelectedDeviceId((prev) => prev || localId);
             setStatus({
-                state: statusRes.data.status,
-                message: statusRes.data.status === 'connected'
-                    ? `Đã kết nối ${statusRes.data.port || ''}`.trim()
-                    : statusRes.data.enabled
+                state: statusRes.data?.status || 'disconnected',
+                message: statusRes.data?.status === 'connected'
+                    ? `Đã kết nối ${statusRes.data?.port || ''}`.trim()
+                    : statusRes.data?.enabled
                         ? 'Chưa kết nối'
                         : 'Đang tắt'
             });
-            setDevices(devicesRes.data);
+            setDevices(Array.isArray(devicesRes.data) ? devicesRes.data : []);
             fetchPorts();
         } catch (error) {
             console.error('Failed to fetch bill devices', error);
@@ -360,3 +360,4 @@ const BillSettings = () => {
 };
 
 export default BillSettings;
+

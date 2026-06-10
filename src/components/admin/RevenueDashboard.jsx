@@ -59,7 +59,13 @@ const RevenueDashboard = () => {
 
             console.log("Fetching revenue with params:", params);
             const res = await axios.get('/api/revenue', { params });
-            setStats(res.data);
+            const data = res.data && typeof res.data === 'object' ? res.data : {};
+            setStats({
+                totalRevenue: Number(data.totalRevenue || 0),
+                transactions: Array.isArray(data.transactions) ? data.transactions : [],
+                chartData: Array.isArray(data.chartData) ? data.chartData : [],
+                paymentBreakdown: data.paymentBreakdown && typeof data.paymentBreakdown === 'object' ? data.paymentBreakdown : {},
+            });
             setShowMobileFilter(false);
         } catch (error) {
             console.error("Failed to fetch revenue:", error);
@@ -88,7 +94,7 @@ const RevenueDashboard = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount || 0));
     };
 
     const handleResetRevenue = async () => {

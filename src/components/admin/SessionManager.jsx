@@ -13,7 +13,7 @@ const SessionManager = () => {
     const fetchSessions = async () => {
         try {
             const res = await axios.get('/api/sessions');
-            setSessions(res.data);
+            setSessions(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Failed to fetch sessions", error);
         } finally {
@@ -22,7 +22,7 @@ const SessionManager = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount || 0));
     };
 
     if (loading) return <div className="p-8">Đang tải danh sách phiên...</div>;

@@ -13,7 +13,7 @@ const DeviceManager = () => {
         setLoading(true);
         try {
             const res = await axios.get('/api/devices');
-            setDevices(res.data);
+            setDevices(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Failed to fetch devices:", error);
         } finally {
