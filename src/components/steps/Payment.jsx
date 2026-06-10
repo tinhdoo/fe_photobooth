@@ -4,8 +4,13 @@ import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
+import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
 
 const Payment = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
@@ -146,11 +151,14 @@ const Payment = () => {
         const createOrder = async () => {
             setLoading(true);
             try {
-                const res = await axios.post('/api/sepay/orders', { amount: remainingAmount });
+                const res = await axios.post(`${CLOUD_API_URL}/api/sepay-orders`, {
+                    amount: remainingAmount,
+                    session_id: sessionData?.sessionId || sessionData?.uuid || null,
+                });
                 if (!cancelled) setQrOrder(res.data);
             } catch (error) {
                 if (!cancelled) {
-                    setQrError(error.response?.data?.error || 'Không thể tạo mã QR Sepay.');
+                    setQrError(error.response?.data?.error || 'Không thể tạo mã QR Sepay trên Vercel.');
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -166,15 +174,26 @@ const Payment = () => {
     useEffect(() => {
         if (method !== 'qr' || !qrOrder?.code) return undefined;
 
+        if (!isSupabaseBrowserConfigured || !supabase) {
+            setQrError('Chưa cấu hình VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY cho kiosk.');
+            return undefined;
+        }
+
         let stopped = false;
         const checkStatus = async () => {
             try {
-                const res = await axios.get(`/api/sepay/orders/${qrOrder.code}/status`);
-                if (!stopped && res.data.status === 'paid') {
+                const { data, error } = await supabase
+                    .from('payments')
+                    .select('status')
+                    .eq('code', qrOrder.code)
+                    .single();
+
+                if (error) throw error;
+                if (!stopped && data?.status === 'paid') {
                     handlePaymentSuccess('qr', { orderCode: qrOrder.code });
                 }
             } catch (error) {
-                console.warn('Sepay status check failed:', error.message);
+                console.warn('Supabase payment status check failed:', error.message);
             }
         };
 
