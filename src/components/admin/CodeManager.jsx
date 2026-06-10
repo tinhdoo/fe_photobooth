@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
 
+const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
+const normalizeCode = (code = {}) => ({
+    ...code,
+    value: Number(code.value ?? code.amount ?? 0),
+    is_used: Boolean(code.is_used),
+    created_at: code.created_at || new Date().toISOString(),
+});
+
 const CodeManager = () => {
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -26,7 +34,8 @@ const CodeManager = () => {
         try {
             const res = await axios.get('/api/codes');
             const now = new Date();
-            const sortedCodes = [...res.data].sort((a, b) => {
+            const list = Array.isArray(res.data) ? res.data.map(normalizeCode) : [];
+            const sortedCodes = list.sort((a, b) => {
                 const getPriority = (code) => {
                     const isExpired = code.expires_at && new Date(code.expires_at) < now;
                     if (code.is_used) return 3;
@@ -189,7 +198,7 @@ const CodeManager = () => {
                                                 <span className="font-mono text-lg font-bold text-[#2f3e46] tracking-wide">{code.code}</span>
                                             </div>
                                             <div className="text-emerald-600 font-bold text-base">
-                                                {code.value.toLocaleString()} ₫
+                                                {formatCurrency(code.value)}
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
@@ -244,7 +253,7 @@ const CodeManager = () => {
                                             <td className="py-4 pl-6">
                                                 <span className="font-mono font-bold text-[#2f3e46] text-lg bg-gray-100/50 px-2 py-1 rounded">{code.code}</span>
                                             </td>
-                                            <td className="py-4 font-bold text-emerald-600">{code.value.toLocaleString()} ₫</td>
+                                            <td className="py-4 font-bold text-emerald-600">{formatCurrency(code.value)}</td>
                                             <td className="py-4 text-center">
                                                 <StatusBadge code={code} />
                                             </td>
