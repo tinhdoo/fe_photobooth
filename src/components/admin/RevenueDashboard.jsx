@@ -3,6 +3,12 @@ import axios from 'axios';
 import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2 } from 'lucide-react';
 import { io } from "socket.io-client";
 
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
+const apiPath = (path) => `${CLOUD_API_URL}${path}`;
+
 const RevenueDashboard = () => {
     const [stats, setStats] = useState({ totalRevenue: 0, transactions: [] });
     const [loading, setLoading] = useState(false);
@@ -58,7 +64,7 @@ const RevenueDashboard = () => {
             if (paymentMethod) params.paymentMethod = paymentMethod;
 
             console.log("Fetching revenue with params:", params);
-            const res = await axios.get('/api/revenue', { params });
+            const res = await axios.get(apiPath('/api/revenue'), { params });
             const data = res.data && typeof res.data === 'object' ? res.data : {};
             setStats({
                 totalRevenue: Number(data.totalRevenue || 0),
@@ -107,7 +113,7 @@ const RevenueDashboard = () => {
         setResetError('');
 
         try {
-            await axios.post('/api/revenue/reset', { code: resetCode });
+            await axios.post(apiPath('/api/revenue'), { code: resetCode });
 
             setShowResetModal(false);
             setResetCode('');
