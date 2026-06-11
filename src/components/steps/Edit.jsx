@@ -653,6 +653,10 @@ const Edit = () => {
                             frame_url: selectedFrame.url || selectedFrame.image,
                             frame_config: frameConfig,
                             photo_positions: photoPositions,
+                            payment_code: sessionData.paymentCode || null,
+                            payment_code_value: sessionData.paymentCodeValue || null,
+                            payment_code_applied: sessionData.paymentCodeApplied || null,
+                            sepay_order_code: sessionData.sepayOrderCode || null,
                         }
                     });
 

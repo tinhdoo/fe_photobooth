@@ -28,6 +28,24 @@ function matchesMethod(tx, method) {
     return current === method;
 }
 
+function methodLabel(method) {
+    const value = String(method || 'cash').toLowerCase();
+    if (value === 'cash') return 'Tiền mặt';
+    if (value === 'qr' || value === 'sepay') return 'Chuyển khoản QR';
+    if (value === 'code') return 'Mã thanh toán';
+    if (value === 'code+cash') return 'Mã + tiền mặt';
+    if (value === 'code+qr') return 'Mã + QR';
+    return method || 'Không xác định';
+}
+
+function detailLabel(method, paymentCode, sepayCode) {
+    const parts = [];
+    if (paymentCode) parts.push(`Mã: ${paymentCode}`);
+    if (sepayCode) parts.push(`QR: ${sepayCode}`);
+    if (!parts.length && (method === 'qr' || method === 'sepay')) parts.push('SePay');
+    return parts.join(' • ');
+}
+
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
     const { data, error } = await supabase.storage.listBuckets();
@@ -60,14 +78,22 @@ async function listStorageSessions(supabase) {
 
         try {
             const session = JSON.parse(await blob.text());
+            const meta = session.meta_data || {};
+            const paymentMethod = session.payment_method || 'cash';
+            const paymentCode = meta.payment_code || session.payment_code || null;
+            const sepayCode = meta.sepay_order_code || session.sepay_order_code || null;
             return {
                 id: session.uuid || file.name.replace(/\.json$/, ''),
-                code: session.uuid || file.name.replace(/\.json$/, ''),
+                code: paymentCode || sepayCode || paymentMethod,
                 value: toNumber(session.amount),
                 status: session.status || 'active',
                 used_at: session.created_at || file.created_at || file.updated_at,
                 created_at: session.created_at || file.created_at || file.updated_at,
-                payment_method: session.payment_method || 'cash',
+                payment_method: paymentMethod,
+                payment_code: paymentCode,
+                sepay_order_code: sepayCode,
+                method_label: methodLabel(paymentMethod),
+                detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
                 source: 'session',
             };
         } catch {
@@ -96,6 +122,10 @@ async function listPaymentTransactions(supabase) {
         used_at: payment.paid_at || payment.created_at,
         created_at: payment.created_at,
         payment_method: 'qr',
+        payment_code: null,
+        sepay_order_code: payment.code,
+        method_label: methodLabel('qr'),
+        detail_label: detailLabel('qr', null, payment.code),
         source: 'payment',
     }));
 }

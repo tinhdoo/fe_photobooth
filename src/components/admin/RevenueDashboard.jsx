@@ -103,6 +103,25 @@ const RevenueDashboard = () => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount || 0));
     };
 
+    const getMethodLabel = (tx) => {
+        if (tx.method_label) return tx.method_label;
+        const method = String(tx.payment_method || '').toLowerCase();
+        if (method === 'cash') return 'Tiền mặt';
+        if (method === 'qr' || method === 'sepay') return 'Chuyển khoản QR';
+        if (method === 'code') return 'Mã thanh toán';
+        if (method === 'code+cash') return 'Mã + tiền mặt';
+        if (method === 'code+qr') return 'Mã + QR';
+        return tx.payment_method || 'Không xác định';
+    };
+
+    const getMethodDetail = (tx) => {
+        if (tx.detail_label) return tx.detail_label;
+        const details = [];
+        if (tx.payment_code) details.push(`Mã: ${tx.payment_code}`);
+        if (tx.sepay_order_code) details.push(`QR: ${tx.sepay_order_code}`);
+        return details.join(' • ');
+    };
+
     const handleResetRevenue = async () => {
         if (resetCode !== '8686') {
             setResetError('Mã xác nhận không đúng');
@@ -541,7 +560,10 @@ const RevenueDashboard = () => {
                                     <div key={tx.id} className="p-5 flex flex-col gap-3 hover:bg-gray-50 transition-colors">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <span className="font-mono font-bold text-[#2f3e46] text-lg block">{tx.code}</span>
+                                                <span className="font-bold text-[#2f3e46] text-lg block">{getMethodLabel(tx)}</span>
+                                                {getMethodDetail(tx) && (
+                                                    <span className="font-mono text-xs font-bold text-[#52796f] block mt-0.5">{getMethodDetail(tx)}</span>
+                                                )}
                                                 <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                                                     <Clock size={12} />
                                                     {tx.used_at ? new Date(tx.used_at.endsWith('Z') ? tx.used_at : tx.used_at + 'Z').toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
@@ -571,7 +593,7 @@ const RevenueDashboard = () => {
                             <table className="w-full border-collapse">
                                 <thead className="bg-gray-50/50">
                                     <tr>
-                                        <th className="pl-8 pr-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Mã GD</th>
+                                        <th className="pl-8 pr-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Phương thức</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Giá trị</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Thời gian</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Trạng thái</th>
@@ -583,7 +605,10 @@ const RevenueDashboard = () => {
                                         stats.transactions.map((tx) => (
                                             <tr key={tx.id} className="hover:bg-[#52796f]/5 transition-colors group">
                                                 <td className="pl-8 pr-4 py-6">
-                                                    <span className="font-mono font-black text-sm text-[#2f3e46]">{tx.code}</span>
+                                                    <span className="block font-black text-sm text-[#2f3e46]">{getMethodLabel(tx)}</span>
+                                                    {getMethodDetail(tx) && (
+                                                        <span className="mt-1 block font-mono text-xs font-bold text-[#52796f]">{getMethodDetail(tx)}</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-6 font-black text-[#52796f]">{formatCurrency(tx.value)}</td>
                                                 <td className="px-4 py-6 text-sm text-gray-500">
