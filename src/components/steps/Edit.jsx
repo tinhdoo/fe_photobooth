@@ -32,7 +32,7 @@ const FILTERS = [
     },
     { id: 'makeup_light', name: 'Makeup nhẹ', type: 'backend', description: 'Cà da nhẹ, sáng trong tự nhiên' },
     { id: 'makeup_soft', name: 'Makeup mềm', type: 'backend', description: 'Môi, má và mắt nhẹ tự nhiên' },
-    { id: 'korean', name: 'Da Hàn Quốc', type: 'backend', description: 'Trắng hồng, da căng bóng' },
+    { id: 'korean', name: 'Trắng hồng', type: 'backend', description: 'Da sáng hồng mức vừa, giữ nét tự nhiên' },
     { id: 'natural', name: 'Da Tự Nhiên', type: 'backend', description: 'Mịn da tự nhiên' },
     { id: 'men', name: 'Da Nam', type: 'backend', description: 'Mịn nhẹ, giữ chi tiết' }
 ];
