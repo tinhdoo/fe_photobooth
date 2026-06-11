@@ -12,7 +12,7 @@ function getAuthToken(req) {
 function extractTransferCode(payload) {
     const prefix = process.env.SEPAY_PAYMENT_PREFIX || 'TOMA';
     const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const codePattern = new RegExp(`${escapedPrefix}[A-Z0-9]{7}`, 'i');
+    const codePattern = new RegExp(`${escapedPrefix}(?:\\d{6,12}|[A-Z0-9]{7})`, 'i');
     const candidates = [
         payload?.code,
         payload?.payment_code,
@@ -20,7 +20,10 @@ function extractTransferCode(payload) {
         payload?.content,
         payload?.description,
         payload?.transferContent,
+        payload?.transfer_content,
         payload?.transactionContent,
+        payload?.transaction_content,
+        JSON.stringify(payload),
     ].filter(Boolean).map(String);
 
     for (const value of candidates) {
@@ -31,12 +34,24 @@ function extractTransferCode(payload) {
     return null;
 }
 
+function toAmount(value) {
+    if (typeof value === 'number') return value;
+    if (typeof value !== 'string') return 0;
+
+    const normalized = value.replace(/[^\d.-]/g, '');
+    return Number(normalized || 0);
+}
+
 function extractAmount(payload) {
-    return Number(
+    return toAmount(
         payload?.transferAmount
+        || payload?.transfer_amount
         || payload?.amount
+        || payload?.amountIn
+        || payload?.amount_in
         || payload?.money
         || payload?.creditAmount
+        || payload?.credit_amount
         || 0
     );
 }

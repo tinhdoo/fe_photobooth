@@ -1,9 +1,9 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
 
 function randomCode() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const alphabet = '0123456789';
     let code = process.env.SEPAY_PAYMENT_PREFIX || 'TOMA';
-    for (let i = 0; i < 7; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
         code += alphabet[Math.floor(Math.random() * alphabet.length)];
     }
     return code;
