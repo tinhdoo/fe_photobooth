@@ -6,6 +6,14 @@ import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
 import ConfirmDialog from './ConfirmDialog';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (typeof window !== 'undefined'
+        ? (window.location.hostname === 'localhost' ? 'https://tomatophotobooth.vercel.app' : window.location.origin)
+        : '');
+const FRAME_API_URL = CLOUD_API_URL || API_URL;
+const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
+
 const FrameManager = () => {
     const [frames, setFrames] = useState([]);
     const [uploading, setUploading] = useState(false);
@@ -39,7 +47,7 @@ const FrameManager = () => {
     useEffect(() => {
         const fetchTopFrames = async () => {
             try {
-                const res = await axios.get('/api/stats/top-frames', { params: { limit: 5 } });
+                const res = await axios.get(frameApiPath('/api/stats/top-frames'), { params: { limit: 5 } });
                 setTopFrames(Array.isArray(res.data) ? res.data : []);
             } catch (err) {
                 console.error('Failed to fetch top frames', err);
@@ -52,7 +60,7 @@ const FrameManager = () => {
 
     const fetchFrames = async () => {
         try {
-            const res = await axios.get('/api/frames', {
+            const res = await axios.get(frameApiPath('/api/frames'), {
                 params: { layout: selectedLayout }
             });
             setFrames(Array.isArray(res.data) ? res.data : []);
@@ -74,7 +82,7 @@ const FrameManager = () => {
                 formData.append('layout', selectedLayout);
 
                 try {
-                    await axios.post('/api/frames', formData, {
+                    await axios.post(frameApiPath('/api/frames'), formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                 } catch (err) {
@@ -122,7 +130,9 @@ const FrameManager = () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false })); // Close modal
 
         try {
-            await axios.delete(`/api/frames/${frame.layout}/${frame.name}`);
+            await axios.delete(frameApiPath('/api/frames'), {
+                params: { layout: frame.layout, name: frame.name }
+            });
             fetchFrames();
             // Remove from selection if exists
             if (selectedFrames.has(frame.id)) {
@@ -191,7 +201,9 @@ const FrameManager = () => {
                             borderRadius: 0,
                             boxes: boxes
                         };
-                        await axios.post(`/api/frames/${frame.layout}/${frame.name}/config`, config);
+                        await axios.post(frameApiPath('/api/frames'), config, {
+                            params: { layout: frame.layout, name: frame.name, resource: 'config' }
+                        });
                         successCount++;
                     } else {
                         console.warn(`No slots found for ${frame.name}`);
@@ -230,7 +242,9 @@ const FrameManager = () => {
 
             const promises = framesToDelete.map(async (frame) => {
                 try {
-                    await axios.delete(`/api/frames/${frame.layout}/${frame.name}`);
+                    await axios.delete(frameApiPath('/api/frames'), {
+                        params: { layout: frame.layout, name: frame.name }
+                    });
                     successCount++;
                 } catch (err) {
                     console.error(`Failed to delete ${frame.name}`, err);
@@ -542,7 +556,8 @@ const FrameManager = () => {
 
                                                 try {
                                                     setNotification({ show: true, message: `Đang tải lên biểu tượng cho ${frame.name}...`, type: 'info' });
-                                                    await axios.post(`/api/frames/${frame.layout}/${frame.name}/icon`, formData, {
+                                                    await axios.post(frameApiPath('/api/frames'), formData, {
+                                                        params: { layout: frame.layout, name: frame.name, resource: 'icon' },
                                                         headers: { 'Content-Type': 'multipart/form-data' }
                                                     });
                                                     setNotification({ show: true, message: "Tải lên biểu tượng thành công!", type: 'success' });

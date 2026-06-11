@@ -13,6 +13,7 @@ const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
     || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
         ? 'https://tomatophotobooth.vercel.app'
         : '');
+const FRAME_API_URL = CLOUD_API_URL || API_URL;
 
 const FILTERS = [
     { id: 'normal', name: 'Gốc', filter: null },
@@ -170,7 +171,7 @@ const Edit = () => {
         const fetchFrames = async () => {
             try {
                 const layoutId = layout.id || 'strip_4';
-                const res = await axios.get(`${API_URL}/api/frames`, { params: { layout: layoutId } });
+                const res = await axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: layoutId } });
                 const allFrames = res.data || [];
                 setFrames(allFrames);
 
@@ -312,7 +313,9 @@ const Edit = () => {
 
         if (frame.url && frame.layout && frame.name) {
             try {
-                const res = await axios.get(`${API_URL}/api/frames/${frame.layout}/${frame.name}/config`);
+                const res = await axios.get(`${FRAME_API_URL}/api/frames`, {
+                    params: { layout: frame.layout, name: frame.name, resource: 'config' }
+                });
 
                 // Chỉ update nếu frame đang chọn vẫn là frame này (tránh race condition)
                 if (selectedFrameRef.current.id === frame.id) {

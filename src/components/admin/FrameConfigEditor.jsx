@@ -5,6 +5,14 @@ import { LAYOUTS } from '../../data/layouts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { detectFrameSlots } from '../../utils/frameDetection';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (typeof window !== 'undefined'
+        ? (window.location.hostname === 'localhost' ? 'https://tomatophotobooth.vercel.app' : window.location.origin)
+        : '');
+const FRAME_API_URL = CLOUD_API_URL || API_URL;
+const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
+
 const FrameConfigEditor = ({ frame, onClose }) => {
     const handleCopyConfig = () => {
         localStorage.setItem('ptb_frame_clipboard', JSON.stringify(config));
@@ -91,7 +99,9 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     useEffect(() => {
         const fetchConfig = async () => {
             try {
-                const res = await axios.get(`/api/frames/${frame.layout}/${frame.name}/config`);
+                const res = await axios.get(frameApiPath('/api/frames'), {
+                    params: { layout: frame.layout, name: frame.name, resource: 'config' }
+                });
                 // Check if current config matches new structure (has boxes)
                 if (res.data && res.data.boxes && res.data.boxes.length > 0) {
                     setConfig(prev => ({ ...prev, ...res.data }));
@@ -109,7 +119,9 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
     const handleSave = async () => {
         try {
-            await axios.post(`/api/frames/${frame.layout}/${frame.name}/config`, config);
+            await axios.post(frameApiPath('/api/frames'), config, {
+                params: { layout: frame.layout, name: frame.name, resource: 'config' }
+            });
             setNotification({ show: true, message: "Lưu cấu hình thành công!", type: 'success' });
             setTimeout(() => onClose(), 1500); // Close after showing success message
         } catch (error) {
