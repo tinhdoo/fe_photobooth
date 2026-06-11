@@ -71,7 +71,7 @@ const StatusBanner = ({ message }) => {
 };
 
 const BrandingSettings = () => {
-    const { configs, refreshConfigs } = useWorkflow();
+    const { configs, refreshConfigs, applyConfigs } = useWorkflow();
     const [localConfigs, setLocalConfigs] = useState({});
     const [uploadingKey, setUploadingKey] = useState(null);
     const [savingColors, setSavingColors] = useState(false);
@@ -105,6 +105,8 @@ const BrandingSettings = () => {
             throw new Error(data.error || `Không thể lưu cấu hình (${response.status}).`);
         }
 
+        applyConfigs?.(data);
+        setLocalConfigs((prev) => ({ ...prev, ...data }));
         await refreshConfigs?.();
         showSuccess(successMessage);
     };
@@ -137,7 +139,9 @@ const BrandingSettings = () => {
                 throw new Error(data.error || `Không thể tải lên file (${response.status}).`);
             }
 
-            setLocalConfigs((prev) => ({ ...prev, [key]: data.url }));
+            const nextConfig = { [key]: data.url };
+            setLocalConfigs((prev) => ({ ...prev, ...nextConfig }));
+            applyConfigs?.(nextConfig);
             await refreshConfigs?.();
             showSuccess('Tải lên thành công.');
         } catch (error) {

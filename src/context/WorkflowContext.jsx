@@ -46,11 +46,11 @@ export const WorkflowProvider = ({ children }) => {
             let res = null;
 
             if (CLOUD_API_URL) {
-                res = await fetch(cloudApiPath('/api/config'));
+                res = await fetch(`${cloudApiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
             }
 
             if ((!res || !res.ok) && (API_URL || isLocalApp())) {
-                res = await fetch(apiPath('/api/config'));
+                res = await fetch(`${apiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
             }
 
             if (res.ok) {
@@ -248,6 +248,22 @@ export const WorkflowProvider = ({ children }) => {
         setSessionData((prev) => ({ ...prev, [key]: value }));
     };
 
+    const applyConfigs = (nextConfigs = {}) => {
+        setConfigs(prev => ({
+            ...prev,
+            ...nextConfigs,
+            price: parseInt(nextConfigs.price ?? prev.price) || 60000,
+            print_price: parseInt(nextConfigs.print_price ?? prev.print_price) || 20000,
+            mobile_price: parseInt(nextConfigs.mobile_price ?? prev.mobile_price) || 30000,
+            mobile_print_price: parseInt(nextConfigs.mobile_print_price ?? prev.mobile_print_price) || 10000,
+            session_timeout: parseInt(nextConfigs.session_timeout ?? prev.session_timeout) || 600,
+            mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? prev.mobile_session_timeout) || 300,
+            countdown: parseInt(nextConfigs.countdown ?? prev.countdown) || 5,
+            camera_mode: nextConfigs.camera_mode || prev.camera_mode || 'webcam',
+            hot_folder: nextConfigs.hot_folder || prev.hot_folder || 'C:/Photobooth_Input'
+        }));
+    };
+
     return (
         <WorkflowContext.Provider
             value={{
@@ -264,6 +280,7 @@ export const WorkflowProvider = ({ children }) => {
                 isSessionActive,
                 SESSION_DURATION,
                 configs, // Expose generic configs
+                applyConfigs,
                 refreshConfigs: fetchConfigs
             }}
         >
