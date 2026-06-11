@@ -32,6 +32,33 @@ using (true);
 -- Inserts/updates are intentionally server-only through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY, so no anon insert/update policy is created.
 
+create table if not exists app_configs (
+  key text primary key default 'app',
+  config jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table app_configs enable row level security;
+
+drop policy if exists "app_configs_public_read" on app_configs;
+create policy "app_configs_public_read"
+on app_configs
+for select
+to anon
+using (true);
+
+insert into app_configs (key, config)
+values ('app', '{}'::jsonb)
+on conflict (key) do nothing;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.app_configs;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
 create table if not exists payment_codes (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,

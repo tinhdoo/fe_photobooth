@@ -26,6 +26,19 @@ async function resolveBucket(supabase) {
 }
 
 async function readConfig(supabase, bucket) {
+    const { data: row, error: dbError } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (!dbError && row?.config && typeof row.config === 'object' && Object.keys(row.config).length > 0) {
+        return {
+            ...DEFAULT_CONFIG,
+            ...row.config,
+        };
+    }
+
     const { data, error } = await supabase.storage
         .from(bucket)
         .download('config/app.json');
@@ -43,6 +56,18 @@ async function readConfig(supabase, bucket) {
 }
 
 async function writeConfig(supabase, bucket, config) {
+    const { error: dbError } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: 'app',
+            config,
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+
+    if (dbError && !/Could not find the table|schema cache|does not exist/i.test(dbError.message || '')) {
+        throw dbError;
+    }
+
     const payload = Buffer.from(JSON.stringify(config, null, 2), 'utf8');
     const { error } = await supabase.storage
         .from(bucket)

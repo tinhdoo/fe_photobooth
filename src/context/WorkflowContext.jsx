@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
+import { isSupabaseBrowserConfigured, supabase } from '../services/supabaseClient';
 const WorkflowContext = createContext();
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -112,13 +113,55 @@ export const WorkflowProvider = ({ children }) => {
         }
     };
 
+    const applyRemoteConfigs = (nextConfigs = {}) => {
+        setConfigs(prev => {
+            const normalized = normalizeConfigs(nextConfigs, prev);
+            if (sameConfig(prev, normalized)) return prev;
+            cacheConfigs(normalized);
+            return normalized;
+        });
+    };
+
     useEffect(() => {
         fetchConfigs();
-        const configInterval = setInterval(() => {
-            if (document.visibilityState !== 'visible') return;
+
+        let fallbackInterval = null;
+        let realtimeReady = false;
+        let channel = null;
+
+        if (isSupabaseBrowserConfigured && supabase) {
+            channel = supabase
+                .channel('app-configs-realtime')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'app_configs', filter: 'key=eq.app' },
+                    (payload) => {
+                        const nextConfig = payload.new?.config;
+                        if (nextConfig && typeof nextConfig === 'object') {
+                            applyRemoteConfigs(nextConfig);
+                        } else {
+                            fetchConfigs();
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    realtimeReady = status === 'SUBSCRIBED';
+                });
+        }
+
+        fallbackInterval = setInterval(() => {
+            if (realtimeReady || document.visibilityState !== 'visible') return;
             fetchConfigs();
-        }, 30000);
-        return () => clearInterval(configInterval);
+        }, 300000);
+
+        const handleFocus = () => fetchConfigs();
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            clearInterval(fallbackInterval);
+            window.removeEventListener('focus', handleFocus);
+            if (channel && supabase) supabase.removeChannel(channel);
+        };
     }, []);
 
     // Initialize mode from localStorage (fallback)
