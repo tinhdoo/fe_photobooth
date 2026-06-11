@@ -31,3 +31,29 @@ using (true);
 
 -- Inserts/updates are intentionally server-only through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY, so no anon insert/update policy is created.
+
+create table if not exists payment_codes (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  value integer not null default 0,
+  is_used boolean not null default false,
+  expires_at timestamptz,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists payment_codes_code_idx on payment_codes (code);
+create index if not exists payment_codes_is_used_idx on payment_codes (is_used);
+create index if not exists payment_codes_expires_at_idx on payment_codes (expires_at);
+
+alter table payment_codes enable row level security;
+
+drop policy if exists "payment_codes_public_read" on payment_codes;
+create policy "payment_codes_public_read"
+on payment_codes
+for select
+to anon
+using (true);
+
+-- Code generation and marking used are server-only through Vercel API using
+-- SUPABASE_SERVICE_ROLE_KEY.
