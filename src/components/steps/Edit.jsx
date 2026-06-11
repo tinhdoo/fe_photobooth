@@ -454,22 +454,22 @@ const Edit = () => {
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
             // 2. Setup Canvas
-            const canvas = document.createElement('canvas');
+            const baseCanvas = document.createElement('canvas');
             const TARGET_HEIGHT = 1800;
             const isStrip = layout.type === 'strip';
             const isHorizontal = layout.type && layout.type.includes('horizontal');
             const ratio = isStrip ? 1 / 3 : (isHorizontal ? 3 / 2 : 2 / 3);
-            canvas.height = TARGET_HEIGHT;
-            canvas.width = TARGET_HEIGHT * ratio;
+            baseCanvas.height = TARGET_HEIGHT;
+            baseCanvas.width = TARGET_HEIGHT * ratio;
 
-            const ctx = canvas.getContext('2d');
+            const baseCtx = baseCanvas.getContext('2d');
 
             // 3. Background
             if (selectedFrame.color && !selectedFrame.url && !selectedFrame.image) {
-                ctx.fillStyle = selectedFrame.color;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                baseCtx.fillStyle = selectedFrame.color;
+                baseCtx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
             } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
             }
 
             // Helper to load image securely
@@ -499,139 +499,155 @@ const Edit = () => {
             if (selectedFrame.url || selectedFrame.image) preloadSources.add(selectedFrame.url || selectedFrame.image);
             await Promise.all(Array.from(preloadSources).map(cachedLoadImage));
 
-            // 4. Draw Photos (Custom vs Grid)
-            if (frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0) {
-                let implicitPhotoIndex = 0;
-                for (const box of frameConfig.boxes) {
-                    if (box.type === 'qr') continue; // Handled by manual overlay
+            const drawComposite = async (targetCanvas, targetCtx) => {
+                // 4. Draw Photos (Custom vs Grid)
+                if (frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0) {
+                    let implicitPhotoIndex = 0;
+                    for (const box of frameConfig.boxes) {
+                        if (box.type === 'qr') continue; // Handled by manual overlay
 
-                    const targetIdx = box.photoIndex !== undefined ? box.photoIndex : (implicitPhotoIndex % photosToDraw.length);
-                    if (box.photoIndex === undefined) implicitPhotoIndex++;
+                        const targetIdx = box.photoIndex !== undefined ? box.photoIndex : (implicitPhotoIndex % photosToDraw.length);
+                        if (box.photoIndex === undefined) implicitPhotoIndex++;
 
-                    const photoSrc = photosToDraw[targetIdx];
-                    const position = photoPositions[targetIdx] || { x: 0.5, y: 0.5 }; // Get position per photo
-                    if (!photoSrc) continue;
+                        const photoSrc = photosToDraw[targetIdx];
+                        const position = photoPositions[targetIdx] || { x: 0.5, y: 0.5 }; // Get position per photo
+                        if (!photoSrc) continue;
 
-                    const img = await cachedLoadImage(photoSrc);
-                    if (img) {
-                        const x = (box.x / 100) * canvas.width;
-                        const y = (box.y / 100) * canvas.height;
-                        const w = (box.width / 100) * canvas.width;
-                        const h = (box.height / 100) * canvas.height;
+                        const img = await cachedLoadImage(photoSrc);
+                        if (img) {
+                            const x = (box.x / 100) * targetCanvas.width;
+                            const y = (box.y / 100) * targetCanvas.height;
+                            const w = (box.width / 100) * targetCanvas.width;
+                            const h = (box.height / 100) * targetCanvas.height;
 
-                        ctx.save();
-                        if (box.rotation) {
-                            // Rotate around center of box
-                            ctx.translate(x + w / 2, y + h / 2);
-                            ctx.rotate((box.rotation * Math.PI) / 180);
-                            ctx.translate(-(x + w / 2), -(y + h / 2));
-                        }
-
-                        if (frameConfig.borderRadius > 0) {
-                            ctx.beginPath();
-                            ctx.rect(x, y, w, h); // Clip in rotated space
-                            ctx.clip();
-                        }
-
-                        if (box.innerRotation) {
-                            ctx.save();
-                            ctx.translate(x + w / 2, y + h / 2);
-                            ctx.rotate((box.innerRotation * Math.PI) / 180);
-
-                            let drawW = w;
-                            let drawH = h;
-                            const isRt = box.innerRotation === 90 || box.innerRotation === -90 || box.innerRotation === 270 || box.innerRotation === -270;
-                            if (isRt) {
-                                drawW = h;
-                                drawH = w;
+                            targetCtx.save();
+                            if (box.rotation) {
+                                // Rotate around center of box
+                                targetCtx.translate(x + w / 2, y + h / 2);
+                                targetCtx.rotate((box.rotation * Math.PI) / 180);
+                                targetCtx.translate(-(x + w / 2), -(y + h / 2));
                             }
 
-                            drawImageCover(ctx, img, -drawW / 2, -drawH / 2, drawW, drawH, position.x, position.y);
-                            ctx.restore();
-                        } else {
-                            // PASS OFFSET ANCHORS HERE
-                            drawImageCover(ctx, img, x, y, w, h, position.x, position.y);
+                            if (frameConfig.borderRadius > 0) {
+                                targetCtx.beginPath();
+                                targetCtx.rect(x, y, w, h); // Clip in rotated space
+                                targetCtx.clip();
+                            }
+
+                            if (box.innerRotation) {
+                                targetCtx.save();
+                                targetCtx.translate(x + w / 2, y + h / 2);
+                                targetCtx.rotate((box.innerRotation * Math.PI) / 180);
+
+                                let drawW = w;
+                                let drawH = h;
+                                const isRt = box.innerRotation === 90 || box.innerRotation === -90 || box.innerRotation === 270 || box.innerRotation === -270;
+                                if (isRt) {
+                                    drawW = h;
+                                    drawH = w;
+                                }
+
+                                drawImageCover(targetCtx, img, -drawW / 2, -drawH / 2, drawW, drawH, position.x, position.y);
+                                targetCtx.restore();
+                            } else {
+                                drawImageCover(targetCtx, img, x, y, w, h, position.x, position.y);
+                            }
+
+                            targetCtx.restore();
                         }
+                    }
+                } else {
+                    // Default Grid
+                    const cols = layout.cols || 1;
+                    const rows = layout.rows || 1;
+                    const padding = 48;
+                    const gap = 36;
+                    const totalGapW = (cols - 1) * gap;
+                    const cellW = (targetCanvas.width - (padding * 2) - totalGapW) / cols;
+                    const totalGapH = (rows - 1) * gap;
+                    const cellH = (targetCanvas.height - (padding * 2) - totalGapH) / rows;
 
-                        ctx.restore();
+                    for (let i = 0; i < (cols * rows); i++) {
+                        const mappedIndex = i % (photosToDraw.length || 1);
+                        if (!photosToDraw[mappedIndex]) continue;
+                        const img = await cachedLoadImage(photosToDraw[mappedIndex]);
+                        const position = photoPositions[mappedIndex] || { x: 0.5, y: 0.5 };
+
+                        if (img) {
+                            const col = i % cols;
+                            const row = Math.floor(i / cols);
+                            const x = padding + col * (cellW + gap);
+                            const y = padding + row * (cellH + gap);
+                            drawImageCover(targetCtx, img, x, y, cellW, cellH, position.x, position.y);
+                        }
                     }
                 }
-            } else {
-                // Default Grid
-                const cols = layout.cols || 1;
-                const rows = layout.rows || 1;
-                const padding = 48;
-                const gap = 36;
-                const totalGapW = (cols - 1) * gap;
-                const cellW = (canvas.width - (padding * 2) - totalGapW) / cols;
-                const totalGapH = (rows - 1) * gap;
-                const cellH = (canvas.height - (padding * 2) - totalGapH) / rows;
 
-                for (let i = 0; i < (cols * rows); i++) {
-                    const mappedIndex = i % (photosToDraw.length || 1);
-                    if (!photosToDraw[mappedIndex]) continue;
-                    const img = await cachedLoadImage(photosToDraw[mappedIndex]);
-                    const position = photoPositions[mappedIndex] || { x: 0.5, y: 0.5 };
-
-                    if (img) {
-                        const col = i % cols;
-                        const row = Math.floor(i / cols);
-                        const x = padding + col * (cellW + gap);
-                        const y = padding + row * (cellH + gap);
-                        drawImageCover(ctx, img, x, y, cellW, cellH, position.x, position.y);
-                    }
+                // 5. Draw Frame Overlay
+                if (selectedFrame.url || selectedFrame.image) {
+                    const frameImg = await cachedLoadImage(selectedFrame.url || selectedFrame.image);
+                    if (frameImg) targetCtx.drawImage(frameImg, 0, 0, targetCanvas.width, targetCanvas.height);
                 }
-            }
 
-            // 5. Draw Frame Overlay
-            if (selectedFrame.url || selectedFrame.image) {
-                const frameImg = await cachedLoadImage(selectedFrame.url || selectedFrame.image);
-                if (frameImg) ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
-            }
+                // 6. Draw QR Code (Manual)
+                if (qrSettings.show) {
+                    const qrW = (qrSettings.size / 100) * targetCanvas.width;
+                    const qrX = (qrSettings.x / 100) * targetCanvas.width - (qrW / 2);
+                    const qrY = (qrSettings.y / 100) * targetCanvas.height - (qrW / 2); // Square center
 
-            // 6. Draw QR Code (Manual)
-            if (qrSettings.show) {
-                const qrW = (qrSettings.size / 100) * canvas.width;
-                const qrX = (qrSettings.x / 100) * canvas.width - (qrW / 2);
-                const qrY = (qrSettings.y / 100) * canvas.height - (qrW / 2); // Square center
+                    try {
+                        const qrCode = new QRCodeStyling({
+                            width: 500,
+                            height: 500,
+                            data: downloadUrl,
+                            margin: 25,
+                            qrOptions: { errorCorrectionLevel: 'L' },
+                            dotsOptions: { color: "#000000", type: "square" },
+                            cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
+                            cornersDotOptions: { type: "dot", color: "#000000" },
+                            backgroundOptions: { color: "#ffffff" }
+                        });
+                        const buffer = await qrCode.getRawData("png");
+                        const qrDataUrl = URL.createObjectURL(buffer);
+                        const qrImg = await cachedLoadImage(qrDataUrl);
+                        if (qrImg) {
+                            targetCtx.drawImage(qrImg, qrX, qrY, qrW, qrW);
+                        }
+                        URL.revokeObjectURL(qrDataUrl);
+                    } catch (e) { console.warn("QR Gen failed", e); }
+                }
 
-                try {
-                    const qrCode = new QRCodeStyling({
-                        width: 500,
-                        height: 500,
-                        data: downloadUrl,
-                        margin: 25,
-                        qrOptions: { errorCorrectionLevel: 'L' },
-                        dotsOptions: { color: "#000000", type: "square" },
-                        cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
-                        cornersDotOptions: { type: "dot", color: "#000000" },
-                        backgroundOptions: { color: "#ffffff" }
-                    });
-                    const buffer = await qrCode.getRawData("png");
-                    const qrDataUrl = URL.createObjectURL(buffer);
-                    const qrImg = await cachedLoadImage(qrDataUrl);
-                    if (qrImg) {
-                        ctx.drawImage(qrImg, qrX, qrY, qrW, qrW);
-                    }
-                    URL.revokeObjectURL(qrDataUrl);
-                } catch (e) { console.warn("QR Gen failed", e); }
-            }
+                // 7. Draw Date
+                if (dateSettings.show) {
+                    const today = new Date();
+                    const dateStr = `${String(today.getDate()).padStart(2, '0')} . ${String(today.getMonth() + 1).padStart(2, '0')} . ${today.getFullYear()}`;
+                    const fontSize = (dateSettings.fontSize / 1000) * targetCanvas.height;
+                    const x = (dateSettings.x / 100) * targetCanvas.width;
+                    const y = (dateSettings.y / 100) * targetCanvas.height;
 
-            // 7. Draw Date
-            if (dateSettings.show) {
-                const today = new Date();
-                const dateStr = `${String(today.getDate()).padStart(2, '0')} . ${String(today.getMonth() + 1).padStart(2, '0')} . ${today.getFullYear()}`;
-                const fontSize = (dateSettings.fontSize / 1000) * canvas.height;
-                const x = (dateSettings.x / 100) * canvas.width;
-                const y = (dateSettings.y / 100) * canvas.height;
+                    targetCtx.save();
+                    targetCtx.font = `bold ${fontSize}px Arial, sans-serif`;
+                    targetCtx.fillStyle = dateSettings.color;
+                    targetCtx.textAlign = 'center';
+                    targetCtx.textBaseline = 'middle';
+                    targetCtx.fillText(dateStr, x, y);
+                    targetCtx.restore();
+                }
+            };
 
-                ctx.save();
-                ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-                ctx.fillStyle = dateSettings.color;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(dateStr, x, y);
-                ctx.restore();
+            await drawComposite(baseCanvas, baseCtx);
+
+            const canvas = layout.printMode === 'double_strip' ? document.createElement('canvas') : baseCanvas;
+            if (layout.printMode === 'double_strip') {
+                canvas.width = 1200;
+                canvas.height = 1800;
+                const printCtx = canvas.getContext('2d');
+                printCtx.fillStyle = '#ffffff';
+                printCtx.fillRect(0, 0, canvas.width, canvas.height);
+                printCtx.imageSmoothingEnabled = true;
+                printCtx.imageSmoothingQuality = 'high';
+                printCtx.drawImage(baseCanvas, 0, 0, 600, 1800);
+                printCtx.drawImage(baseCanvas, 600, 0, 600, 1800);
             }
 
             // 8. Upload & Create Session
@@ -715,6 +731,7 @@ const Edit = () => {
                             frame_url: selectedFrame.url || selectedFrame.image,
                             frame_config: frameConfig,
                             photo_positions: photoPositions,
+                            print_mode: layout.printMode || 'single',
                             payment_code: sessionData.paymentCode || null,
                             payment_code_value: sessionData.paymentCodeValue || null,
                             payment_code_applied: sessionData.paymentCodeApplied || null,
