@@ -105,12 +105,12 @@ export default async function handler(req, res) {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error && !/Could not find the table|schema cache|does not exist/i.test(error.message || '')) throw error;
 
         return json(res, 201, {
             success: true,
-            url: data.url,
-            public_id: data.public_id,
+            url: data?.url || url,
+            public_id: data?.public_id || `${bucket}/${objectPath}`,
         });
     } catch (error) {
         console.error('Mobile upload failed:', error);
