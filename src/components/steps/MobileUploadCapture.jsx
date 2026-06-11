@@ -16,6 +16,10 @@ const isLocalHost = (hostname) => (
     || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
 );
 
+const samePhotos = (a = [], b = []) => (
+    a.length === b.length && a.every((url, index) => url === b[index])
+);
+
 const MobileUploadCapture = () => {
     const { nextStep, sessionData, updateSessionData, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
@@ -27,6 +31,7 @@ const MobileUploadCapture = () => {
     const layout = sessionData.layout;
     const TOTAL_PHOTOS = layout ? layout.photoCount : 4; // Default to 4
     const qrRef = useRef(null);
+    const advancedRef = useRef(false);
 
     useEffect(() => {
         if (qrUrl && qrRef.current) {
@@ -78,7 +83,10 @@ const MobileUploadCapture = () => {
         socket.on('mobile_photo_uploaded', (data) => {
             console.log('Received socket event mobile_photo_uploaded:', data);
             if (data.session_id === sessionId && data.url) {
-                setPhotosTaken(prev => [...prev, data.url]);
+                setPhotosTaken(prev => {
+                    if (prev.includes(data.url) || prev.length >= TOTAL_PHOTOS) return prev;
+                    return [...prev, data.url].slice(0, TOTAL_PHOTOS);
+                });
             }
         });
 
@@ -95,7 +103,8 @@ const MobileUploadCapture = () => {
                 if (!res.ok) return;
                 const uploads = await res.json();
                 if (stopped || !Array.isArray(uploads)) return;
-                setPhotosTaken(uploads.slice(0, TOTAL_PHOTOS).map((item) => item.url));
+                const nextPhotos = uploads.slice(0, TOTAL_PHOTOS).map((item) => item.url).filter(Boolean);
+                setPhotosTaken(prev => samePhotos(prev, nextPhotos) ? prev : nextPhotos);
             } catch (error) {
                 console.error('Failed to poll mobile uploads:', error);
             }
@@ -114,11 +123,12 @@ const MobileUploadCapture = () => {
         if (photosTaken.length === 0) return;
         updateSessionData('photos', photosTaken);
         updateSessionData('capturedPhotos', photosTaken);
-        if (photosTaken.length >= TOTAL_PHOTOS) {
-            const timer = setTimeout(() => nextStep(), 1500);
+        if (photosTaken.length >= TOTAL_PHOTOS && !advancedRef.current) {
+            advancedRef.current = true;
+            const timer = setTimeout(() => nextStep(), 350);
             return () => clearTimeout(timer);
         }
-    }, [photosTaken]);
+    }, [photosTaken, TOTAL_PHOTOS, nextStep, updateSessionData]);
 
     // Helper: auto fill empty slots with placeholder
     const renderSlots = () => {
