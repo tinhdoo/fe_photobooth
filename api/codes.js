@@ -1,5 +1,7 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
 
+const PAYMENT_CODE_RETENTION_DAYS = 15;
+
 function randomPaymentCode() {
     const alphabet = '0123456789';
     let code = '';
@@ -104,6 +106,45 @@ async function markCodeUsed(req, res, supabase) {
     return json(res, 200, { success: true, code: data });
 }
 
+async function cleanupPaymentCodes(req, res, supabase) {
+    const secret = process.env.CLEANUP_SECRET;
+    const auth = String(req.headers.authorization || '');
+    if (secret && auth !== `Bearer ${secret}` && req.query.secret !== secret) {
+        return json(res, 401, { error: 'Unauthorized cleanup request' });
+    }
+
+    const cutoffIso = new Date(Date.now() - PAYMENT_CODE_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: usedCodes, error: usedError } = await supabase
+        .from('payment_codes')
+        .delete()
+        .eq('is_used', true)
+        .lt('used_at', cutoffIso)
+        .select('id');
+
+    if (usedError) throw usedError;
+
+    const { data: expiredCodes, error: expiredError } = await supabase
+        .from('payment_codes')
+        .delete()
+        .eq('is_used', false)
+        .not('expires_at', 'is', null)
+        .lt('expires_at', cutoffIso)
+        .select('id');
+
+    if (expiredError) throw expiredError;
+
+    return json(res, 200, {
+        success: true,
+        retention_days: PAYMENT_CODE_RETENTION_DAYS,
+        cutoff: cutoffIso,
+        deleted: {
+            used: Array.isArray(usedCodes) ? usedCodes.length : 0,
+            expired: Array.isArray(expiredCodes) ? expiredCodes.length : 0,
+        },
+    });
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -115,10 +156,15 @@ export default async function handler(req, res) {
             if (action === 'generate') return generateCodes(req, res, supabase);
             if (action === 'validate') return validateCode(req, res, supabase);
             if (action === 'use') return markCodeUsed(req, res, supabase);
+            if (action === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
             return json(res, 400, { error: 'Invalid action' });
         }
 
         if (req.method !== 'GET') return methodNotAllowed(res);
+
+        if (String(req.query?.action || '').trim() === 'cleanup') {
+            return cleanupPaymentCodes(req, res, supabase);
+        }
 
         const { data, error } = await supabase
             .from('payment_codes')
