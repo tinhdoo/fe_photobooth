@@ -33,10 +33,14 @@ async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
         .upload(objectPath, buffer, options);
 
     if (error && /bucket/i.test(error.message || '')) {
-        await supabase.storage.createBucket(bucket, {
+        const { error: createError } = await supabase.storage.createBucket(bucket, {
             public: false,
             fileSizeLimit: 25 * 1024 * 1024,
         });
+
+        if (createError) {
+            throw new Error(`Storage bucket "${bucket}" không tồn tại và API không tạo được bucket: ${createError.message}`);
+        }
 
         const retry = await supabase.storage
             .from(bucket)

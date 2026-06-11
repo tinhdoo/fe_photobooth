@@ -42,10 +42,14 @@ async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
         .upload(objectPath, buffer, options);
 
     if (error && /bucket/i.test(error.message || '')) {
-        await supabase.storage.createBucket(bucket, {
+        const { error: createError } = await supabase.storage.createBucket(bucket, {
             public: false,
             fileSizeLimit: 80 * 1024 * 1024,
         });
+
+        if (createError) {
+            throw new Error(`Storage bucket "${bucket}" không tồn tại và API không tạo được bucket: ${createError.message}`);
+        }
 
         const retry = await supabase.storage
             .from(bucket)
@@ -58,15 +62,28 @@ async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
 
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
-    if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {
+        const supabase = getSupabaseAdmin();
+        const bucket = process.env.SUPABASE_BUCKET || 'tomato';
+
+        if (req.method === 'GET') {
+            const { data, error } = await supabase.storage.listBuckets();
+            if (error) throw error;
+
+            return json(res, 200, {
+                bucket,
+                exists: Array.isArray(data) && data.some((item) => item.name === bucket),
+                buckets: Array.isArray(data) ? data.map((item) => item.name) : [],
+            });
+        }
+
+        if (req.method !== 'POST') return methodNotAllowed(res);
+
         const { files } = await parseForm(req);
         const file = firstValue(files.file);
         if (!file) return json(res, 400, { error: 'Missing file' });
 
-        const supabase = getSupabaseAdmin();
-        const bucket = process.env.SUPABASE_BUCKET || 'tomato';
         const extension = cleanExtension(file.originalFilename, file.mimetype);
         const objectPath = `booth/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
         const buffer = await fs.readFile(file.filepath);
