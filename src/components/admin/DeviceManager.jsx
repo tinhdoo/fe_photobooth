@@ -30,7 +30,7 @@ const DeviceManager = () => {
     const toggleMode = async (device) => {
         const newMode = device.mode === 'event' ? 'payment' : 'event';
         try {
-            await axios.put(`/api/devices/${device.id}`, { mode: newMode });
+            await axios.put('/api/devices', { id: device.id, mode: newMode });
             fetchDevices();
         } catch (error) {
             console.error("Failed to update mode:", error);
@@ -44,7 +44,7 @@ const DeviceManager = () => {
 
     const saveName = async (id) => {
         try {
-            await axios.put(`/api/devices/${id}`, { name: editName });
+            await axios.put('/api/devices', { id, name: editName });
             setEditingId(null);
             fetchDevices();
         } catch (error) {
@@ -55,7 +55,7 @@ const DeviceManager = () => {
     const confirmDelete = async () => {
         if (!deleteTarget) return;
         try {
-            await axios.delete(`/api/devices/${deleteTarget.id}`);
+            await axios.delete('/api/devices', { data: { id: deleteTarget.id } });
             setDeleteTarget(null);
             fetchDevices();
         } catch (error) {
