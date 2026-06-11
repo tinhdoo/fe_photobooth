@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import axios from 'axios';
@@ -37,7 +37,21 @@ const FILTERS = [
     { id: 'men', name: 'Da Nam', type: 'backend', description: 'Mịn nhẹ, giữ chi tiết' }
 ];
 
-const DraggablePhotoSlot = ({ photo, box, index, position, onUpdatePosition, frameConfig }) => {
+const mapWithConcurrency = async (items, limit, worker) => {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (cursor < items.length) {
+            const index = cursor;
+            cursor += 1;
+            results[index] = await worker(items[index], index);
+        }
+    });
+    await Promise.all(runners);
+    return results;
+};
+
+const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition, frameConfig }) => {
     const handlePan = (event, info) => {
         // Natural dragging
         const SENSITIVITY = 0.002;
@@ -94,7 +108,7 @@ const DraggablePhotoSlot = ({ photo, box, index, position, onUpdatePosition, fra
             )}
         </div>
     );
-};
+});
 
 const Edit = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, configs } = useWorkflow();
@@ -115,14 +129,16 @@ const Edit = () => {
     );
 
     const startPositionsRef = useRef(null); // Track pan start
+    const filterCacheRef = useRef(new Map());
+    const filterRunRef = useRef(0);
 
-    const updatePhotoPosition = (index, pos) => {
+    const updatePhotoPosition = useCallback((index, pos) => {
         setPhotoPositions(prev => {
             const next = [...prev];
             next[index] = pos;
             return next;
         });
-    };
+    }, []);
 
     const sessionLayout = sessionData.layout || { id: 'strip_4' };
     const layout = LAYOUTS.find(l => l.id === sessionLayout.id) || sessionLayout;
@@ -149,6 +165,16 @@ const Edit = () => {
         console.log('5. filteredPhotos state:', filteredPhotos);
         console.log('6. layout:', layout);
         console.log('=====================================');
+    }, []);
+
+    useEffect(() => {
+        const cache = filterCacheRef.current;
+        return () => {
+            cache.forEach((url) => {
+                if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            });
+            cache.clear();
+        };
     }, []);
 
     // Pagination
@@ -213,6 +239,9 @@ const Edit = () => {
     // 3. Filter Logic
     useEffect(() => {
         let isMounted = true;
+        const runId = filterRunRef.current + 1;
+        filterRunRef.current = runId;
+
         const applyFilterToPhotos = async () => {
             if (selectedFilter.id === 'normal') {
                 if (isMounted) setFilteredPhotos(photos);
@@ -221,8 +250,11 @@ const Edit = () => {
 
             // Client-side Filters
             if (selectedFilter.filter) {
-                const filtered = await Promise.all(photos.map(async (photoSrc) => {
+                const filtered = await mapWithConcurrency(photos, 2, async (photoSrc) => {
                     if (!photoSrc) return null;
+                    const cacheKey = `${selectedFilter.id}:${photoSrc}`;
+                    if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+
                     return new Promise((resolve) => {
                         const img = new Image();
                         img.crossOrigin = 'anonymous'; // Important for CORS
@@ -233,13 +265,21 @@ const Edit = () => {
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0);
                             selectedFilter.filter(ctx, canvas.width, canvas.height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.95));
+                            canvas.toBlob((blob) => {
+                                if (!blob) {
+                                    resolve(photoSrc);
+                                    return;
+                                }
+                                const url = URL.createObjectURL(blob);
+                                filterCacheRef.current.set(cacheKey, url);
+                                resolve(url);
+                            }, 'image/jpeg', 0.9);
                         };
                         img.onerror = () => resolve(photoSrc);
                         img.src = photoSrc;
                     });
-                }));
-                if (isMounted) setFilteredPhotos(filtered);
+                });
+                if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
                 return;
             }
 
@@ -247,8 +287,11 @@ const Edit = () => {
             if (selectedFilter.type === 'backend') {
                 setIsFiltering(true);
                 try {
-                    const filtered = await Promise.all(photos.map(async (photoSrc, index) => {
+                    const filtered = await mapWithConcurrency(photos, 2, async (photoSrc, index) => {
                         if (!photoSrc) return null;
+                        const cacheKey = `${selectedFilter.id}:${photoSrc}`;
+                        if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+
                         try {
                             const response = await fetch(photoSrc);
                             const blob = await response.blob();
@@ -259,17 +302,19 @@ const Edit = () => {
                             const res = await axios.post(`${API_URL}/api/enhance`, formData, {
                                 headers: { 'Content-Type': 'multipart/form-data' }
                             });
-                            return `${res.data.url}?t=${Date.now()}`;
+                            const filteredUrl = `${res.data.url}?t=${Date.now()}`;
+                            filterCacheRef.current.set(cacheKey, filteredUrl);
+                            return filteredUrl;
                         } catch (e) {
                             console.error("Backend filter error", e);
                             return photoSrc;
                         }
-                    }));
-                    if (isMounted) setFilteredPhotos(filtered);
+                    });
+                    if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
                 } catch (err) {
                     console.error("Backend filter failed", err);
                 } finally {
-                    if (isMounted) setIsFiltering(false);
+                    if (isMounted && filterRunRef.current === runId) setIsFiltering(false);
                 }
             }
         };
@@ -428,15 +473,31 @@ const Edit = () => {
             }
 
             // Helper to load image securely
+            const imageCache = new Map();
             const loadImage = (src) => new Promise((resolve) => {
+                if (!src) {
+                    resolve(null);
+                    return;
+                }
+                if (imageCache.has(src)) {
+                    imageCache.get(src).then(resolve);
+                    return;
+                }
                 const img = new Image();
                 img.crossOrigin = 'anonymous'; // CRITICAL for toBlob
                 img.onload = () => resolve(img);
                 img.onerror = (e) => { console.warn("Load failed", src); resolve(null); };
                 img.src = src;
             });
+            const cachedLoadImage = (src) => {
+                if (!imageCache.has(src)) imageCache.set(src, loadImage(src));
+                return imageCache.get(src);
+            };
 
             const photosToDraw = filteredPhotos.length > 0 ? filteredPhotos : photos;
+            const preloadSources = new Set(photosToDraw.filter(Boolean));
+            if (selectedFrame.url || selectedFrame.image) preloadSources.add(selectedFrame.url || selectedFrame.image);
+            await Promise.all(Array.from(preloadSources).map(cachedLoadImage));
 
             // 4. Draw Photos (Custom vs Grid)
             if (frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0) {
@@ -451,7 +512,7 @@ const Edit = () => {
                     const position = photoPositions[targetIdx] || { x: 0.5, y: 0.5 }; // Get position per photo
                     if (!photoSrc) continue;
 
-                    const img = await loadImage(photoSrc);
+                    const img = await cachedLoadImage(photoSrc);
                     if (img) {
                         const x = (box.x / 100) * canvas.width;
                         const y = (box.y / 100) * canvas.height;
@@ -509,7 +570,7 @@ const Edit = () => {
                 for (let i = 0; i < (cols * rows); i++) {
                     const mappedIndex = i % (photosToDraw.length || 1);
                     if (!photosToDraw[mappedIndex]) continue;
-                    const img = await loadImage(photosToDraw[mappedIndex]);
+                    const img = await cachedLoadImage(photosToDraw[mappedIndex]);
                     const position = photoPositions[mappedIndex] || { x: 0.5, y: 0.5 };
 
                     if (img) {
@@ -524,7 +585,7 @@ const Edit = () => {
 
             // 5. Draw Frame Overlay
             if (selectedFrame.url || selectedFrame.image) {
-                const frameImg = await loadImage(selectedFrame.url || selectedFrame.image);
+                const frameImg = await cachedLoadImage(selectedFrame.url || selectedFrame.image);
                 if (frameImg) ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
             }
 
@@ -548,10 +609,11 @@ const Edit = () => {
                     });
                     const buffer = await qrCode.getRawData("png");
                     const qrDataUrl = URL.createObjectURL(buffer);
-                    const qrImg = await loadImage(qrDataUrl);
+                    const qrImg = await cachedLoadImage(qrDataUrl);
                     if (qrImg) {
                         ctx.drawImage(qrImg, qrX, qrY, qrW, qrW);
                     }
+                    URL.revokeObjectURL(qrDataUrl);
                 } catch (e) { console.warn("QR Gen failed", e); }
             }
 
@@ -583,7 +645,7 @@ const Edit = () => {
                     // Upload originals and videos
                     // Upload originals and videos
                     const rawSource = sessionData.photos || [];
-                    const uploadedPhotos = await Promise.all(photos.map(async (photoUrl, index) => {
+                    const uploadedPhotos = await mapWithConcurrency(photos, 2, async (photoUrl, index) => {
                         let finalPhotoUrl = photoUrl;
                         let finalPhotoPublicId = null;
                         let finalVideoUrl = null;
@@ -638,7 +700,7 @@ const Edit = () => {
                                 type: 'raw'
                             };
                         }
-                    }));
+                    });
 
                     const sessionBaseUrl = CLOUD_API_URL || API_URL;
                     const sessionRes = await axios.post(`${sessionBaseUrl}/api/sessions`, {

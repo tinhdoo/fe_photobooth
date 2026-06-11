@@ -27,6 +27,12 @@ const Capture = () => {
     // Motion Photo Refs
     const videoChunksRef = useRef([]);
     const mediaRecorderRef = useRef(null);
+    const shutterAudioRef = useRef(null);
+
+    useEffect(() => {
+        shutterAudioRef.current = new Audio('/shutter.mp3');
+        shutterAudioRef.current.preload = 'auto';
+    }, []);
 
     const startRecording = () => {
         if (configs.camera_mode !== 'webcam' || !stream) return;
@@ -49,7 +55,10 @@ const Capture = () => {
                 }
             }
 
-            const recorder = new MediaRecorder(stream, options);
+            const recorder = new MediaRecorder(stream, {
+                ...options,
+                videoBitsPerSecond: 2500000,
+            });
 
             recorder.ondataavailable = (event) => {
                 if (event.data && event.data.size > 0) {
@@ -110,73 +119,55 @@ const Capture = () => {
 
     useEffect(() => {
         let currentStream = null;
-        console.log('🎥 [Webcam] useEffect triggered, videoRef:', videoRef.current);
-
         if (configs.camera_mode !== 'webcam') {
             setCameraReady(true); // Always ready in hotfolder/canon mode
             return;
         }
 
         const initCamera = async () => {
-            console.log('📹 [Webcam] Starting initCamera...');
             try {
-                console.log('📹 [Webcam] Calling getUserMedia...');
-                // This acts as a read. I will perform read via view_file first.
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        width: { ideal: 1920 },
-                        height: { ideal: 1280 },
-                        facingMode: 'user'
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30, max: 30 },
+                        facingMode: 'user',
                     },
                     audio: false
                 });
 
-                console.log('✅ [Webcam] getUserMedia SUCCESS!', mediaStream);
-                console.log('✅ [Webcam] Video tracks:', mediaStream.getVideoTracks());
                 currentStream = mediaStream;
 
                 if (videoRef.current) {
-                    console.log('✅ [Webcam] Video ref exists, setting srcObject...');
                     videoRef.current.srcObject = mediaStream;
                     setStream(mediaStream);
                     setCameraReady(true);
-                    console.log('✅ [Webcam] Camera ready set to TRUE!');
                 } else {
-                    console.error('❌ [Webcam] videoRef.current is NULL!');
                     setCameraError('Video element not ready');
                 }
             } catch (error) {
-                console.error('❌ [Webcam] Error in initCamera:', error);
-                console.error('❌ [Webcam] Error name:', error.name);
-                console.error('❌ [Webcam] Error message:', error.message);
+                console.error('Webcam init failed:', error);
                 setCameraError(error.message);
             }
         };
 
-        console.log('⏰ [Webcam] Calling initCamera in 50ms...');
         const timer = setTimeout(() => {
-            console.log('⏰ [Webcam] Timer fired, calling initCamera now!');
             initCamera();
         }, 50);
 
         return () => {
             clearTimeout(timer);
-            console.log('🧹 [Webcam] Cleanup function called');
-            // Cleanup: Stop all tracks
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
-                console.log('✅ [Webcam] Stream stopped');
             }
         };
     }, []);
 
     useEffect(() => {
-        console.log('⏱️ [Countdown] Checking camera ready status:', cameraReady);
         const needsRetake = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
         const needsMorePhotos = photosTaken.length < TOTAL_PHOTOS;
 
         if (cameraReady && (needsRetake || needsMorePhotos)) {
-            console.log('⏱️ [Countdown] Camera ready and photo needed (New/Retake). Starting countdown...');
             startCountdown();
         }
     }, [cameraReady]); // Only depend on cameraReady (initially), logic internal checks sessionData/photos
@@ -208,12 +199,12 @@ const Capture = () => {
     }, [countdown, configs.countdown, TOTAL_PHOTOS]);
 
     const takePhoto = async () => {
-        console.log('📸 [Capture] Taking photo...');
         setIsShooting(true);
         setFlash(true);
 
-        const audio = new Audio('/shutter.mp3');
-        audio.play().catch(e => { });
+        const audio = shutterAudioRef.current;
+        if (audio) audio.currentTime = 0;
+        audio?.play().catch(e => { });
 
         // --- CANON MIDDLEWARE MODE ---
         if (configs.camera_mode === 'canon') {
@@ -299,8 +290,6 @@ const Capture = () => {
         try {
             const canvas = canvasRef.current;
             const video = videoRef.current;
-            console.log('📸 [Capture] Canvas:', canvas);
-            console.log('📸 [Capture] Video:', video);
 
             if (!canvas || !video) throw new Error('Canvas or Video not ready');
 
@@ -309,6 +298,7 @@ const Capture = () => {
             canvas.height = video.videoHeight;
 
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
 
             // Flip horizontally (mirror effect)
             ctx.translate(canvas.width, 0);
@@ -319,7 +309,7 @@ const Capture = () => {
 
             // Convert to blob
             const photoBlob = await new Promise(resolve =>
-                canvas.toBlob(resolve, 'image/jpeg', 0.95)
+                canvas.toBlob(resolve, 'image/jpeg', 0.9)
             );
 
             // Stop Motion Recording

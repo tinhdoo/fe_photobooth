@@ -63,6 +63,8 @@ const cacheConfigs = (configs) => {
     }
 };
 
+const sameConfig = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 export const WorkflowProvider = ({ children }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const [sessionData, setSessionData] = useState({
@@ -100,6 +102,7 @@ export const WorkflowProvider = ({ children }) => {
                 const data = await res.json();
                 setConfigs(prev => {
                     const normalized = normalizeConfigs(data, prev);
+                    if (sameConfig(prev, normalized)) return prev;
                     cacheConfigs(normalized);
                     return normalized;
                 });
@@ -110,10 +113,11 @@ export const WorkflowProvider = ({ children }) => {
     };
 
     useEffect(() => {
-        // Fetch ngay lần đầu
         fetchConfigs();
-        // Polling mỗi 10 giây: admin chỉnh config → booth tự cập nhật mà không cần restart
-        const configInterval = setInterval(fetchConfigs, 10000);
+        const configInterval = setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
+            fetchConfigs();
+        }, 30000);
         return () => clearInterval(configInterval);
     }, []);
 
@@ -150,7 +154,10 @@ export const WorkflowProvider = ({ children }) => {
 
                 if (res.ok) {
                     const data = await res.json();
-                    setIsEventMode(data.mode === 'event');
+                    setIsEventMode(prev => {
+                        const next = data.mode === 'event';
+                        return prev === next ? prev : next;
+                    });
                 }
             } catch (error) {
                 console.error("Device sync failed:", error);
@@ -167,7 +174,10 @@ export const WorkflowProvider = ({ children }) => {
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();
-                        setIsEventMode(data.mode === 'event');
+                        setIsEventMode(prev => {
+                            const next = data.mode === 'event';
+                            return prev === next ? prev : next;
+                        });
                     }
                 } catch (error) {
                     console.warn("Cloud device sync failed:", error);
@@ -251,28 +261,20 @@ export const WorkflowProvider = ({ children }) => {
 
     // Timer Countdown
     useEffect(() => {
-        let interval;
-        if (isSessionActive && timeLeft > 0) {
-            // Check if we are at step 1 or completed (scary if we reset automatically!)
-            // Actually, we only want to count down during the active flow (Steps 4-6 mainly)
-            // But user said "after payment", so it runs.
-            interval = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(interval);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        } else if (timeLeft === 0 && isSessionActive) {
-            // Timeout reached!
-            // We can set a flag here or handle specific logic.
-            // The components will verify timeLeft === 0 and act.
-            setIsSessionActive(false); // Stop timer
-        }
+        if (!isSessionActive) return undefined;
+
+        const interval = setInterval(() => {
+            setTimeLeft((prev) => Math.max(0, prev - 1));
+        }, 1000);
+
         return () => clearInterval(interval);
-    }, [isSessionActive, timeLeft]);
+    }, [isSessionActive]);
+
+    useEffect(() => {
+        if (timeLeft === 0 && isSessionActive) {
+            setIsSessionActive(false);
+        }
+    }, [timeLeft, isSessionActive]);
 
     const resetSession = () => {
         // Tự động tải lại trang để làm mới toàn bộ cài đặt (giá tiền, khung ảnh) và dọn dẹp bộ nhớ
