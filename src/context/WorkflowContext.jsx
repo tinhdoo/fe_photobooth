@@ -8,6 +8,7 @@ const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
         : '');
 const isLocalApp = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
+const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 
 export const WorkflowProvider = ({ children }) => {
     const [currentStep, setCurrentStep] = useState(1);
@@ -41,8 +42,17 @@ export const WorkflowProvider = ({ children }) => {
 
     const fetchConfigs = async () => {
         try {
-            if (!API_URL && !isLocalApp()) return;
-            const res = await fetch(apiPath('/api/config'));
+            if (!API_URL && !CLOUD_API_URL && !isLocalApp()) return;
+            let res = null;
+
+            if (CLOUD_API_URL) {
+                res = await fetch(cloudApiPath('/api/config'));
+            }
+
+            if ((!res || !res.ok) && (API_URL || isLocalApp())) {
+                res = await fetch(apiPath('/api/config'));
+            }
+
             if (res.ok) {
                 const data = await res.json();
                 setConfigs(prev => ({

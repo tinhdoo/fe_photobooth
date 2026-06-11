@@ -4,7 +4,11 @@ import toast from 'react-hot-toast';
 import { useWorkflow } from '../../context/WorkflowContext';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
-const apiPath = (path) => `${API_URL}${path}`;
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
+const apiPath = (path) => `${CLOUD_API_URL || API_URL}${path}`;
 
 const pageBackgrounds = [
     { id: 'source-selection', label: 'Chọn nguồn ảnh (source-selection)' },
@@ -123,7 +127,7 @@ const BrandingSettings = () => {
         formData.append('key', key);
 
         try {
-            const response = await fetch(apiPath('/api/upload/branding'), {
+            const response = await fetch(apiPath('/api/upload-branding'), {
                 method: 'POST',
                 body: formData,
             });
