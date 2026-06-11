@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useRef } from 'react';
 import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
@@ -22,6 +23,7 @@ const Payment = () => {
     const [qrOrder, setQrOrder] = useState(null);
     const [qrError, setQrError] = useState('');
     const [errorModal, setErrorModal] = useState({ show: false, message: '' });
+    const qrRequestRef = useRef(0);
 
     const price = sessionData.printPrice || 60000;
     const printQuantity = sessionData.printQuantity || 1;
@@ -148,6 +150,9 @@ const Payment = () => {
         if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;
 
         let cancelled = false;
+        const requestId = qrRequestRef.current + 1;
+        qrRequestRef.current = requestId;
+
         const createOrder = async () => {
             setLoading(true);
             try {
@@ -155,19 +160,20 @@ const Payment = () => {
                     amount: remainingAmount,
                     session_id: sessionData?.sessionId || sessionData?.uuid || null,
                 });
-                if (!cancelled) setQrOrder(res.data);
+                if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);
             } catch (error) {
-                if (!cancelled) {
+                if (!cancelled && qrRequestRef.current === requestId) {
                     setQrError(error.response?.data?.error || 'Không thể tạo mã QR Sepay trên Vercel.');
                 }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled && qrRequestRef.current === requestId) setLoading(false);
             }
         };
 
         createOrder();
         return () => {
             cancelled = true;
+            if (qrRequestRef.current === requestId) setLoading(false);
         };
     }, [method, qrOrder, qrError, remainingAmount]);
 
@@ -226,6 +232,8 @@ const Payment = () => {
 
     const goBack = () => {
         if (method) {
+            qrRequestRef.current += 1;
+            setLoading(false);
             setMethod(null);
             setCashInserted(0);
             setQrOrder(null);
@@ -432,7 +440,7 @@ const Payment = () => {
         );
     };
 
-    if (loading && method !== 'qr') {
+    if (loading && method && method !== 'qr') {
         return (
             <div
                 className="flex h-full flex-col items-center justify-center gap-4 bg-[#FFF8E7] bg-cover bg-center font-serif"
