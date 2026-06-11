@@ -52,6 +52,165 @@ function buildSession(body) {
     };
 }
 
+function parseStoragePublicId(publicId) {
+    const value = String(publicId || '').trim();
+    const slashIndex = value.indexOf('/');
+    if (slashIndex <= 0) return null;
+    return {
+        bucket: value.slice(0, slashIndex),
+        path: value.slice(slashIndex + 1),
+    };
+}
+
+function collectSessionStoragePaths(session) {
+    const paths = new Set();
+    const addPublicId = (publicId) => {
+        const parsed = parseStoragePublicId(publicId);
+        if (parsed?.path) paths.add(parsed.path);
+    };
+
+    addPublicId(session.composite_public_id);
+    addPublicId(session.gif_public_id);
+
+    const photos = Array.isArray(session.photos) ? session.photos : [];
+    photos.forEach((photo) => {
+        addPublicId(photo?.public_id);
+        addPublicId(photo?.video_public_id);
+    });
+
+    const meta = session.meta_data || {};
+    addPublicId(meta.composite_public_id);
+    addPublicId(meta.video_public_id);
+
+    return Array.from(paths);
+}
+
+async function listFilesRecursive(supabase, bucket, prefix) {
+    const result = [];
+    const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+    if (error) return result;
+
+    const items = Array.isArray(data) ? data : [];
+    for (const item of items) {
+        const path = `${prefix}/${item.name}`;
+        if (item.id) {
+            result.push({ ...item, path });
+        } else {
+            result.push(...await listFilesRecursive(supabase, bucket, path));
+        }
+    }
+    return result;
+}
+
+async function removeStoragePaths(supabase, bucket, paths) {
+    const uniquePaths = Array.from(new Set(paths.filter(Boolean)));
+    let deleted = 0;
+
+    for (let i = 0; i < uniquePaths.length; i += 100) {
+        const batch = uniquePaths.slice(i, i + 100);
+        const { error } = await supabase.storage.from(bucket).remove(batch);
+        if (!error) deleted += batch.length;
+    }
+
+    return deleted;
+}
+
+async function cleanupExpiredCloud(req, res, supabase) {
+    const secret = process.env.CLEANUP_SECRET;
+    const auth = String(req.headers.authorization || '');
+    if (secret && auth !== `Bearer ${secret}` && req.query.secret !== secret) {
+        return json(res, 401, { error: 'Unauthorized cleanup request' });
+    }
+
+    const bucket = await resolveBucket(supabase);
+    const now = Date.now();
+    const maxAgeMs = 72 * 60 * 60 * 1000;
+    const cutoffIso = new Date(now - maxAgeMs).toISOString();
+    const pathsToDelete = new Set();
+    let expiredSessionRows = 0;
+    let deletedMobileRows = 0;
+
+    const { data: sessions, error: sessionError } = await supabase
+        .from('photo_sessions')
+        .select('*')
+        .or(`expires_at.lt.${new Date(now).toISOString()},created_at.lt.${cutoffIso}`)
+        .limit(500);
+
+    if (sessionError && !isMissingTable(sessionError)) throw sessionError;
+
+    if (!sessionError && Array.isArray(sessions)) {
+        for (const session of sessions) {
+            collectSessionStoragePaths(session).forEach((path) => pathsToDelete.add(path));
+            pathsToDelete.add(`sessions/${session.uuid}.json`);
+        }
+
+        if (sessions.length > 0) {
+            const ids = sessions.map((item) => item.id).filter(Boolean);
+            const { error } = await supabase
+                .from('photo_sessions')
+                .update({ status: 'expired' })
+                .in('id', ids);
+            if (!error) expiredSessionRows = ids.length;
+        }
+    }
+
+    const sessionFiles = await listFilesRecursive(supabase, bucket, 'sessions');
+    for (const file of sessionFiles) {
+        let shouldDelete = false;
+
+        try {
+            const { data } = await supabase.storage.from(bucket).download(file.path);
+            const session = JSON.parse(await data.text());
+            const expiresAt = session.expires_at ? new Date(session.expires_at).getTime() : 0;
+            shouldDelete = expiresAt > 0 ? expiresAt < now : new Date(file.created_at || file.updated_at || 0).getTime() < now - maxAgeMs;
+        } catch {
+            shouldDelete = new Date(file.created_at || file.updated_at || 0).getTime() < now - maxAgeMs;
+        }
+
+        if (shouldDelete) pathsToDelete.add(file.path);
+    }
+
+    for (const prefix of ['booth', 'cloud', 'mobile']) {
+        const files = await listFilesRecursive(supabase, bucket, prefix);
+        files.forEach((file) => {
+            const createdAt = new Date(file.created_at || file.updated_at || 0).getTime();
+            if (createdAt && createdAt < now - maxAgeMs) pathsToDelete.add(file.path);
+        });
+    }
+
+    const { data: mobileRows, error: mobileError } = await supabase
+        .from('mobile_uploads')
+        .select('*')
+        .lt('created_at', cutoffIso)
+        .limit(1000);
+
+    if (mobileError && !isMissingTable(mobileError)) throw mobileError;
+
+    if (!mobileError && Array.isArray(mobileRows)) {
+        mobileRows.forEach((row) => {
+            const parsed = parseStoragePublicId(row.public_id);
+            if (parsed?.path) pathsToDelete.add(parsed.path);
+        });
+
+        if (mobileRows.length > 0) {
+            const ids = mobileRows.map((row) => row.id).filter(Boolean);
+            const { error } = await supabase.from('mobile_uploads').delete().in('id', ids);
+            if (!error) deletedMobileRows = ids.length;
+        }
+    }
+
+    const deletedStorageObjects = await removeStoragePaths(supabase, bucket, Array.from(pathsToDelete));
+
+    return json(res, 200, {
+        success: true,
+        bucket,
+        cutoff: cutoffIso,
+        expiredSessionRows,
+        deletedMobileRows,
+        deletedStorageObjects,
+    });
+}
+
 async function saveSessionToStorage(supabase, session) {
     const bucket = await resolveBucket(supabase);
     const objectPath = `sessions/${session.uuid}.json`;
@@ -84,6 +243,11 @@ export default async function handler(req, res) {
 
     try {
         const supabase = getSupabaseAdmin();
+
+        if (req.query.action === 'cleanup') {
+            if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(res);
+            return cleanupExpiredCloud(req, res, supabase);
+        }
 
         if (req.method === 'GET') {
             const sessionId = String(req.query.id || req.query.uuid || '').trim();
