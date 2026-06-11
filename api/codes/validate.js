@@ -1,6 +1,7 @@
-import { getSupabaseAdmin, json, methodNotAllowed } from '../_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../_supabase.js';
 
 export default async function handler(req, res) {
+    if (handleOptions(req, res)) return;
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {

@@ -43,7 +43,7 @@ const Payment = () => {
         setTimeout(async () => {
             if (activeVoucher?.id && !activeVoucher.used) {
                 try {
-                    await axios.post(`/api/codes/${activeVoucher.id}/use`);
+                    await axios.post(`${CLOUD_API_URL}/api/codes/${activeVoucher.id}/use`);
                     setVoucher((prev) => prev?.id === activeVoucher.id ? { ...prev, used: true } : prev);
                 } catch (error) {
                     setLoading(false);
@@ -76,7 +76,7 @@ const Payment = () => {
 
         setLoading(true);
         try {
-            const res = await axios.post('/api/codes/validate', { code });
+            const res = await axios.post(`${CLOUD_API_URL}/api/codes/validate`, { code });
             if (!res.data.valid || res.data.value <= 0) {
                 setErrorModal({ show: true, message: 'Mã không hợp lệ hoặc không còn giá trị.' });
                 return;
