@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import QRCodeStyling from 'qr-code-styling';
 import io from 'socket.io-client';
@@ -25,7 +25,7 @@ const MobileUploadCapture = () => {
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const [qrUrl, setQrUrl] = useState('');
-    const [sessionId] = useState(`session-${Math.random().toString(36).substring(2, 10)}`);
+    const [sessionId] = useState(() => `session-${Math.random().toString(36).substring(2, 10)}`);
     const [photosTaken, setPhotosTaken] = useState(sessionData.photos || []);
 
     const layout = sessionData.layout;
@@ -93,7 +93,7 @@ const MobileUploadCapture = () => {
         return () => {
             socket.disconnect();
         };
-    }, []);
+    }, [sessionId, TOTAL_PHOTOS]);
 
     useEffect(() => {
         let stopped = false;

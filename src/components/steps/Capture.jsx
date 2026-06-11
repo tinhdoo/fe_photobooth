@@ -8,11 +8,10 @@ import { FirebaseService } from '../../services/FirebaseService';
 const Capture = () => {
     const { nextStep, sessionData, updateSessionData, timeLeft, isSessionActive, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
-    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const [countdown, setCountdown] = useState(null);
     // Initialize with existing photos if any (for retake feature)
     const [photosTaken, setPhotosTaken] = useState(sessionData.photos || []);
-    const [isShooting, setIsShooting] = useState(false);
+    const [, setIsShooting] = useState(false);
     const [flash, setFlash] = useState(false);
     const [latestPhoto, setLatestPhoto] = useState(null);
     const isRetakeMode = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
@@ -317,8 +316,8 @@ const Capture = () => {
             try {
                 videoUrl = await stopRecording();
                 console.log("🎥 [Motion] Captured:", videoUrl);
-            } catch (e) {
-                console.warn("Motion capture error:", e);
+            } catch (error) {
+                console.warn("Motion capture error:", error);
             }
 
             // Create Photo Object

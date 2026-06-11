@@ -19,7 +19,7 @@ const Settings = () => {
         hot_folder: 'C:/Photobooth_Input',
         trigger_key: '{F8}'
     });
-    const [loading, setLoading] = useState(true);
+    const [, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
 

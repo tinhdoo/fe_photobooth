@@ -33,7 +33,7 @@ export const saveSessionToDB = async (sessionData, currentStep) => {
                         const res = await fetch(p);
                         const blob = await res.blob();
                         return blob;
-                    } catch (e) {
+                    } catch {
                         console.warn("Failed to fetch blob for persistence", p);
                         return null;
                     }
@@ -50,7 +50,7 @@ export const saveSessionToDB = async (sessionData, currentStep) => {
                     try {
                         const res = await fetch(p);
                         return await res.blob();
-                    } catch (e) { return null; }
+                    } catch { return null; }
                 }
                 return p;
             }));

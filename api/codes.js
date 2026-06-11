@@ -75,7 +75,7 @@ async function validateCode(req, res, supabase) {
     });
 }
 
-async function useCode(req, res, supabase) {
+async function markCodeUsed(req, res, supabase) {
     const id = String(req.body?.id || req.query?.id || '').trim();
     if (!id) return json(res, 400, { success: false, message: 'Thiếu ID mã thanh toán.' });
 
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
             const action = String(req.body?.action || req.query?.action || '').trim();
             if (action === 'generate') return generateCodes(req, res, supabase);
             if (action === 'validate') return validateCode(req, res, supabase);
-            if (action === 'use') return useCode(req, res, supabase);
+            if (action === 'use') return markCodeUsed(req, res, supabase);
             return json(res, 400, { error: 'Invalid action' });
         }
 

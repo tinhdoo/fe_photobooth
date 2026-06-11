@@ -113,7 +113,6 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 const Edit = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
-    const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const captureRef = useRef(null);
     // --- STATE ---
     // Tối ưu: Sử dụng useMemo để tránh tạo tham chiếu mới mỗi lần render gây lặp vô tận
@@ -128,7 +127,6 @@ const Edit = () => {
         Array(10).fill({ x: 0.5, y: 0.5 })
     );
 
-    const startPositionsRef = useRef(null); // Track pan start
     const filterCacheRef = useRef(new Map());
     const filterRunRef = useRef(0);
 
@@ -486,7 +484,7 @@ const Edit = () => {
                 const img = new Image();
                 img.crossOrigin = 'anonymous'; // CRITICAL for toBlob
                 img.onload = () => resolve(img);
-                img.onerror = (e) => { console.warn("Load failed", src); resolve(null); };
+                img.onerror = () => { console.warn("Load failed", src); resolve(null); };
                 img.src = src;
             });
             const cachedLoadImage = (src) => {

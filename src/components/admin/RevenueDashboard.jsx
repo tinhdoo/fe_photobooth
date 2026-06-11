@@ -150,7 +150,7 @@ const RevenueDashboard = () => {
 
             setNotification('Đã reset doanh thu thành công');
             setTimeout(() => setNotification(null), 3000);
-        } catch (err) {
+        } catch {
             setResetError('Reset thất bại');
         } finally {
             setResetLoading(false);
