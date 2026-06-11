@@ -36,6 +36,17 @@ function cleanExtension(filename, mimetype) {
     return 'bin';
 }
 
+async function resolveBucket(supabase) {
+    const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
+    const { data, error } = await supabase.storage.listBuckets();
+    if (error) throw error;
+
+    const buckets = Array.isArray(data) ? data : [];
+    if (buckets.some((item) => item.name === configuredBucket)) return configuredBucket;
+    if (buckets.length > 0) return buckets[0].name;
+    return configuredBucket;
+}
+
 async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
     let { error } = await supabase.storage
         .from(bucket)
@@ -65,13 +76,15 @@ export default async function handler(req, res) {
 
     try {
         const supabase = getSupabaseAdmin();
-        const bucket = process.env.SUPABASE_BUCKET || 'tomato';
+        const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
+        const bucket = await resolveBucket(supabase);
 
         if (req.method === 'GET') {
             const { data, error } = await supabase.storage.listBuckets();
             if (error) throw error;
 
             return json(res, 200, {
+                configuredBucket,
                 bucket,
                 exists: Array.isArray(data) && data.some((item) => item.name === bucket),
                 buckets: Array.isArray(data) ? data.map((item) => item.name) : [],

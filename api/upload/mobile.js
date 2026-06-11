@@ -51,6 +51,17 @@ async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
     if (error) throw error;
 }
 
+async function resolveBucket(supabase) {
+    const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
+    const { data, error } = await supabase.storage.listBuckets();
+    if (error) throw error;
+
+    const buckets = Array.isArray(data) ? data : [];
+    if (buckets.some((item) => item.name === configuredBucket)) return configuredBucket;
+    if (buckets.length > 0) return buckets[0].name;
+    return configuredBucket;
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
     if (req.method !== 'POST') return methodNotAllowed(res);
@@ -64,7 +75,7 @@ export default async function handler(req, res) {
         if (!file) return json(res, 400, { error: 'Missing file' });
 
         const supabase = getSupabaseAdmin();
-        const bucket = process.env.SUPABASE_BUCKET || 'tomato';
+        const bucket = await resolveBucket(supabase);
         const originalName = file.originalFilename || 'photo.jpg';
         const extension = originalName.includes('.') ? originalName.split('.').pop().toLowerCase() : 'jpg';
         const objectPath = `mobile/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
