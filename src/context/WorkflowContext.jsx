@@ -2,6 +2,10 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 const WorkflowContext = createContext();
 const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
 const isLocalApp = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
 
@@ -92,7 +96,7 @@ export const WorkflowProvider = ({ children }) => {
             }
 
             try {
-                // Initial registration / sync
+                // Initial registration / sync on the local backend.
                 const res = await fetch(apiPath('/api/devices/heartbeat'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -107,6 +111,22 @@ export const WorkflowProvider = ({ children }) => {
                 console.error("Device sync failed:", error);
                 // Fallback to local setting if offline
                 setIsEventMode(localStorage.getItem('BOOTH_MODE') === 'event');
+            }
+
+            if (CLOUD_API_URL) {
+                try {
+                    const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices/heartbeat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceId, name: deviceName })
+                    });
+                    if (cloudRes.ok) {
+                        const data = await cloudRes.json();
+                        setIsEventMode(data.mode === 'event');
+                    }
+                } catch (error) {
+                    console.warn("Cloud device sync failed:", error);
+                }
             }
         };
 

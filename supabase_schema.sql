@@ -57,3 +57,28 @@ using (true);
 
 -- Code generation and marking used are server-only through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY.
+
+create table if not exists devices (
+  id uuid primary key default gen_random_uuid(),
+  device_id text unique not null,
+  name text,
+  mode text not null default 'payment',
+  last_active timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists devices_device_id_idx on devices (device_id);
+create index if not exists devices_last_active_idx on devices (last_active);
+
+alter table devices enable row level security;
+
+drop policy if exists "devices_public_read" on devices;
+create policy "devices_public_read"
+on devices
+for select
+to anon
+using (true);
+
+-- Device registration, edit, and delete are server-only through Vercel API using
+-- SUPABASE_SERVICE_ROLE_KEY.
