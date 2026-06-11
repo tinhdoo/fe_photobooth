@@ -719,6 +719,11 @@ const Edit = () => {
                     });
 
                     const sessionBaseUrl = CLOUD_API_URL || API_URL;
+                    const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
+                    const printerCopies = layout.printMode === 'double_strip'
+                        ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
+                        : selectedPrintQuantity;
+
                     const sessionRes = await axios.post(`${sessionBaseUrl}/api/sessions`, {
                         layout_id: layout.id || 'strip_4',
                         composite_url: compositeUrl,
@@ -732,6 +737,8 @@ const Edit = () => {
                             frame_config: frameConfig,
                             photo_positions: photoPositions,
                             print_mode: layout.printMode || 'single',
+                            print_quantity: selectedPrintQuantity,
+                            printer_copies: printerCopies,
                             payment_code: sessionData.paymentCode || null,
                             payment_code_value: sessionData.paymentCodeValue || null,
                             payment_code_applied: sessionData.paymentCodeApplied || null,
@@ -743,7 +750,7 @@ const Edit = () => {
                     updateSessionData('sessionId', sessionRes.data.uuid || sessionId);
 
                     try {
-                        const printResult = await sendToPrinter(blob, sessionData.printQuantity || 1);
+                        const printResult = await sendToPrinter(blob, printerCopies);
                         console.log('Print job queued:', printResult);
                     } catch (printError) {
                         const data = printError.response?.data;
