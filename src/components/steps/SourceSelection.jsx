@@ -17,12 +17,13 @@ const SourceSelection = () => {
     };
 
     return (
-        <div className="relative flex h-full w-full flex-col items-center justify-center space-y-8 overflow-hidden bg-[#FFF8E7] p-8">
+        <div className="relative flex h-full min-h-screen w-full flex-col items-center justify-center space-y-8 overflow-hidden bg-[#FFF8E7] p-8">
             {backgroundUrl && (
                 isVideoUrl(backgroundUrl) ? (
                     <video
                         src={backgroundUrl}
-                        className="absolute -inset-6 z-0 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover"
+                        className="absolute inset-x-0 -top-8 -bottom-14 z-0 h-[calc(100%+5.5rem)] w-full object-cover"
+                        style={{ objectPosition: 'center calc(100% + 24px)' }}
                         autoPlay
                         muted
                         loop
@@ -31,8 +32,11 @@ const SourceSelection = () => {
                     />
                 ) : (
                     <div
-                        className="absolute -inset-6 z-0 bg-cover bg-center"
-                        style={{ backgroundImage: `url('${backgroundUrl}')` }}
+                        className="absolute inset-x-0 -top-8 -bottom-14 z-0 bg-cover"
+                        style={{
+                            backgroundImage: `url('${backgroundUrl}')`,
+                            backgroundPosition: 'center calc(100% + 24px)'
+                        }}
                     />
                 )
             )}
