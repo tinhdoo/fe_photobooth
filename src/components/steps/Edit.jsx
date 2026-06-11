@@ -9,6 +9,10 @@ import { LAYOUTS } from '../../data/layouts';
 
 // Cấu hình URL API (Nên đưa vào biến môi trường)
 const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
 
 const FILTERS = [
     { id: 'normal', name: 'Gốc', filter: null },
@@ -361,11 +365,12 @@ const Edit = () => {
         document.addEventListener('touchend', upHandler);
     };
 
-    const uploadFile = async (blob) => {
+    const uploadFile = async (blob, filename = `capture_${Date.now()}.png`) => {
         const formData = new FormData();
-        formData.append('file', blob, `capture_${Date.now()}.png`);
+        formData.append('file', blob, filename);
         try {
-            const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
+            const uploadBaseUrl = CLOUD_API_URL || API_URL;
+            const res = await axios.post(`${uploadBaseUrl}/api/upload/cloud`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             return { url: res.data.url, public_id: res.data.public_id };
@@ -397,7 +402,8 @@ const Edit = () => {
             const sessionId = (window.crypto && typeof window.crypto.randomUUID === 'function')
                 ? window.crypto.randomUUID()
                 : `session-${Math.random().toString(36).substring(2, 11)}`;
-            const downloadUrl = `${window.location.origin}/album/${sessionId}`;
+            const albumBaseUrl = CLOUD_API_URL || window.location.origin;
+            const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
             // 2. Setup Canvas
             const canvas = document.createElement('canvas');
@@ -592,7 +598,7 @@ const Edit = () => {
                                     console.log(`☁️ Uploading photo to cloud: ${photoUrl}`);
                                     const f = await fetch(photoUrl);
                                     const b = await f.blob();
-                                    const uploadData = await uploadFile(b);
+                                    const uploadData = await uploadFile(b, `raw_${index}_${Date.now()}.jpg`);
                                     finalPhotoUrl = uploadData.url;
                                     finalPhotoPublicId = uploadData.public_id;
                                 }
@@ -603,13 +609,9 @@ const Edit = () => {
                                 console.log(`🎥 Uploading video for slot ${index}:`, originalData.videoUrl);
                                 const f = await fetch(originalData.videoUrl);
                                 const b = await f.blob();
-                                const formData = new FormData();
-                                formData.append('file', b, `motion_${Date.now()}.webm`);
-                                const res = await axios.post(`${API_URL}/api/upload/cloud`, formData, {
-                                    headers: { 'Content-Type': 'multipart/form-data' }
-                                });
-                                finalVideoUrl = res.data.url;
-                                finalVideoPublicId = res.data.public_id;
+                                const uploadData = await uploadFile(b, `motion_${index}_${Date.now()}.webm`);
+                                finalVideoUrl = uploadData.url;
+                                finalVideoPublicId = uploadData.public_id;
                                 console.log(`✅ Video uploaded:`, finalVideoUrl);
                             } else {
                                 console.log(`ℹ️ No video pending for slot ${index}`);
@@ -635,7 +637,8 @@ const Edit = () => {
                         }
                     }));
 
-                    const sessionRes = await axios.post(`${API_URL}/api/sessions`, {
+                    const sessionBaseUrl = CLOUD_API_URL || API_URL;
+                    const sessionRes = await axios.post(`${sessionBaseUrl}/api/sessions`, {
                         layout_id: layout.id || 'strip_4',
                         composite_url: compositeUrl,
                         composite_public_id: compositePublicId, // Send Public ID

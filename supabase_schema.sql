@@ -105,3 +105,34 @@ using (true);
 
 -- Mobile uploads are inserted server-side through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY.
+
+create table if not exists photo_sessions (
+  id uuid primary key default gen_random_uuid(),
+  uuid text unique not null,
+  layout_id text,
+  composite_url text,
+  composite_public_id text,
+  photos jsonb not null default '[]'::jsonb,
+  payment_method text,
+  amount integer not null default 0,
+  meta_data jsonb not null default '{}'::jsonb,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz
+);
+
+create index if not exists photo_sessions_uuid_idx on photo_sessions (uuid);
+create index if not exists photo_sessions_created_at_idx on photo_sessions (created_at);
+create index if not exists photo_sessions_expires_at_idx on photo_sessions (expires_at);
+
+alter table photo_sessions enable row level security;
+
+drop policy if exists "photo_sessions_public_read" on photo_sessions;
+create policy "photo_sessions_public_read"
+on photo_sessions
+for select
+to anon
+using (true);
+
+-- Photo sessions are inserted/updated server-side through Vercel API using
+-- SUPABASE_SERVICE_ROLE_KEY.

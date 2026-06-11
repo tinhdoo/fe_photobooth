@@ -259,8 +259,11 @@ const ViewPage = () => {
             setLoading(true);
             setError('');
             try {
-                const apiUrl = import.meta.env.VITE_API_URL || '';
-                const res = await axios.get(`${apiUrl}/api/sessions/${id}`);
+                const cloudApiUrl = import.meta.env.VITE_CLOUD_API_URL
+                    || (window.location.hostname === 'localhost' ? 'https://tomatophotobooth.vercel.app' : '');
+                const res = await axios.get(`${cloudApiUrl}/api/sessions`, {
+                    params: { id }
+                });
                 const data = res.data;
 
                 if (cancelled) return;

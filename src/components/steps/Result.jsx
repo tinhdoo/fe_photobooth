@@ -3,6 +3,11 @@ import QRCodeStyling from 'qr-code-styling';
 import { CheckCircle2, QrCode } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';
 
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
+    || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'https://tomatophotobooth.vercel.app'
+        : '');
+
 const Result = () => {
     const { resetSession, sessionData, configs } = useWorkflow();
     const finalImage = sessionData.finalImage;
@@ -36,19 +41,8 @@ const Result = () => {
                 setViewUrl(finalImage);
                 return;
             }
-            try {
-                const res = await fetch('/api/network/ip');
-                if (res.ok) {
-                    const data = await res.json();
-                    const port = window.location.port ? `:${window.location.port}` : '';
-                    setViewUrl(`http://${data.ip}${port}/album/${sessionId}`);
-                } else {
-                    setViewUrl(`${window.location.origin}/album/${sessionId}`);
-                }
-            } catch (error) {
-                console.error('Failed to get LAN IP', error);
-                setViewUrl(`${window.location.origin}/album/${sessionId}`);
-            }
+            const albumBaseUrl = CLOUD_API_URL || window.location.origin;
+            setViewUrl(`${albumBaseUrl}/album/${sessionId}`);
         };
         fetchViewUrl();
     }, [sessionId, finalImage]);
