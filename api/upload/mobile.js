@@ -27,6 +27,26 @@ function firstValue(value) {
     return Array.isArray(value) ? value[0] : value;
 }
 
+async function uploadToBucket(supabase, bucket, objectPath, buffer, options) {
+    let { error } = await supabase.storage
+        .from(bucket)
+        .upload(objectPath, buffer, options);
+
+    if (error && /bucket/i.test(error.message || '')) {
+        await supabase.storage.createBucket(bucket, {
+            public: false,
+            fileSizeLimit: 25 * 1024 * 1024,
+        });
+
+        const retry = await supabase.storage
+            .from(bucket)
+            .upload(objectPath, buffer, options);
+        error = retry.error;
+    }
+
+    if (error) throw error;
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
     if (req.method !== 'POST') return methodNotAllowed(res);
@@ -46,14 +66,10 @@ export default async function handler(req, res) {
         const objectPath = `mobile/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
         const buffer = await fs.readFile(file.filepath);
 
-        const { error: uploadError } = await supabase.storage
-            .from(bucket)
-            .upload(objectPath, buffer, {
+        await uploadToBucket(supabase, bucket, objectPath, buffer, {
                 contentType: file.mimetype || 'image/jpeg',
                 upsert: false,
-            });
-
-        if (uploadError) throw uploadError;
+        });
 
         const { data: publicData } = supabase.storage
             .from(bucket)
