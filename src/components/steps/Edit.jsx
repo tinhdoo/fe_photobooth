@@ -370,7 +370,7 @@ const Edit = () => {
         formData.append('file', blob, filename);
         try {
             const uploadBaseUrl = CLOUD_API_URL || API_URL;
-            const res = await axios.post(`${uploadBaseUrl}/api/upload/cloud`, formData, {
+            const res = await axios.post(`${uploadBaseUrl}/api/upload-cloud`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             return { url: res.data.url, public_id: res.data.public_id };
