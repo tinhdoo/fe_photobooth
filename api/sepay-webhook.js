@@ -2,7 +2,11 @@ import { getSupabaseAdmin, json, methodNotAllowed } from './_supabase.js';
 
 function getAuthToken(req) {
     const header = req.headers.authorization || req.headers.Authorization || '';
-    return header.replace(/^Apikey\s+/i, '').replace(/^Bearer\s+/i, '').trim();
+    const explicitHeader = req.headers['x-api-key'] || req.headers['sepay-api-key'];
+    return String(explicitHeader || header)
+        .replace(/^Apikey\s+/i, '')
+        .replace(/^Bearer\s+/i, '')
+        .trim();
 }
 
 function extractTransferCode(payload) {
