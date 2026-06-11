@@ -6,6 +6,40 @@ export default async function handler(req, res) {
     try {
         const supabase = getSupabaseAdmin();
 
+        if (req.method === 'POST') {
+            const action = String(req.body?.action || req.query?.action || '').trim();
+            if (action !== 'heartbeat') {
+                return json(res, 400, { error: 'Invalid action' });
+            }
+
+            const deviceId = String(req.body?.deviceId || req.body?.device_id || '').trim();
+            const name = String(req.body?.name || '').trim();
+
+            if (!deviceId) return json(res, 400, { error: 'Missing deviceId' });
+
+            const now = new Date().toISOString();
+            const payload = {
+                device_id: deviceId,
+                last_active: now,
+                updated_at: now,
+            };
+
+            if (name) payload.name = name;
+
+            const { data, error } = await supabase
+                .from('devices')
+                .upsert(payload, { onConflict: 'device_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return json(res, 200, {
+                ...data,
+                mode: data.mode || 'payment',
+                name: data.name || `Máy ${deviceId.slice(-6).toUpperCase()}`,
+            });
+        }
+
         if (req.method === 'PUT') {
             const id = req.body?.id || req.query?.id;
             if (!id) return json(res, 400, { error: 'Missing device id' });
@@ -42,7 +76,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method !== 'GET') {
-            res.setHeader('Allow', 'GET,PUT,DELETE');
+            res.setHeader('Allow', 'GET,POST,PUT,DELETE');
             return json(res, 405, { error: 'Method not allowed' });
         }
 

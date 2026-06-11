@@ -115,10 +115,10 @@ export const WorkflowProvider = ({ children }) => {
 
             if (CLOUD_API_URL) {
                 try {
-                    const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices/heartbeat`, {
+                    const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ deviceId, name: deviceName })
+                        body: JSON.stringify({ action: 'heartbeat', deviceId, name: deviceName })
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();

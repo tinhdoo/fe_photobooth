@@ -71,7 +71,7 @@ const CodeManager = () => {
                 }
                 payload.expires_at = selectedDate.toISOString();
             }
-            await axios.post('/api/codes/generate', payload);
+            await axios.post('/api/codes', { ...payload, action: 'generate' });
             fetchCodes();
             setNotification({ show: true, message: "Tạo mã thành công!", type: 'success' });
         } catch (error) {
