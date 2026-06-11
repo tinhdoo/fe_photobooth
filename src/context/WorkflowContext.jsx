@@ -2,13 +2,66 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 const WorkflowContext = createContext();
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+const getDefaultCloudApiUrl = () => {
+    if (typeof window === 'undefined') return '';
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'https://tomatophotobooth.vercel.app';
+    }
+    return window.location.origin;
+};
+
 const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
-const isLocalApp = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    || getDefaultCloudApiUrl();
+const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
+const CONFIG_CACHE_KEY = 'ptb_configs_cache';
+
+const DEFAULT_CONFIGS = {
+    price: 60000,
+    print_price: 20000,
+    mobile_price: 30000,
+    mobile_print_price: 10000,
+    session_timeout: 600,
+    mobile_session_timeout: 300,
+    countdown: 5,
+    camera_mode: 'webcam',
+    hot_folder: 'C:/Photobooth_Input'
+};
+
+const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
+    ...fallback,
+    ...nextConfigs,
+    price: parseInt(nextConfigs.price ?? fallback.price) || DEFAULT_CONFIGS.price,
+    print_price: parseInt(nextConfigs.print_price ?? fallback.print_price) || DEFAULT_CONFIGS.print_price,
+    mobile_price: parseInt(nextConfigs.mobile_price ?? fallback.mobile_price) || DEFAULT_CONFIGS.mobile_price,
+    mobile_print_price: parseInt(nextConfigs.mobile_print_price ?? fallback.mobile_print_price) || DEFAULT_CONFIGS.mobile_print_price,
+    session_timeout: parseInt(nextConfigs.session_timeout ?? fallback.session_timeout) || DEFAULT_CONFIGS.session_timeout,
+    mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? fallback.mobile_session_timeout) || DEFAULT_CONFIGS.mobile_session_timeout,
+    countdown: parseInt(nextConfigs.countdown ?? fallback.countdown) || DEFAULT_CONFIGS.countdown,
+    camera_mode: nextConfigs.camera_mode || fallback.camera_mode || DEFAULT_CONFIGS.camera_mode,
+    hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder
+});
+
+const readCachedConfigs = () => {
+    if (typeof window === 'undefined') return {};
+    try {
+        return JSON.parse(localStorage.getItem(CONFIG_CACHE_KEY) || '{}');
+    } catch {
+        return {};
+    }
+};
+
+const cacheConfigs = (configs) => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(configs));
+    } catch {
+        // Ignore storage quota/private mode errors.
+    }
+};
 
 export const WorkflowProvider = ({ children }) => {
     const [currentStep, setCurrentStep] = useState(1);
@@ -28,17 +81,7 @@ export const WorkflowProvider = ({ children }) => {
 
 
     // Dynamic Configs
-    const [configs, setConfigs] = useState({
-        price: 60000,
-        print_price: 20000,
-        mobile_price: 30000,
-        mobile_print_price: 10000,
-        session_timeout: 600,
-        mobile_session_timeout: 300,
-        countdown: 5,
-        camera_mode: 'webcam',
-        hot_folder: 'C:/Photobooth_Input'
-    });
+    const [configs, setConfigs] = useState(() => normalizeConfigs(readCachedConfigs()));
 
     const fetchConfigs = async () => {
         try {
@@ -55,19 +98,11 @@ export const WorkflowProvider = ({ children }) => {
 
             if (res.ok) {
                 const data = await res.json();
-                setConfigs(prev => ({
-                    ...prev,
-                    ...data,
-                    price: parseInt(data.price) || 60000,
-                    print_price: parseInt(data.print_price) || 20000,
-                    mobile_price: parseInt(data.mobile_price) || 30000,
-                    mobile_print_price: parseInt(data.mobile_print_price) || 10000,
-                    session_timeout: parseInt(data.session_timeout) || 600,
-                    mobile_session_timeout: parseInt(data.mobile_session_timeout) || 300,
-                    countdown: parseInt(data.countdown) || 5,
-                    camera_mode: data.camera_mode || 'webcam',
-                    hot_folder: data.hot_folder || 'C:/Photobooth_Input'
-                }));
+                setConfigs(prev => {
+                    const normalized = normalizeConfigs(data, prev);
+                    cacheConfigs(normalized);
+                    return normalized;
+                });
             }
         } catch (error) {
             console.error("Failed to load configs:", error);
@@ -249,19 +284,11 @@ export const WorkflowProvider = ({ children }) => {
     };
 
     const applyConfigs = (nextConfigs = {}) => {
-        setConfigs(prev => ({
-            ...prev,
-            ...nextConfigs,
-            price: parseInt(nextConfigs.price ?? prev.price) || 60000,
-            print_price: parseInt(nextConfigs.print_price ?? prev.print_price) || 20000,
-            mobile_price: parseInt(nextConfigs.mobile_price ?? prev.mobile_price) || 30000,
-            mobile_print_price: parseInt(nextConfigs.mobile_print_price ?? prev.mobile_print_price) || 10000,
-            session_timeout: parseInt(nextConfigs.session_timeout ?? prev.session_timeout) || 600,
-            mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? prev.mobile_session_timeout) || 300,
-            countdown: parseInt(nextConfigs.countdown ?? prev.countdown) || 5,
-            camera_mode: nextConfigs.camera_mode || prev.camera_mode || 'webcam',
-            hot_folder: nextConfigs.hot_folder || prev.hot_folder || 'C:/Photobooth_Input'
-        }));
+        setConfigs(prev => {
+            const normalized = normalizeConfigs(nextConfigs, prev);
+            cacheConfigs(normalized);
+            return normalized;
+        });
     };
 
     return (

@@ -56,6 +56,7 @@ async function writeConfig(supabase, bucket, config) {
 
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
 
     try {
         const supabase = getSupabaseAdmin();
