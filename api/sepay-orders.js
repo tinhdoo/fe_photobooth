@@ -2,7 +2,7 @@ import { getSupabaseAdmin, json, methodNotAllowed } from './_supabase.js';
 
 function randomCode() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = 'TPB';
+    let code = process.env.SEPAY_PAYMENT_PREFIX || 'TOMA';
     for (let i = 0; i < 7; i += 1) {
         code += alphabet[Math.floor(Math.random() * alphabet.length)];
     }

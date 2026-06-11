@@ -10,6 +10,9 @@ function getAuthToken(req) {
 }
 
 function extractTransferCode(payload) {
+    const prefix = process.env.SEPAY_PAYMENT_PREFIX || 'TOMA';
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const codePattern = new RegExp(`${escapedPrefix}[A-Z0-9]{7}`, 'i');
     const candidates = [
         payload?.code,
         payload?.payment_code,
@@ -21,8 +24,8 @@ function extractTransferCode(payload) {
     ].filter(Boolean).map(String);
 
     for (const value of candidates) {
-        const match = value.toUpperCase().match(/TPB[A-Z0-9]{7}/);
-        if (match) return match[0];
+        const match = value.match(codePattern);
+        if (match) return match[0].toUpperCase();
     }
 
     return null;
