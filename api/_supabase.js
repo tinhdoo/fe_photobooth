@@ -17,10 +17,23 @@ export function getSupabaseAdmin() {
 }
 
 export function json(res, status, body) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, Sepay-API-Key');
     res.status(status).json(body);
 }
 
 export function methodNotAllowed(res) {
     res.setHeader('Allow', 'POST');
     json(res, 405, { error: 'Method not allowed' });
+}
+
+export function handleOptions(req, res) {
+    if (req.method !== 'OPTIONS') return false;
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, Sepay-API-Key');
+    res.status(204).end();
+    return true;
 }

@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
 
 function randomCode() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -10,6 +10,7 @@ function randomCode() {
 }
 
 export default async function handler(req, res) {
+    if (handleOptions(req, res)) return;
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {
