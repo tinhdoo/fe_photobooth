@@ -4,7 +4,7 @@ import { Upload, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../context/WorkflowContext';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || '';
 
 const MobileUploadClient = () => {
     const { sessionId } = useParams();
@@ -56,7 +56,7 @@ const MobileUploadClient = () => {
                 formData.append('file', file);
                 formData.append('session_id', sessionId);
 
-                const response = await fetch(`${API_URL}/api/upload/mobile`, {
+                const response = await fetch(`${CLOUD_API_URL}/api/upload/mobile`, {
                     method: 'POST',
                     body: formData,
                 });

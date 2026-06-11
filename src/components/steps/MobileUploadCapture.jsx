@@ -7,6 +7,7 @@ import { getDeviceId } from '../../utils/deviceId';
 import { Smartphone, CheckCircle, Image as ImageIcon } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || 'https://tomatophotobooth.vercel.app';
 const isLocalHost = (hostname) => (
     hostname === 'localhost'
     || hostname === '127.0.0.1'
@@ -50,28 +51,12 @@ const MobileUploadCapture = () => {
     }, [qrUrl]);
 
     useEffect(() => {
-        // 1. Generate QR Code pointing to Mobile Client
+        // 1. Generate QR Code pointing to the public upload client on Vercel.
         const initQr = async () => {
-            const publicUploadUrl = `${window.location.origin}/m/upload/${sessionId}?limit=${TOTAL_PHOTOS}`;
-            if (!isLocalHost(window.location.hostname)) {
-                setQrUrl(publicUploadUrl);
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/api/network/ip`);
-                if (res.ok) {
-                    const data = await res.json();
-                    const port = window.location.port ? `:${window.location.port}` : '';
-                    const uploadUrl = `http://${data.ip}${port}/m/upload/${sessionId}?limit=${TOTAL_PHOTOS}`;
-                    setQrUrl(uploadUrl);
-                    console.log("QR URL Generated:", uploadUrl);
-                }
-            } catch (error) {
-                console.error("Failed to get LAN IP", error);
-                // Fallback to localhost (only works if testing on same machine)
-                setQrUrl(publicUploadUrl);
-            }
+            const baseUrl = isLocalHost(window.location.hostname) ? CLOUD_API_URL : window.location.origin;
+            const publicUploadUrl = `${baseUrl}/m/upload/${sessionId}?limit=${TOTAL_PHOTOS}`;
+            setQrUrl(publicUploadUrl);
+            console.log("QR URL Generated:", publicUploadUrl);
         };
         initQr();
 
@@ -106,7 +91,7 @@ const MobileUploadCapture = () => {
         let stopped = false;
         const pollUploads = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/mobile-uploads/${sessionId}`);
+                const res = await fetch(`${CLOUD_API_URL}/api/mobile-uploads?session_id=${encodeURIComponent(sessionId)}`);
                 if (!res.ok) return;
                 const uploads = await res.json();
                 if (stopped || !Array.isArray(uploads)) return;
