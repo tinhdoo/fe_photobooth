@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Upload, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Loader, ImagePlus, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../context/WorkflowContext';
 
 const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || '';
+const CREAM = '#FFF8E7';
+const BEIGE = '#D5B895';
+const BEIGE_DARK = '#8E6B4D';
+const TEXT_PRIMARY = '#7B5E43';
+const TEXT_SECONDARY = '#5E6B78';
 
 const MobileUploadClient = () => {
     const { sessionId } = useParams();
@@ -35,10 +40,10 @@ const MobileUploadClient = () => {
 
         let selectedFiles = Array.from(e.target.files);
         if (selectedFiles.length > limit) {
-            setErrorMsg(`Bạn chỉ được chọn tối đa ${limit} ảnh. Các ảnh thừa đã bị loại bỏ.`);
+            setErrorMsg(`Bạn chỉ được chọn tối đa ${limit} ảnh. Các ảnh thừa đã được bỏ qua.`);
             selectedFiles = selectedFiles.slice(0, limit);
         } else if (selectedFiles.length < limit) {
-            setErrorMsg(`Vui lòng chọn thêm ảnh, cần đúng ${limit} ảnh.`);
+            setErrorMsg(`Vui lòng chọn đủ ${limit} ảnh để gửi lên Photobooth.`);
         } else {
             setErrorMsg('');
         }
@@ -78,103 +83,129 @@ const MobileUploadClient = () => {
     };
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAF7] p-6 font-sans">
-            <div className="w-full max-w-md overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl">
-                <div className="bg-[#B5C1B0] p-6 text-center text-white">
-                    <img
-                        src={logoUrl}
-                        alt="Tomato Photobooth"
-                        className="mx-auto mb-3 h-16 w-16 rounded-full object-contain"
-                    />
-                    <h1 className="font-serif text-2xl font-bold">Gửi ảnh lên Tomato Photobooth</h1>
-                    <p className="mt-1 text-sm opacity-90">Phiên làm việc: {sessionId ? sessionId.substring(0, 8) : 'N/A'}</p>
-                </div>
+        <div className="min-h-screen overflow-y-auto px-4 py-6 font-sans" style={{ backgroundColor: CREAM }}>
+            <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-center">
+                <div className="w-full overflow-hidden rounded-3xl border border-[#E7D3B7] bg-white shadow-[0_18px_50px_rgba(142,107,77,0.18)]">
+                    <div className="border-b border-[#E7D3B7] p-6 text-center" style={{ backgroundColor: '#F7E8CF' }}>
+                        <img
+                            src={logoUrl}
+                            alt="Tomato Photobooth"
+                            className="mx-auto mb-3 h-16 w-16 object-contain"
+                        />
+                        <h1 className="font-serif text-3xl font-extrabold leading-tight" style={{ color: TEXT_PRIMARY }}>
+                            Gửi ảnh lên Tomato Photobooth
+                        </h1>
+                        <p className="mt-2 text-sm font-semibold" style={{ color: TEXT_SECONDARY }}>
+                            Chọn đúng {limit} ảnh yêu thích của bạn
+                        </p>
+                    </div>
 
-                <div className="flex flex-col items-center space-y-6 p-8">
-                    {uploadStatus === 'success' && (
-                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 flex flex-col items-center text-green-600">
-                            <CheckCircle size={56} className="mb-4 text-[#52796f]" />
-                            <p className="text-center font-serif text-2xl font-bold text-[#2f3e46]">Tải ảnh lên thành công!</p>
-                            <div className="mt-4 space-y-2 rounded-xl border border-green-100 bg-green-50 p-4 text-center">
-                                <p className="text-sm text-green-800">Ảnh của bạn đã được chuyển tới máy Photobooth.</p>
-                                <p className="text-sm font-bold text-green-900">Vui lòng quay lại màn hình chính của máy để tiếp tục.</p>
-                            </div>
-                            <p className="mt-8 text-sm font-medium uppercase tracking-wide text-gray-500">Cảm ơn bạn đã sử dụng dịch vụ.</p>
-                        </motion.div>
-                    )}
-
-                    {uploadStatus === 'error' && (
-                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 flex flex-col items-center text-red-500">
-                            <AlertCircle size={48} className="mb-2" />
-                            <p className="text-center text-lg font-medium">Có lỗi xảy ra!</p>
-                            <p className="mt-1 text-center text-sm opacity-80">Vui lòng thử lại sau.</p>
-                        </motion.div>
-                    )}
-
-                    {!isUploading && uploadStatus !== 'success' && (
-                        <div className="w-full">
-                            <label className="relative flex h-40 w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#85937F] bg-gray-50 transition-none active:bg-[#F9FAF7]">
-                                <div className="flex flex-col items-center justify-center pb-6 pt-5">
-                                    <Upload size={40} className="mb-3 text-[#85937F] transition-none" />
-                                    <p className="mb-2 text-sm text-gray-500">
-                                        <span className="font-semibold text-gray-700">
-                                            {files.length > 0 ? 'Chạm vào đây để chọn lại' : `Chạm để chọn ${limit} ảnh`}
-                                        </span>
+                    <div className="flex flex-col items-center space-y-6 p-6">
+                        {uploadStatus === 'success' && (
+                            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 flex flex-col items-center">
+                                <CheckCircle size={56} className="mb-4" style={{ color: TEXT_PRIMARY }} />
+                                <p className="text-center font-serif text-2xl font-extrabold" style={{ color: TEXT_PRIMARY }}>
+                                    Tải ảnh lên thành công!
+                                </p>
+                                <div className="mt-4 space-y-2 rounded-2xl border border-[#E7D3B7] bg-[#FFF8E7] p-4 text-center">
+                                    <p className="text-sm" style={{ color: TEXT_SECONDARY }}>
+                                        Ảnh của bạn đã được chuyển tới máy Photobooth.
                                     </p>
-                                    <p className="text-xs text-gray-400">PNG, JPG</p>
+                                    <p className="text-sm font-bold" style={{ color: TEXT_PRIMARY }}>
+                                        Vui lòng quay lại màn hình chính để tiếp tục.
+                                    </p>
                                 </div>
-                                <input type="file" className="hidden" multiple accept="image/*" onChange={handleFileChange} />
-                            </label>
-                            {errorMsg && <p className="mt-3 rounded-xl border border-red-100 bg-red-50 p-2 text-center text-sm font-medium text-red-500">{errorMsg}</p>}
-                        </div>
-                    )}
+                                <p className="mt-6 text-center text-sm font-semibold" style={{ color: TEXT_SECONDARY }}>
+                                    Cảm ơn bạn đã sử dụng dịch vụ.
+                                </p>
+                            </motion.div>
+                        )}
 
-                    {files.length > 0 && (
-                        <div className="w-full">
-                            <div className="mb-3 flex items-center justify-between">
-                                <p className="text-sm font-bold text-gray-700">Đã chọn ({files.length}/{limit} ảnh):</p>
-                                {!isUploading && uploadStatus !== 'success' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { setFiles([]); setErrorMsg(''); }}
-                                        className="rounded-lg border border-red-100 px-3 py-1.5 text-xs font-bold text-[#e63946] transition-none active:bg-red-50"
-                                    >
-                                        Hủy chọn tất cả
-                                    </button>
+                        {uploadStatus === 'error' && (
+                            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 flex flex-col items-center text-red-500">
+                                <AlertCircle size={48} className="mb-2" />
+                                <p className="text-center text-lg font-bold">Có lỗi xảy ra!</p>
+                                <p className="mt-1 text-center text-sm opacity-80">Vui lòng thử lại sau.</p>
+                            </motion.div>
+                        )}
+
+                        {!isUploading && uploadStatus !== 'success' && (
+                            <div className="w-full">
+                                <label className="relative flex h-44 w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#D5B895] bg-[#FFF8E7] transition-none active:bg-[#F7E8CF]">
+                                    <div className="flex flex-col items-center justify-center pb-6 pt-5">
+                                        <ImagePlus size={42} className="mb-3 transition-none" style={{ color: TEXT_PRIMARY }} />
+                                        <p className="mb-2 text-center text-base" style={{ color: TEXT_SECONDARY }}>
+                                            <span className="font-bold" style={{ color: TEXT_PRIMARY }}>
+                                                {files.length > 0 ? 'Chạm để chọn lại ảnh' : `Chạm để chọn ${limit} ảnh`}
+                                            </span>
+                                        </p>
+                                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: TEXT_SECONDARY }}>
+                                            PNG, JPG, HEIC
+                                        </p>
+                                    </div>
+                                    <input type="file" className="hidden" multiple accept="image/*" onChange={handleFileChange} />
+                                </label>
+                                {errorMsg && (
+                                    <p className="mt-3 rounded-xl border border-[#F0B6A8] bg-[#FFF4F1] p-3 text-center text-sm font-semibold text-[#B6503A]">
+                                        {errorMsg}
+                                    </p>
                                 )}
                             </div>
-                            <div className="grid w-full grid-cols-2 gap-3">
-                                {previews.map((src, i) => (
-                                    <div key={src} className="relative aspect-[3/4] overflow-hidden rounded-xl border-2 border-gray-100 bg-gray-50 shadow-sm">
-                                        <img src={src} alt={`Preview ${i + 1}`} className="h-full w-full object-cover" />
-                                        <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2f3e46]/80 text-xs font-bold text-white">
-                                            {i + 1}
+                        )}
+
+                        {files.length > 0 && (
+                            <div className="w-full">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-bold" style={{ color: TEXT_PRIMARY }}>
+                                        Đã chọn ({files.length}/{limit} ảnh)
+                                    </p>
+                                    {!isUploading && uploadStatus !== 'success' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setFiles([]); setErrorMsg(''); }}
+                                            className="inline-flex items-center gap-1 rounded-xl border border-[#E7D3B7] px-3 py-1.5 text-xs font-bold transition-none active:bg-[#FFF8E7]"
+                                            style={{ color: TEXT_PRIMARY }}
+                                        >
+                                            <RotateCcw size={14} />
+                                            Chọn lại
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid w-full grid-cols-2 gap-3">
+                                    {previews.map((src, i) => (
+                                        <div key={src} className="relative aspect-[3/4] overflow-hidden rounded-2xl border-2 border-[#F1DDBE] bg-[#FFF8E7] shadow-sm">
+                                            <img src={src} alt={`Preview ${i + 1}`} className="h-full w-full object-cover" />
+                                            <div className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: TEXT_PRIMARY }}>
+                                                {i + 1}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {!isUploading && uploadStatus !== 'success' && (
-                        <button
-                            type="button"
-                            onClick={handleUpload}
-                            disabled={files.length !== limit}
-                            className={`w-full rounded-xl py-4 text-lg font-medium text-white shadow-md transition-none active:scale-95 ${
-                                files.length === limit ? 'bg-[#6A7865]' : 'cursor-not-allowed bg-gray-300'
-                            }`}
-                        >
-                            {files.length === limit ? 'Tải lên bây giờ' : `Vui lòng chọn đúng ${limit} ảnh`}
-                        </button>
-                    )}
+                        {!isUploading && uploadStatus !== 'success' && (
+                            <button
+                                type="button"
+                                onClick={handleUpload}
+                                disabled={files.length !== limit}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-[0_12px_24px_rgba(142,107,77,0.2)] transition-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+                                style={{ backgroundColor: files.length === limit ? BEIGE_DARK : BEIGE }}
+                            >
+                                <Upload size={20} />
+                                {files.length === limit ? 'Tải lên bây giờ' : `Chọn đủ ${limit} ảnh`}
+                            </button>
+                        )}
 
-                    {isUploading && (
-                        <div className="flex flex-col items-center justify-center py-8">
-                            <Loader className="mb-4 animate-spin text-[#85937F]" size={40} />
-                            <p className="animate-pulse text-gray-600">Đang tải ảnh lên...</p>
-                        </div>
-                    )}
+                        {isUploading && (
+                            <div className="flex flex-col items-center justify-center py-8">
+                                <Loader className="mb-4 animate-spin" style={{ color: TEXT_PRIMARY }} size={40} />
+                                <p className="animate-pulse font-semibold" style={{ color: TEXT_SECONDARY }}>
+                                    Đang tải ảnh lên...
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
