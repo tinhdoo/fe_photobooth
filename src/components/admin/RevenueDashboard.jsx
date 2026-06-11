@@ -17,7 +17,9 @@ const RevenueDashboard = () => {
     const dropdownRef = useRef(null);
     const [dateRange, setDateRange] = useState({
         startDate: '',
-        endDate: ''
+        endDate: '',
+        startTime: '',
+        endTime: ''
     });
     const [paymentMethod, setPaymentMethod] = useState('');
 
@@ -47,20 +49,29 @@ const RevenueDashboard = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const getFilterRange = () => {
+        const hasFilter = dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime;
+        if (!hasFilter) return {};
+
+        const today = new Date();
+        const startBase = dateRange.startDate ? new Date(dateRange.startDate) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endBase = dateRange.endDate ? new Date(dateRange.endDate) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const [startHour = 0, startMinute = 0] = (dateRange.startTime || '00:00').split(':').map(Number);
+        const [endHour = 23, endMinute = 59] = (dateRange.endTime || '23:59').split(':').map(Number);
+
+        startBase.setHours(startHour, startMinute, 0, 0);
+        endBase.setHours(endHour, endMinute, 59, 999);
+
+        return { start: startBase, end: endBase };
+    };
+
     const fetchRevenue = async () => {
         setLoading(true);
         try {
             const params = {};
-            if (dateRange.startDate) {
-                const start = new Date(dateRange.startDate);
-                start.setHours(0, 0, 0, 0);
-                params.startDate = start.toISOString();
-            }
-            if (dateRange.endDate) {
-                const end = new Date(dateRange.endDate);
-                end.setHours(23, 59, 59, 999);
-                params.endDate = end.toISOString();
-            }
+            const filterRange = getFilterRange();
+            if (filterRange.start) params.startDate = filterRange.start.toISOString();
+            if (filterRange.end) params.endDate = filterRange.end.toISOString();
             if (paymentMethod) params.paymentMethod = paymentMethod;
 
             console.log("Fetching revenue with params:", params);
@@ -180,17 +191,16 @@ const RevenueDashboard = () => {
         // Determine date range: either from filter or last 14 days
         const now = new Date();
         let rangeStart, rangeEnd;
-        if (dateRange.startDate) {
-            rangeStart = new Date(dateRange.startDate);
-            rangeStart.setHours(0, 0, 0, 0);
+        const filterRange = getFilterRange();
+        if (filterRange.start) {
+            rangeStart = filterRange.start;
         } else {
             rangeStart = new Date(now);
             rangeStart.setDate(now.getDate() - 13);
             rangeStart.setHours(0, 0, 0, 0);
         }
-        if (dateRange.endDate) {
-            rangeEnd = new Date(dateRange.endDate);
-            rangeEnd.setHours(23, 59, 59, 999);
+        if (filterRange.end) {
+            rangeEnd = filterRange.end;
         } else {
             rangeEnd = new Date(now);
             rangeEnd.setHours(23, 59, 59, 999);
@@ -307,7 +317,7 @@ const RevenueDashboard = () => {
                                 <div>
                                     <h3 className="text-base font-black text-[#2f3e46]">Xu hướng Doanh thu</h3>
                                     <p className="text-gray-400 text-xs mt-0.5">
-                                        {dateRange.startDate || dateRange.endDate ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
+                                        {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -357,7 +367,7 @@ const RevenueDashboard = () => {
                                 <div>
                                     <h3 className="text-base font-black text-[#2f3e46]">Doanh thu từng ngày</h3>
                                     <p className="text-gray-400 text-xs mt-0.5">
-                                        {dateRange.startDate || dateRange.endDate ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
+                                        {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -450,6 +460,30 @@ const RevenueDashboard = () => {
                                     onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
                                 />
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label htmlFor="startTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Từ giờ</label>
+                                    <input
+                                        type="time"
+                                        id="startTime"
+                                        name="startTime"
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                        value={dateRange.startTime}
+                                        onChange={(e) => setDateRange({ ...dateRange, startTime: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="endTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Đến giờ</label>
+                                    <input
+                                        type="time"
+                                        id="endTime"
+                                        name="endTime"
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                        value={dateRange.endTime}
+                                        onChange={(e) => setDateRange({ ...dateRange, endTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
                             <div className="space-y-1.5" ref={dropdownRef}>
                                 <label className="text-xs font-bold text-gray-400 uppercase ml-1">Phương thức</label>
                                 <div className="relative">
@@ -511,11 +545,11 @@ const RevenueDashboard = () => {
                                 >
                                     {loading ? 'Đang tải...' : <><Filter size={20} /> Áp dụng</>}
                                 </button>
-                                {(dateRange.startDate || dateRange.endDate || paymentMethod) && (
+                                {(dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime || paymentMethod) && (
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setDateRange({ startDate: '', endDate: '' });
+                                            setDateRange({ startDate: '', endDate: '', startTime: '', endTime: '' });
                                             setPaymentMethod('');
                                         }}
                                         className="w-full py-3 text-gray-400 hover:text-red-500 font-bold text-sm transition-colors"

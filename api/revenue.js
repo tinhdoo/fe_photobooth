@@ -46,6 +46,55 @@ function detailLabel(method, paymentCode, sepayCode) {
     return parts.join(' • ');
 }
 
+function normalizeMeta(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return value;
+}
+
+function pickPaymentCode(row, meta = normalizeMeta(row?.meta_data)) {
+    return meta.payment_code
+        || meta.paymentCode
+        || meta.code
+        || meta.voucher_code
+        || meta.voucherCode
+        || row?.payment_code
+        || null;
+}
+
+function pickSepayCode(row, meta = normalizeMeta(row?.meta_data)) {
+    return meta.sepay_order_code
+        || meta.sepayOrderCode
+        || meta.sepay_code
+        || row?.sepay_order_code
+        || row?.code
+        || null;
+}
+
+function normalizeSessionTransaction(session, source = 'session') {
+    const meta = normalizeMeta(session.meta_data);
+    const paymentMethod = session.payment_method || meta.payment_method || 'cash';
+    const paymentCode = pickPaymentCode(session, meta);
+    const sepayCode = pickSepayCode(session, meta);
+    const id = session.uuid || session.session_id || session.id;
+
+    return {
+        id,
+        code: paymentCode || sepayCode || paymentMethod,
+        value: toNumber(session.amount),
+        status: session.status || 'active',
+        used_at: session.created_at || session.updated_at || session.paid_at,
+        created_at: session.created_at || session.updated_at || session.paid_at,
+        payment_method: paymentMethod,
+        payment_code: paymentCode,
+        payment_code_value: meta.payment_code_value || meta.paymentCodeValue || null,
+        payment_code_applied: meta.payment_code_applied || meta.paymentCodeApplied || null,
+        sepay_order_code: sepayCode,
+        method_label: methodLabel(paymentMethod),
+        detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
+        source,
+    };
+}
+
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
     const { data, error } = await supabase.storage.listBuckets();
@@ -78,30 +127,32 @@ async function listStorageSessions(supabase) {
 
         try {
             const session = JSON.parse(await blob.text());
-            const meta = session.meta_data || {};
-            const paymentMethod = session.payment_method || 'cash';
-            const paymentCode = meta.payment_code || session.payment_code || null;
-            const sepayCode = meta.sepay_order_code || session.sepay_order_code || null;
-            return {
-                id: session.uuid || file.name.replace(/\.json$/, ''),
-                code: paymentCode || sepayCode || paymentMethod,
-                value: toNumber(session.amount),
-                status: session.status || 'active',
-                used_at: session.created_at || file.created_at || file.updated_at,
+            return normalizeSessionTransaction({
+                ...session,
+                uuid: session.uuid || file.name.replace(/\.json$/, ''),
                 created_at: session.created_at || file.created_at || file.updated_at,
-                payment_method: paymentMethod,
-                payment_code: paymentCode,
-                sepay_order_code: sepayCode,
-                method_label: methodLabel(paymentMethod),
-                detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
-                source: 'session',
-            };
+            }, 'storage-session');
         } catch {
             return null;
         }
     }));
 
     return rows.filter(Boolean);
+}
+
+async function listDbSessions(supabase) {
+    const { data, error } = await supabase
+        .from('photo_sessions')
+        .select('id, uuid, payment_method, amount, meta_data, status, created_at, updated_at')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+
+    if (error && isMissingTable(error)) return [];
+    if (error) throw error;
+
+    return (Array.isArray(data) ? data : [])
+        .map((session) => normalizeSessionTransaction(session, 'db-session'))
+        .filter((session) => session.id);
 }
 
 async function listPaymentTransactions(supabase) {
@@ -130,16 +181,32 @@ async function listPaymentTransactions(supabase) {
     }));
 }
 
-function mergeTransactions(payments, sessions) {
-    const seen = new Set();
+function mergeTransactions(payments, dbSessions, storageSessions) {
+    const bySession = new Map();
     const merged = [];
 
-    [...payments, ...sessions].forEach((tx) => {
-        const key = tx.source === 'payment' ? `payment:${tx.code}` : `session:${tx.id}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        merged.push(tx);
+    [...storageSessions, ...dbSessions].forEach((tx) => {
+        if (!tx?.id) return;
+        bySession.set(String(tx.id), tx);
     });
+
+    payments.forEach((payment) => {
+        const sessionKey = payment.id ? String(payment.id) : '';
+        const sessionTx = sessionKey ? bySession.get(sessionKey) : null;
+        if (sessionTx) {
+            const sepayCode = sessionTx.sepay_order_code || payment.sepay_order_code;
+            bySession.set(sessionKey, {
+                ...sessionTx,
+                sepay_order_code: sepayCode,
+                detail_label: detailLabel(sessionTx.payment_method, sessionTx.payment_code, sepayCode),
+            });
+            return;
+        }
+
+        merged.push(payment);
+    });
+
+    merged.push(...bySession.values());
 
     return merged.sort((a, b) => new Date(txDate(b)).getTime() - new Date(txDate(a)).getTime());
 }
@@ -163,12 +230,13 @@ export default async function handler(req, res) {
         const endDate = req.query?.endDate || '';
         const paymentMethod = req.query?.paymentMethod || '';
 
-        const [payments, sessions] = await Promise.all([
+        const [payments, dbSessions, storageSessions] = await Promise.all([
             listPaymentTransactions(supabase),
+            listDbSessions(supabase),
             listStorageSessions(supabase),
         ]);
 
-        const transactions = mergeTransactions(payments, sessions)
+        const transactions = mergeTransactions(payments, dbSessions, storageSessions)
             .filter((tx) => inRange(tx, startDate, endDate))
             .filter((tx) => matchesMethod(tx, paymentMethod));
 
