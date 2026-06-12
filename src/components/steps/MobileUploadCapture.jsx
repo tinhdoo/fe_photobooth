@@ -65,7 +65,7 @@ const fetchMobileUploads = async (baseUrl, sessionId) => {
 };
 
 const MobileUploadCapture = () => {
-    const { nextStep, sessionData, updateSessionData, configs } = useWorkflow();
+    const { goToStep, sessionData, updateSessionData, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const [qrUrl, setQrUrl] = useState('');
@@ -141,7 +141,6 @@ const MobileUploadCapture = () => {
 
     useEffect(() => {
         let stopped = false;
-        let realtimeReady = false;
         let channel = null;
 
         const applyUploads = (uploads) => {
@@ -179,14 +178,12 @@ const MobileUploadCapture = () => {
                         });
                     }
                 )
-                .subscribe((status) => {
-                    realtimeReady = status === 'SUBSCRIBED';
-                });
+                .subscribe();
         }
 
         pollUploads();
         const interval = setInterval(() => {
-            if (realtimeReady || document.visibilityState !== 'visible') return;
+            if (document.visibilityState !== 'visible') return;
             pollUploads();
         }, 2500);
         return () => {
@@ -203,10 +200,9 @@ const MobileUploadCapture = () => {
         updateSessionData('capturedPhotos', photosTaken);
         if (photosTaken.length >= TOTAL_PHOTOS && !advancedRef.current) {
             advancedRef.current = true;
-            const timer = setTimeout(() => nextStep(), 350);
-            return () => clearTimeout(timer);
+            setTimeout(() => goToStep(6), 350);
         }
-    }, [photosTaken, TOTAL_PHOTOS, nextStep, updateSessionData]);
+    }, [photosTaken, TOTAL_PHOTOS, goToStep, updateSessionData]);
 
     // Helper: auto fill empty slots with placeholder
     const renderSlots = () => {

@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';

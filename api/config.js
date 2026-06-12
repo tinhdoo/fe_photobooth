@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 
 const DEFAULT_CONFIG = {
     price: 60000,

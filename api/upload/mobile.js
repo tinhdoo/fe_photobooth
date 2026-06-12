@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
-import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../../lib/supabase.js';
 
 export const config = {
     api: {

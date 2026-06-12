@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 

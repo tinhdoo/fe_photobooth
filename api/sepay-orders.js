@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 
 function randomCode() {
     const alphabet = '0123456789';

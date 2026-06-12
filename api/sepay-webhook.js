@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, json, methodNotAllowed } from '../lib/supabase.js';
 
 function getAuthToken(req) {
     const header = req.headers.authorization || req.headers.Authorization || '';

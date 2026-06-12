@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 
 function isMissingTable(error) {
     return /Could not find the table|schema cache|does not exist/i.test(error?.message || '');

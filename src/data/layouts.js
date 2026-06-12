@@ -56,6 +56,17 @@ export const LAYOUTS = [
     icon: '5.png',
   },
   {
+    id: 'grid_4_vertical',
+    name: 'Layout 6',
+    description: '70.000 VND',
+    type: 'grid',
+    printMode: 'grid_4x6',
+    photoCount: 4,
+    cols: 2,
+    rows: 2,
+    icon: 'layout_6.png',
+  },
+  {
     id: 'mobile_double_horizontal',
     name: 'Layout 1',
     description: '70.000 VNĐ',

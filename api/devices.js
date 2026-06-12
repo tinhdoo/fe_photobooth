@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, handleOptions, json } from './_supabase.js';
+import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
