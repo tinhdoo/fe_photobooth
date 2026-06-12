@@ -29,6 +29,7 @@ const StaffPanel = ({ onClose }) => {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState(null);
     const [printingId, setPrintingId] = useState(null);
+    const [previewSession, setPreviewSession] = useState(null);
 
     const fetchSessions = async () => {
         setLoading(true);
@@ -119,17 +120,24 @@ const StaffPanel = ({ onClose }) => {
                             {sessions.map((session) => {
                                 const isFailed = session.printStatus === 'failed';
                                 const isPrinting = printingId?.startsWith(session.uuid);
+                                const previewUrl = session.previewUrl || session.finalImageUrl;
                                 return (
                                     <div key={session.uuid} className="grid grid-cols-[96px_1fr_auto] items-center gap-4 rounded-3xl border border-[#E7D3B7] bg-white p-4 shadow-sm">
-                                        <div className="h-24 overflow-hidden rounded-2xl border border-[#EFE2CF] bg-[#FFF8E7]">
-                                            {session.finalImageUrl ? (
-                                                <img src={session.finalImageUrl} alt={session.sessionId} className="h-full w-full object-cover" />
+                                        <button
+                                            type="button"
+                                            disabled={!previewUrl}
+                                            onClick={() => previewUrl && setPreviewSession(session)}
+                                            className="h-24 overflow-hidden rounded-2xl border border-[#EFE2CF] bg-[#FFF8E7] disabled:cursor-default"
+                                            title={previewUrl ? 'Xem ảnh preview' : 'Chưa có ảnh preview'}
+                                        >
+                                            {previewUrl ? (
+                                                <img src={previewUrl} alt={session.sessionId} className="h-full w-full object-cover" />
                                             ) : (
                                                 <div className="flex h-full items-center justify-center text-[#D5B895]">
                                                     <AlertCircle />
                                                 </div>
                                             )}
-                                        </div>
+                                        </button>
 
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -150,16 +158,15 @@ const StaffPanel = ({ onClose }) => {
                                         </div>
 
                                         <div className="flex flex-col gap-2">
-                                            {session.finalImageUrl && (
-                                                <a
-                                                    href={session.finalImageUrl}
-                                                    target="_blank"
-                                                    rel="noreferrer"
+                                            {previewUrl && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewSession(session)}
                                                     className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full border border-[#D5B895] bg-white px-4 py-2 font-black text-[#7B5E43]"
                                                 >
                                                     <Eye size={18} />
                                                     Xem ảnh
-                                                </a>
+                                                </button>
                                             )}
                                             <button
                                                 disabled={!session.canReprint || isPrinting}
@@ -191,6 +198,39 @@ const StaffPanel = ({ onClose }) => {
                     )}
                 </div>
             </div>
+
+            {previewSession && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-6"
+                    onClick={() => setPreviewSession(null)}
+                >
+                    <div
+                        className="max-h-[92vh] max-w-[92vw] overflow-hidden rounded-3xl bg-white p-4 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="mb-3 flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-black text-[#2F3E46]">{previewSession.sessionId}</h3>
+                                <p className="text-sm font-bold text-[#7B5E43]">
+                                    {formatTime(previewSession.createdAt)} · {previewSession.layout || '--'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setPreviewSession(null)}
+                                className="rounded-full bg-[#8E6B4D] p-3 text-white"
+                                aria-label="Đóng preview"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <img
+                            src={previewSession.previewUrl || previewSession.finalImageUrl}
+                            alt={previewSession.sessionId}
+                            className="max-h-[78vh] max-w-[86vw] rounded-2xl object-contain"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
