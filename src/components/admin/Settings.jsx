@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Save, RefreshCw, Settings as SettingsIcon, Monitor } from 'lucide-react';
+import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle } from 'lucide-react';
 import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
 
@@ -24,10 +24,22 @@ const Settings = () => {
     const [, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const [hardware, setHardware] = useState(null);
+    const [hardwareLoading, setHardwareLoading] = useState(false);
+    const [testLoading, setTestLoading] = useState(null);
+    const [cameraTestOk, setCameraTestOk] = useState(false);
 
     useEffect(() => {
         fetchConfigs();
     }, []);
+
+    useEffect(() => {
+        if (!isLocalAdmin) return;
+        fetchHardwareStatus();
+        const interval = setInterval(fetchHardwareStatus, 15000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLocalAdmin]);
 
     const fetchConfigs = async () => {
         setLoading(true);
@@ -46,6 +58,9 @@ const Settings = () => {
 
     const handleChange = (e) => {
         setConfigs({ ...configs, [e.target.name]: e.target.value });
+        if (e.target.name === 'camera_mode') {
+            setCameraTestOk(false);
+        }
     };
 
     const handleSave = async () => {
@@ -64,14 +79,139 @@ const Settings = () => {
         }
     };
 
+    const fetchHardwareStatus = async () => {
+        if (!isLocalAdmin) return;
+        setHardwareLoading(true);
+        try {
+            const res = await axios.get('/api/hardware/status');
+            setHardware(res.data);
+        } catch (error) {
+            console.error("Error fetching hardware status:", error);
+            setHardware({
+                ok: false,
+                checks: { printer: false, camera: false, internet: false, supabase: false },
+                printer: { online: false, message: 'Không đọc được trạng thái máy in' },
+                camera: { online: false, message: 'Không đọc được trạng thái máy ảnh' },
+                internet: { online: false, message: 'Không kiểm tra được Internet' },
+                supabase: { online: false, message: 'Không kiểm tra được Supabase' }
+            });
+        } finally {
+            setHardwareLoading(false);
+        }
+    };
+
+    const runTestPrint = async () => {
+        setTestLoading('printer');
+        setMessage(null);
+        try {
+            await axios.post('/api/printer/test', { printer_name: configs.printer_name });
+            setMessage({ type: 'success', text: 'Đã gửi lệnh in thử sang máy in.' });
+            fetchHardwareStatus();
+        } catch (error) {
+            console.error("Test print failed:", error);
+            setMessage({ type: 'error', text: error.response?.data?.error || 'Không in thử được.' });
+        } finally {
+            setTestLoading(null);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const runCameraTest = async () => {
+        setTestLoading('camera');
+        setMessage(null);
+        try {
+            if (configs.camera_mode === 'webcam') {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach((track) => track.stop());
+                setCameraTestOk(true);
+                setHardware((prev) => ({
+                    ...prev,
+                    checks: { ...(prev?.checks || {}), camera: true },
+                    camera: {
+                        ...(prev?.camera || {}),
+                        online: true,
+                        name: 'Webcam / USB camera',
+                        message: 'Đã kết nối'
+                    }
+                }));
+                setMessage({ type: 'success', text: 'Camera đã sẵn sàng.' });
+            } else if (configs.camera_mode === 'hotfolder') {
+                await axios.post('/api/camera/capture');
+                setCameraTestOk(true);
+                setMessage({ type: 'success', text: 'Đã gửi lệnh chụp thử hot folder.' });
+            } else {
+                setMessage({ type: 'error', text: 'Chế độ Canon cần kiểm tra trong middleware Canon.' });
+            }
+        } catch (error) {
+            console.error("Camera test failed:", error);
+            setMessage({ type: 'error', text: error.response?.data?.error || 'Không chụp thử được.' });
+        } finally {
+            setTestLoading(null);
+            fetchHardwareStatus();
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const statusTone = (online) => {
+        if (online === true) return 'text-green-600 bg-green-50 border-green-100';
+        if (online === false) return 'text-red-600 bg-red-50 border-red-100';
+        return 'text-amber-700 bg-amber-50 border-amber-100';
+    };
+
+    const statusDot = (online) => (
+        <span className={`inline-block h-2.5 w-2.5 rounded-full ${online === true ? 'bg-green-500' : online === false ? 'bg-red-500' : 'bg-amber-400'}`} />
+    );
+
+    const healthItem = (label, ok, Icon) => (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-white/80 px-3 py-2">
+            <span className="flex items-center gap-2 text-sm font-bold text-[#2f3e46]">
+                <Icon size={16} className="text-[#52796f]" />
+                {label}
+            </span>
+            {ok ? <CheckCircle2 size={18} className="text-green-600" /> : <XCircle size={18} className="text-red-500" />}
+        </div>
+    );
+
     if (isLocalAdmin) {
+        const printer = hardware?.printer || {};
+        const camera = hardware?.camera || {};
+        const checks = { ...(hardware?.checks || {}), camera: cameraTestOk || Boolean(hardware?.checks?.camera) };
+        const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.supabase);
+
         return (
-            <div className="mx-auto max-w-5xl space-y-6 animate-fadeIn">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cai dat phan cung</h1>
-                    <p className="mt-1 text-sm md:text-base text-[#52796f]">
-                        Chi cau hinh cac thiet bi gan truc tiep voi may photobooth local.
-                    </p>
+            <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cài đặt phần cứng</h1>
+                        <p className="mt-1 text-sm md:text-base text-[#52796f]">
+                            Chỉ cấu hình các thiết bị gắn trực tiếp với máy photobooth local.
+                        </p>
+                    </div>
+
+                    <div className={`w-full rounded-2xl border p-4 shadow-sm lg:w-80 ${hardwareOk ? 'border-green-100 bg-green-50' : 'border-amber-100 bg-[#FFF8E8]'}`}>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                {statusDot(hardwareOk)}
+                                <span className="text-base font-extrabold text-[#2f3e46]">
+                                    {hardwareOk ? 'Hardware OK' : 'Cần kiểm tra phần cứng'}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={fetchHardwareStatus}
+                                className="rounded-full p-2 text-[#52796f]"
+                                title="Làm mới trạng thái"
+                            >
+                                <RefreshCw size={18} className={hardwareLoading ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+                        <div className="grid gap-2">
+                            {healthItem('Printer', checks.printer, Printer)}
+                            {healthItem('Camera', checks.camera, Camera)}
+                            {healthItem('Internet', checks.internet, Wifi)}
+                            {healthItem('Supabase', checks.supabase, Database)}
+                        </div>
+                    </div>
                 </div>
 
                 {message && (
@@ -79,6 +219,102 @@ const Settings = () => {
                         {message.text}
                     </div>
                 )}
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
+                                    <Printer size={22} className="text-[#52796f]" />
+                                    Máy in
+                                </h2>
+                                <p className="mt-1 text-sm font-bold text-[#52796f]">{printer.name || 'DNP RX1HS'}</p>
+                            </div>
+                            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(printer.online)}`}>
+                                {statusDot(printer.online)}
+                                {printer.online ? 'Online' : 'Chưa kết nối'}
+                            </span>
+                        </div>
+                        <div className="grid gap-3 rounded-2xl bg-[#F8F3E7] p-4 text-sm">
+                            <div className="flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Status</span>
+                                <span className="text-right font-bold text-[#2f3e46]">{printer.status || printer.message || '--'}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Paper</span>
+                                <span className="text-right font-bold text-[#2f3e46]">{printer.paper || '4x6'}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Remaining</span>
+                                <span className="text-right font-bold text-[#2f3e46]">{printer.remaining ?? printer.remaining_label ?? '--'}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Driver</span>
+                                <span className="text-right font-bold text-[#2f3e46]">{printer.driver || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        <div className="mt-5 flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={fetchHardwareStatus}
+                                className="rounded-xl border border-[#d8c0a0] px-5 py-2.5 text-sm font-bold text-[#7B5E43]"
+                            >
+                                Kiểm tra
+                            </button>
+                            <button
+                                type="button"
+                                onClick={runTestPrint}
+                                disabled={testLoading === 'printer'}
+                                className="rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+                            >
+                                {testLoading === 'printer' ? 'Đang in thử...' : 'In thử'}
+                            </button>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
+                                    <Camera size={22} className="text-[#52796f]" />
+                                    Máy ảnh
+                                </h2>
+                                <p className="mt-1 text-sm font-bold text-[#52796f]">{camera.name || 'Webcam / Canon'}</p>
+                            </div>
+                            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(cameraTestOk || camera.online)}`}>
+                                {statusDot(cameraTestOk || camera.online)}
+                                {cameraTestOk ? 'Đã kết nối' : camera.online === false ? 'Chưa kết nối' : 'Cần chụp thử'}
+                            </span>
+                        </div>
+                        <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#2f3e46]">
+                            <div className="flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Mode</span>
+                                <span className="text-right font-bold">{camera.mode || configs.camera_mode}</span>
+                            </div>
+                            <div className="mt-3 flex justify-between gap-4">
+                                <span className="font-bold text-gray-500">Status</span>
+                                <span className="text-right font-bold">{camera.message || '--'}</span>
+                            </div>
+                        </div>
+                        <div className="mt-5 flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={fetchHardwareStatus}
+                                className="rounded-xl border border-[#d8c0a0] px-5 py-2.5 text-sm font-bold text-[#7B5E43]"
+                            >
+                                Kiểm tra
+                            </button>
+                            <button
+                                type="button"
+                                onClick={runCameraTest}
+                                disabled={testLoading === 'camera'}
+                                className="rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+                            >
+                                {testLoading === 'camera' ? 'Đang chụp thử...' : 'Chụp thử'}
+                            </button>
+                        </div>
+                    </section>
+                </div>
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
