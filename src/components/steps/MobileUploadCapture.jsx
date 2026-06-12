@@ -5,6 +5,7 @@ import QRCodeStyling from 'qr-code-styling';
 import io from 'socket.io-client';
 import { getDeviceId } from '../../utils/deviceId';
 import { Smartphone, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || 'https://tomatophotobooth.vercel.app';
@@ -97,24 +98,60 @@ const MobileUploadCapture = () => {
 
     useEffect(() => {
         let stopped = false;
+        let realtimeReady = false;
+        let channel = null;
+
+        const applyUploads = (uploads) => {
+            if (stopped || !Array.isArray(uploads)) return;
+            const nextPhotos = uploads.slice(0, TOTAL_PHOTOS).map((item) => item.url).filter(Boolean);
+            setPhotosTaken(prev => samePhotos(prev, nextPhotos) ? prev : nextPhotos);
+        };
+
         const pollUploads = async () => {
             try {
                 const res = await fetch(`${CLOUD_API_URL}/api/mobile-uploads?session_id=${encodeURIComponent(sessionId)}`);
                 if (!res.ok) return;
                 const uploads = await res.json();
-                if (stopped || !Array.isArray(uploads)) return;
-                const nextPhotos = uploads.slice(0, TOTAL_PHOTOS).map((item) => item.url).filter(Boolean);
-                setPhotosTaken(prev => samePhotos(prev, nextPhotos) ? prev : nextPhotos);
+                applyUploads(uploads);
             } catch (error) {
                 console.error('Failed to poll mobile uploads:', error);
             }
         };
 
+        if (isSupabaseBrowserConfigured && supabase) {
+            channel = supabase
+                .channel(`mobile-uploads-${sessionId}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'mobile_uploads',
+                        filter: `session_uuid=eq.${sessionId}`
+                    },
+                    (payload) => {
+                        const url = payload.new?.url;
+                        if (!url) return;
+                        setPhotosTaken(prev => {
+                            if (prev.includes(url) || prev.length >= TOTAL_PHOTOS) return prev;
+                            return [...prev, url].slice(0, TOTAL_PHOTOS);
+                        });
+                    }
+                )
+                .subscribe((status) => {
+                    realtimeReady = status === 'SUBSCRIBED';
+                });
+        }
+
         pollUploads();
-        const interval = setInterval(pollUploads, 1000);
+        const interval = setInterval(() => {
+            if (realtimeReady || document.visibilityState !== 'visible') return;
+            pollUploads();
+        }, 5000);
         return () => {
             stopped = true;
             clearInterval(interval);
+            if (channel && supabase) supabase.removeChannel(channel);
         };
     }, [sessionId, TOTAL_PHOTOS]);
 

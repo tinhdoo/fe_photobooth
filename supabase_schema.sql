@@ -51,14 +51,6 @@ insert into app_configs (key, config)
 values ('app', '{}'::jsonb)
 on conflict (key) do nothing;
 
-do $$
-begin
-  alter publication supabase_realtime add table public.app_configs;
-exception
-  when duplicate_object then null;
-  when undefined_object then null;
-end $$;
-
 create table if not exists payment_codes (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
@@ -163,3 +155,51 @@ using (true);
 
 -- Photo sessions are inserted/updated server-side through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY.
+
+do $$
+begin
+  alter publication supabase_realtime add table public.app_configs;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.devices;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.payments;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.mobile_uploads;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.payment_codes;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.photo_sessions;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;

@@ -187,6 +187,9 @@ const Payment = () => {
         }
 
         let stopped = false;
+        let realtimeReady = false;
+        let channel = null;
+
         const checkStatus = async () => {
             try {
                 const { data, error } = await supabase
@@ -204,11 +207,35 @@ const Payment = () => {
             }
         };
 
+        channel = supabase
+            .channel(`payment-status-${qrOrder.code}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'payments',
+                    filter: `code=eq.${qrOrder.code}`
+                },
+                (payload) => {
+                    if (!stopped && payload.new?.status === 'paid') {
+                        handlePaymentSuccess('qr', { orderCode: qrOrder.code });
+                    }
+                }
+            )
+            .subscribe((status) => {
+                realtimeReady = status === 'SUBSCRIBED';
+            });
+
         checkStatus();
-        const interval = setInterval(checkStatus, 3000);
+        const interval = setInterval(() => {
+            if (realtimeReady || document.visibilityState !== 'visible') return;
+            checkStatus();
+        }, 10000);
         return () => {
             stopped = true;
             clearInterval(interval);
+            if (channel && supabase) supabase.removeChannel(channel);
         };
     }, [handlePaymentSuccess, method, qrOrder?.code]);
 

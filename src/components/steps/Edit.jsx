@@ -209,7 +209,7 @@ const Edit = () => {
             }
         };
         fetchFrames();
-    }, [layout.id]);
+    }, [layout.id, configs?.frame_revision]);
 
     useEffect(() => {
         selectedFrameRef.current = selectedFrame;

@@ -175,9 +175,17 @@ export const WorkflowProvider = ({ children }) => {
             return;
         }
 
+        const deviceId = getDeviceId();
+
+        const applyDeviceMode = (mode) => {
+            setIsEventMode(prev => {
+                const next = mode === 'event';
+                return prev === next ? prev : next;
+            });
+        };
+
         const syncDevice = async () => {
             if (!API_URL && !isLocalApp()) return;
-            const deviceId = getDeviceId();
 
             let deviceName = getDeviceName();
             if (!deviceName) {
@@ -197,10 +205,7 @@ export const WorkflowProvider = ({ children }) => {
 
                 if (res.ok) {
                     const data = await res.json();
-                    setIsEventMode(prev => {
-                        const next = data.mode === 'event';
-                        return prev === next ? prev : next;
-                    });
+                    applyDeviceMode(data.mode);
                 }
             } catch (error) {
                 console.error("Device sync failed:", error);
@@ -217,10 +222,7 @@ export const WorkflowProvider = ({ children }) => {
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();
-                        setIsEventMode(prev => {
-                            const next = data.mode === 'event';
-                            return prev === next ? prev : next;
-                        });
+                        applyDeviceMode(data.mode);
                     }
                 } catch (error) {
                     console.warn("Cloud device sync failed:", error);
@@ -229,9 +231,32 @@ export const WorkflowProvider = ({ children }) => {
         };
 
         syncDevice();
-        // Optional: Poll every 30 seconds to keep updated?
-        const interval = setInterval(syncDevice, 30000);
-        return () => clearInterval(interval);
+        const interval = setInterval(syncDevice, 60000);
+
+        let channel = null;
+        if (isSupabaseBrowserConfigured && supabase) {
+            channel = supabase
+                .channel(`device-mode-${deviceId}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'devices',
+                        filter: `device_id=eq.${deviceId}`
+                    },
+                    (payload) => {
+                        const row = payload.new || payload.old;
+                        if (row?.mode) applyDeviceMode(row.mode);
+                    }
+                )
+                .subscribe();
+        }
+
+        return () => {
+            clearInterval(interval);
+            if (channel && supabase) supabase.removeChannel(channel);
+        };
     }, []);
 
     const toggleEventMode = () => {

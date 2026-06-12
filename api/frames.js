@@ -67,6 +67,39 @@ function publicUrl(supabase, bucket, objectPath) {
     return supabase.storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
 }
 
+async function bumpFrameRevision(supabase, layout) {
+    const now = new Date().toISOString();
+    const { data: row, error: readError } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (readError && !/Could not find the table|schema cache|does not exist/i.test(readError.message || '')) {
+        throw readError;
+    }
+
+    const current = row?.config && typeof row.config === 'object' ? row.config : {};
+    const next = {
+        ...current,
+        frame_revision: Date.now(),
+        frame_revision_layout: layout || current.frame_revision_layout || '',
+        updated_at: now,
+    };
+
+    const { error } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: 'app',
+            config: next,
+            updated_at: now,
+        }, { onConflict: 'key' });
+
+    if (error && !/Could not find the table|schema cache|does not exist/i.test(error.message || '')) {
+        throw error;
+    }
+}
+
 function framePath(layout, name) {
     return `frames/${layout}/${name}`;
 }
@@ -156,6 +189,8 @@ async function uploadFrame(req, res, supabase, bucket) {
 
     if (error) throw error;
 
+    await bumpFrameRevision(supabase, layout);
+
     return json(res, 201, {
         id: `${layout}-${filename}`,
         name: filename,
@@ -189,6 +224,7 @@ async function saveConfig(req, res, supabase, bucket, layout, name) {
         });
 
     if (error) throw error;
+    await bumpFrameRevision(supabase, layout);
     return json(res, 200, { success: true });
 }
 
@@ -227,6 +263,7 @@ async function uploadIcon(req, res, supabase, bucket, layout, name) {
         });
 
     if (error) throw error;
+    await bumpFrameRevision(supabase, layout);
     return json(res, 200, { success: true, icon_url: publicUrl(supabase, bucket, objectPath) });
 }
 
@@ -244,6 +281,8 @@ async function deleteFrame(req, res, supabase, bucket, layout, name) {
 
     const { error } = await supabase.storage.from(bucket).remove(paths);
     if (error) throw error;
+
+    await bumpFrameRevision(supabase, layout);
 
     return json(res, 200, { success: true });
 }

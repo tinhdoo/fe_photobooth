@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle } from 'lucide-react';
+import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const DeviceManager = () => {
     const [devices, setDevices] = useState([]);
@@ -23,8 +24,47 @@ const DeviceManager = () => {
 
     useEffect(() => {
         fetchDevices();
-        const interval = setInterval(fetchDevices, 10000);
-        return () => clearInterval(interval);
+        let realtimeReady = false;
+        let channel = null;
+
+        if (isSupabaseBrowserConfigured && supabase) {
+            channel = supabase
+                .channel('admin-devices-realtime')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'devices' },
+                    (payload) => {
+                        setDevices((prev) => {
+                            if (payload.eventType === 'DELETE') {
+                                return prev.filter((device) => device.id !== payload.old?.id);
+                            }
+
+                            const nextDevice = payload.new;
+                            if (!nextDevice?.id) return prev;
+
+                            const exists = prev.some((device) => device.id === nextDevice.id);
+                            const next = exists
+                                ? prev.map((device) => device.id === nextDevice.id ? nextDevice : device)
+                                : [nextDevice, ...prev];
+
+                            return next.sort((a, b) => new Date(b.last_active || 0) - new Date(a.last_active || 0));
+                        });
+                    }
+                )
+                .subscribe((status) => {
+                    realtimeReady = status === 'SUBSCRIBED';
+                });
+        }
+
+        const interval = setInterval(() => {
+            if (realtimeReady || document.visibilityState !== 'visible') return;
+            fetchDevices();
+        }, 60000);
+
+        return () => {
+            clearInterval(interval);
+            if (channel && supabase) supabase.removeChannel(channel);
+        };
     }, []);
 
     const toggleMode = async (device) => {
