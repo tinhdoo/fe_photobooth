@@ -428,10 +428,13 @@ const Edit = () => {
         }
     };
 
-    const sendToPrinter = async (blob, copies = 1) => {
+    const sendToPrinter = async (blob, copies = 1, printOptions = {}) => {
         const formData = new FormData();
         formData.append('file', blob, `TomatoPhotobooth_print_${Date.now()}.png`);
         formData.append('copies', String(Math.max(1, parseInt(copies, 10) || 1)));
+        formData.append('print_mode', printOptions.printMode || 'grid_4x6');
+        formData.append('cut_mode', printOptions.cutMode || 'none');
+        if (printOptions.sessionId) formData.append('session_id', printOptions.sessionId);
 
         const res = await axios.post(`${API_URL}/api/print`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
@@ -439,6 +442,54 @@ const Edit = () => {
         });
 
         return res.data;
+    };
+
+    const canvasToBlob = (canvas, type = 'image/png', quality) => new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), type, quality);
+    });
+
+    const drawImageContain = (ctx, imgCanvas, x, y, w, h) => {
+        const sourceRatio = imgCanvas.width / imgCanvas.height;
+        const targetRatio = w / h;
+        let drawW = w;
+        let drawH = h;
+        let drawX = x;
+        let drawY = y;
+
+        if (sourceRatio > targetRatio) {
+            drawH = w / sourceRatio;
+            drawY = y + (h - drawH) / 2;
+        } else {
+            drawW = h * sourceRatio;
+            drawX = x + (w - drawW) / 2;
+        }
+
+        ctx.drawImage(imgCanvas, drawX, drawY, drawW, drawH);
+    };
+
+    const buildPrintCanvas = (sourceCanvas, printMode = 'grid_4x6') => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 1800;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        if (printMode === 'double_strip') {
+            ctx.drawImage(sourceCanvas, 0, 0, 600, 1800);
+            ctx.drawImage(sourceCanvas, 600, 0, 600, 1800);
+            return { canvas, cutMode: '2x6' };
+        }
+
+        if (printMode === 'single_strip') {
+            ctx.drawImage(sourceCanvas, 300, 0, 600, 1800);
+            return { canvas, cutMode: 'none' };
+        }
+
+        drawImageContain(ctx, sourceCanvas, 0, 0, canvas.width, canvas.height);
+        return { canvas, cutMode: 'none' };
     };
 
     const handlePrint = async () => {
@@ -637,22 +688,16 @@ const Edit = () => {
 
             await drawComposite(baseCanvas, baseCtx);
 
-            const canvas = layout.printMode === 'double_strip' ? document.createElement('canvas') : baseCanvas;
-            if (layout.printMode === 'double_strip') {
-                canvas.width = 1200;
-                canvas.height = 1800;
-                const printCtx = canvas.getContext('2d');
-                printCtx.fillStyle = '#ffffff';
-                printCtx.fillRect(0, 0, canvas.width, canvas.height);
-                printCtx.imageSmoothingEnabled = true;
-                printCtx.imageSmoothingQuality = 'high';
-                printCtx.drawImage(baseCanvas, 0, 0, 600, 1800);
-                printCtx.drawImage(baseCanvas, 600, 0, 600, 1800);
-            }
+            const printMode = layout.printMode || (layout.type === 'strip' ? 'double_strip' : 'grid_4x6');
+            const printOutput = buildPrintCanvas(baseCanvas, printMode);
+            const printCanvas = printOutput.canvas;
+            const cutMode = printOutput.cutMode;
+            const compositeCanvas = printMode === 'double_strip' ? printCanvas : baseCanvas;
+            const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
             // 8. Upload & Create Session
-            canvas.toBlob(async (blob) => {
-                if (!blob) { setIsUploading(false); return; }
+            compositeCanvas.toBlob(async (blob) => {
+                if (!blob || !printBlob) { setIsUploading(false); return; }
                 try {
                     const compositeData = await uploadFile(blob);
                     const compositeUrl = compositeData.url;
@@ -720,7 +765,7 @@ const Edit = () => {
 
                     const sessionBaseUrl = CLOUD_API_URL || API_URL;
                     const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
-                    const printerCopies = layout.printMode === 'double_strip'
+                    const printerCopies = printMode === 'double_strip'
                         ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
                         : selectedPrintQuantity;
 
@@ -736,7 +781,8 @@ const Edit = () => {
                             frame_url: selectedFrame.url || selectedFrame.image,
                             frame_config: frameConfig,
                             photo_positions: photoPositions,
-                            print_mode: layout.printMode || 'single',
+                            print_mode: printMode,
+                            cut_mode: cutMode,
                             print_quantity: selectedPrintQuantity,
                             printer_copies: printerCopies,
                             payment_code: sessionData.paymentCode || null,
@@ -750,7 +796,11 @@ const Edit = () => {
                     updateSessionData('sessionId', sessionRes.data.uuid || sessionId);
 
                     try {
-                        const printResult = await sendToPrinter(blob, printerCopies);
+                        const printResult = await sendToPrinter(printBlob, printerCopies, {
+                            printMode,
+                            cutMode,
+                            sessionId,
+                        });
                         console.log('Print job queued:', printResult);
                     } catch (printError) {
                         const data = printError.response?.data;
