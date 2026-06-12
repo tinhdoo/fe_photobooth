@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { WorkflowProvider, useWorkflow } from './context/WorkflowContext';
 import MainLayout from './layouts/MainLayout';
+import { isLocalHost } from './utils/runtime';
 
 import Welcome from './components/steps/Welcome';
 import SourceSelection from './components/steps/SourceSelection';
@@ -89,6 +90,16 @@ const StepContent = () => {
     }
 };
 
+const AdminIndex = () => {
+    if (isLocalHost()) return <Navigate to="/admin/settings" replace />;
+    return <FrameManager />;
+};
+
+const CloudAdminRoute = ({ children }) => {
+    if (isLocalHost()) return <Navigate to="/admin/settings" replace />;
+    return children;
+};
+
 const App = () => {
     return (
         <BrowserRouter>
@@ -115,12 +126,12 @@ const App = () => {
                                 </ProtectedRoute>
                             }
                         >
-                            <Route index element={<FrameManager />} />
-                            <Route path="codes" element={<CodeManager />} />
-                            <Route path="revenue" element={<RevenueDashboard />} />
+                            <Route index element={<AdminIndex />} />
+                            <Route path="codes" element={<CloudAdminRoute><CodeManager /></CloudAdminRoute>} />
+                            <Route path="revenue" element={<CloudAdminRoute><RevenueDashboard /></CloudAdminRoute>} />
                             <Route path="settings" element={<Settings />} />
                             <Route path="bill-settings" element={<BillSettings />} />
-                            <Route path="branding" element={<BrandingSettings />} />
+                            <Route path="branding" element={<CloudAdminRoute><BrandingSettings /></CloudAdminRoute>} />
                         </Route>
                     </Routes>
                 </Suspense>

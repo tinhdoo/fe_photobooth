@@ -64,6 +64,144 @@ const Settings = () => {
         }
     };
 
+    if (isLocalAdmin) {
+        return (
+            <div className="mx-auto max-w-5xl space-y-6 animate-fadeIn">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cai dat phan cung</h1>
+                    <p className="mt-1 text-sm md:text-base text-[#52796f]">
+                        Chi cau hinh cac thiet bi gan truc tiep voi may photobooth local.
+                    </p>
+                </div>
+
+                {message && (
+                    <div className={`rounded-xl border p-4 ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                        {message.text}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-6 flex items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-[#2f3e46]">May in</h2>
+                                <p className="mt-1 text-sm text-[#52796f]">Dung cho DNP RX1HS hoac may in Windows tuong thich.</p>
+                            </div>
+                            <Monitor className="text-[#52796f]" size={24} />
+                        </div>
+
+                        <div className="space-y-5">
+                            <label className="block">
+                                <span className="mb-2 block text-sm font-bold text-gray-700">Ten may in Windows</span>
+                                <input
+                                    type="text"
+                                    name="printer_name"
+                                    value={configs.printer_name}
+                                    onChange={handleChange}
+                                    placeholder="RX1HS hoac DNP DS-RX1HS"
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                />
+                            </label>
+
+                            <label className="block">
+                                <span className="mb-2 block text-sm font-bold text-gray-700">So ban in mac dinh</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    name="printer_copies"
+                                    value={configs.printer_copies}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                />
+                            </label>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-6 flex items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-[#2f3e46]">May anh</h2>
+                                <p className="mt-1 text-sm text-[#52796f]">Chon cach may booth nhan anh tu camera.</p>
+                            </div>
+                            <SettingsIcon className="text-[#52796f]" size={24} />
+                        </div>
+
+                        <div className="space-y-5">
+                            <label className="block">
+                                <span className="mb-2 block text-sm font-bold text-gray-700">Che do camera</span>
+                                <select
+                                    name="camera_mode"
+                                    value={configs.camera_mode}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                >
+                                    <option value="webcam">Webcam USB / laptop</option>
+                                    <option value="canon">Canon middleware</option>
+                                    <option value="hotfolder">Hot folder / EOS Utility</option>
+                                </select>
+                            </label>
+
+                            {configs.camera_mode === 'hotfolder' && (
+                                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+                                    <label className="block">
+                                        <span className="mb-2 block text-sm font-bold text-gray-700">Thu muc nhan anh</span>
+                                        <input
+                                            type="text"
+                                            name="hot_folder"
+                                            value={configs.hot_folder}
+                                            onChange={handleChange}
+                                            placeholder="C:/Photobooth_Input"
+                                            className="block w-full rounded-xl border-orange-200 px-4 py-3 text-sm focus:border-orange-400 focus:ring-orange-400"
+                                        />
+                                    </label>
+
+                                    <label className="mt-4 block">
+                                        <span className="mb-2 block text-sm font-bold text-gray-700">Phim chup</span>
+                                        <input
+                                            type="text"
+                                            name="trigger_key"
+                                            value={configs.trigger_key}
+                                            onChange={handleChange}
+                                            placeholder="{F8}"
+                                            className="block w-full rounded-xl border-orange-200 px-4 py-3 text-sm font-mono focus:border-orange-400 focus:ring-orange-400"
+                                        />
+                                    </label>
+                                </div>
+                            )}
+
+                            {configs.camera_mode === 'canon' && (
+                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm leading-6 text-blue-700">
+                                    Can chay Canon middleware tren may local. LiveView va capture dung cong
+                                    <span className="font-mono font-bold"> http://localhost:5000</span>.
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="flex justify-end">
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className={`flex items-center justify-center gap-2 rounded-xl px-8 py-3 font-bold text-white shadow-lg shadow-[#52796f]/20 transition-all duration-200 ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#52796f] hover:bg-[#3f6154]'}`}
+                    >
+                        {saving ? (
+                            <>
+                                <RefreshCw size={20} className="animate-spin" />
+                                Dang luu...
+                            </>
+                        ) : (
+                            <>
+                                <Save size={20} />
+                                Luu cau hinh phan cung
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-6rem)] animate-fadeIn">
             {/* Left Sidebar: Navigation & Header */}

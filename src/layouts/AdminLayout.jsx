@@ -37,7 +37,11 @@ const AdminLayout = () => {
         { to: '/admin/bill-settings', icon: <Banknote size={20} />, label: 'Đầu đọc tiền' },
         { to: '/admin/branding', icon: <Palette size={20} />, label: 'Giao diện & Branding' },
         { to: '/admin/settings', icon: <Settings size={20} />, label: 'Cài đặt' },
-    ].filter((item) => isLocalHost() || item.to !== '/admin/bill-settings');
+    ].filter((item) => (
+        isLocalHost()
+            ? ['/admin/settings', '/admin/bill-settings'].includes(item.to)
+            : item.to !== '/admin/bill-settings'
+    ));
 
     return (
         <div className="flex h-screen bg-[#F0F2E9]">
