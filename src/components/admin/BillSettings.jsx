@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Banknote, Monitor, Power, RefreshCw, Save } from 'lucide-react';
+import { Banknote, Clock, Monitor, Power, RefreshCw, Save } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getDeviceId } from '../../utils/deviceId';
 import { isLocalHost } from '../../utils/runtime';
@@ -16,6 +16,7 @@ const BillSettings = () => {
     const [ports, setPorts] = useState([]);
     const [status, setStatus] = useState({ state: 'disconnected', message: 'Chưa kết nối' });
     const [lastDebug, setLastDebug] = useState(null);
+    const [cashHistory, setCashHistory] = useState({ total: 0, count: 0, entries: [], date: '' });
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState(null);
 
@@ -47,6 +48,23 @@ const BillSettings = () => {
             }
         });
 
+        socket.on('money_inserted', (data) => {
+            if (!data.device_id || data.device_id === selectedDeviceId) {
+                const entry = data.entry || {
+                    id: `${Date.now()}-${data.amount}`,
+                    amount: data.amount,
+                    hex_code: data.hex,
+                    created_at: new Date().toISOString()
+                };
+                setCashHistory((prev) => ({
+                    ...prev,
+                    total: Number(prev.total || 0) + Number(entry.amount || 0),
+                    count: Number(prev.count || 0) + 1,
+                    entries: [entry, ...(Array.isArray(prev.entries) ? prev.entries : [])].slice(0, 100)
+                }));
+            }
+        });
+
         socket.on('config_updated_global', (data) => {
             if (data.device_id === selectedDeviceId) {
                 fetchConfig(selectedDeviceId);
@@ -66,7 +84,9 @@ const BillSettings = () => {
         if (!isLocalAdmin) return;
         if (selectedDeviceId) {
             fetchConfig(selectedDeviceId);
+            fetchCashHistory(selectedDeviceId);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDeviceId, isLocalAdmin]);
 
     const fetchDevices = async () => {
@@ -105,6 +125,22 @@ const BillSettings = () => {
         } catch (error) {
             console.warn('Failed to fetch serial ports', error);
             setPorts([]);
+        }
+    };
+
+    const fetchCashHistory = async (deviceId = selectedDeviceId) => {
+        if (!deviceId) return;
+        try {
+            const res = await axios.get('/api/bill/history', { params: { device_id: deviceId } });
+            setCashHistory({
+                total: Number(res.data?.total || 0),
+                count: Number(res.data?.count || 0),
+                entries: Array.isArray(res.data?.entries) ? res.data.entries : [],
+                date: res.data?.date || ''
+            });
+        } catch (error) {
+            console.warn('Failed to fetch bill cash history', error);
+            setCashHistory({ total: 0, count: 0, entries: [], date: '' });
         }
     };
 
@@ -170,6 +206,17 @@ const BillSettings = () => {
         }
 
         setTimeout(() => setMessage(null), 3000);
+    };
+
+    const formatVnd = (amount) => new Intl.NumberFormat('vi-VN').format(Number(amount || 0)) + ' d';
+
+    const formatTime = (value) => {
+        if (!value) return '--';
+        return new Date(value).toLocaleTimeString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
     };
 
     if (!isLocalAdmin) {
@@ -375,6 +422,66 @@ const BillSettings = () => {
                             <Banknote size={14} />
                             Đút thử tiền vào máy để xem mã Hex xuất hiện tại đây.
                         </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
+                                    <Clock size={20} className="text-[#52796f]" />
+                                    Lịch sử tiền mặt hôm nay
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Tự động reset hiển thị khi sang ngày mới{cashHistory.date ? ` (${cashHistory.date})` : ''}.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => fetchCashHistory()}
+                                className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-[#52796f]"
+                            >
+                                <RefreshCw size={16} className="mr-2" />
+                                Làm mới
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tổng tiền</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{formatVnd(cashHistory.total)}</p>
+                            </div>
+                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Số lần nhận</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{cashHistory.count}</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 max-h-72 overflow-y-auto rounded-2xl border border-gray-100">
+                            {cashHistory.entries.length > 0 ? (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wider text-gray-400">
+                                        <tr>
+                                            <th className="px-4 py-3">Thời gian</th>
+                                            <th className="px-4 py-3">Mệnh giá</th>
+                                            <th className="px-4 py-3">Hex</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {cashHistory.entries.map((entry) => (
+                                            <tr key={entry.id}>
+                                                <td className="px-4 py-3 font-medium text-gray-600">{formatTime(entry.created_at)}</td>
+                                                <td className="px-4 py-3 font-bold text-[#2f3e46]">{formatVnd(entry.amount)}</td>
+                                                <td className="px-4 py-3 font-mono text-gray-500">{entry.hex_code ? `0x${entry.hex_code}` : '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="p-8 text-center text-sm text-gray-400">
+                                    Chưa có lần nhận tiền mặt nào trong ngày.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
