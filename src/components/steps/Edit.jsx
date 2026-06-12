@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
-import { Monitor, Edit2, ArrowLeft } from 'lucide-react';
+import { Monitor, Edit2, ArrowLeft, AlertCircle } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 
@@ -149,6 +149,7 @@ const Edit = () => {
     const [frameConfig, setFrameConfig] = useState({ boxes: [] });
     const [isUploading, setIsUploading] = useState(false);
     const [isFiltering, setIsFiltering] = useState(false);
+    const [errorDialog, setErrorDialog] = useState({ show: false, title: '', message: '' });
 
     // Preview QR Code State
     const [previewQrUrl, setPreviewQrUrl] = useState(null);
@@ -808,13 +809,21 @@ const Edit = () => {
                             ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
                             : '';
                         const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
-                        alert(`${message}${available}`);
+                        setErrorDialog({
+                            show: true,
+                            title: 'Không thể in ảnh',
+                            message: `${message}${available}`,
+                        });
                     }
 
                     nextStep();
                 } catch (err) {
                     console.error("Upload process failed:", err);
-                    alert("Có lỗi khi lưu ảnh, vui lòng thử lại.");
+                    setErrorDialog({
+                        show: true,
+                        title: 'Không thể lưu ảnh',
+                        message: 'Có lỗi khi lưu ảnh, vui lòng thử lại.',
+                    });
                 } finally {
                     setIsUploading(false);
                 }
@@ -1124,6 +1133,27 @@ const Edit = () => {
                             ))}
                         </div>
                         <p className="text-[#7B5E43]/60 text-sm font-medium text-center w-full px-4 leading-relaxed whitespace-nowrap">Vui lòng không chạm vào màn hình</p>
+                    </div>
+                </div>
+            )}
+
+            {errorDialog.show && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-6">
+                    <div className="w-full max-w-md rounded-3xl border border-[#E7D3B7] bg-white p-7 text-center shadow-2xl">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
+                            <AlertCircle size={34} />
+                        </div>
+                        <h3 className="mb-3 text-2xl font-black text-[#3F3127]">{errorDialog.title}</h3>
+                        <p className="mx-auto mb-6 max-w-sm whitespace-pre-line text-base font-semibold leading-relaxed text-[#7B5E43]">
+                            {errorDialog.message}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setErrorDialog({ show: false, title: '', message: '' })}
+                            className="min-h-12 rounded-2xl bg-[#D5B895] px-10 text-base font-extrabold text-white shadow-md active:scale-95"
+                        >
+                            Đã hiểu
+                        </button>
                     </div>
                 </div>
             )}

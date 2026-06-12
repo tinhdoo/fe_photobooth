@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { Download, Film, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, Download, Film, Image as ImageIcon } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
 
 const pad2 = (value) => String(value).padStart(2, '0');
@@ -251,6 +251,7 @@ const ViewPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [downloading, setDownloading] = useState(false);
+    const [errorDialog, setErrorDialog] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -477,7 +478,7 @@ const ViewPage = () => {
             window.setTimeout(() => URL.revokeObjectURL(downloadObjectUrl), 60000);
         } catch (error) {
             console.error('Motion frame download failed', error);
-            alert('Không thể tạo video trong khung. Vui lòng thử lại.');
+            setErrorDialog('Không thể tạo video trong khung. Vui lòng thử lại.');
         } finally {
             objectUrls.forEach((url) => URL.revokeObjectURL(url));
             setDownloading(false);
@@ -516,6 +517,25 @@ const ViewPage = () => {
             className="h-dvh overflow-y-auto overflow-x-hidden bg-[#FFF8E7] font-serif text-[#3F3127]"
             style={{ WebkitOverflowScrolling: 'touch' }}
         >
+            {errorDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6">
+                    <div className="w-full max-w-sm rounded-3xl border border-[#E7D3B7] bg-white p-7 text-center shadow-2xl">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500">
+                            <AlertCircle size={30} />
+                        </div>
+                        <h2 className="mb-3 text-2xl font-black text-[#3F3127]">Đã xảy ra lỗi</h2>
+                        <p className="mb-6 text-base font-semibold leading-relaxed text-[#7B5E43]">{errorDialog}</p>
+                        <button
+                            type="button"
+                            onClick={() => setErrorDialog(null)}
+                            className="min-h-12 rounded-2xl bg-[#D5B895] px-9 text-base font-extrabold text-white shadow-md active:scale-95"
+                        >
+                            Đã hiểu
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <header className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pb-5 pt-8 text-center sm:px-6 md:pt-12">
                 <div>
                     <img

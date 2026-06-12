@@ -4,6 +4,7 @@ import { X, Save, RotateCw, RefreshCw, Copy, Clipboard, Wand2, CheckCircle, XCir
 import { LAYOUTS } from '../../data/layouts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { detectFrameSlots } from '../../utils/frameDetection';
+import ConfirmDialog from './ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
@@ -29,9 +30,20 @@ const FrameConfigEditor = ({ frame, onClose }) => {
             const parsed = JSON.parse(saved);
             if (parsed && Array.isArray(parsed.boxes)) {
                 if (parsed.boxes.length !== layoutDef.photoCount) {
-                    if (!confirm(`Số lượng ảnh không khớp (Đã sao chép: ${parsed.boxes.length}, Hiện tại: ${layoutDef.photoCount}). Vẫn dán?`)) {
-                        return;
-                    }
+                    setConfirmDialog({
+                        isOpen: true,
+                        title: 'Dán cấu hình?',
+                        message: `Số lượng ảnh không khớp. Đã sao chép: ${parsed.boxes.length}, hiện tại: ${layoutDef.photoCount}. Bạn vẫn muốn dán?`,
+                        confirmText: 'Dán',
+                        type: 'info',
+                        onConfirm: () => {
+                            setConfig(parsed);
+                            setSelectedBoxIndices([]);
+                            setNotification({ show: true, message: "Dán cấu hình thành công!", type: 'success' });
+                            closeConfirmDialog();
+                        },
+                    });
+                    return;
                 }
                 setConfig(parsed);
                 setSelectedBoxIndices([]);
@@ -51,11 +63,23 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     });
     const [selectedBoxIndices, setSelectedBoxIndices] = useState([]);
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Xác nhận',
+        type: 'info',
+        onConfirm: null,
+    });
     const containerRef = useRef(null);
     const dragState = useRef(null);
     const hasDragged = useRef(false);
 
     const layoutDef = LAYOUTS.find(l => l.id === frame.layout) || LAYOUTS[0];
+
+    const closeConfirmDialog = () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+    };
 
     // Helper to calculate default grid positions (in %)
     const getDefaultBoxes = () => {
@@ -284,8 +308,20 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     };
 
     const handleAutoDetect = async () => {
-        if (!confirm("Tự động phát hiện sẽ thay thế tất cả các hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình. Tiếp tục?")) return;
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Tự động phát hiện?',
+            message: 'Tính năng này sẽ thay thế tất cả hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình.',
+            confirmText: 'Phát hiện',
+            type: 'info',
+            onConfirm: () => {
+                closeConfirmDialog();
+                runAutoDetect();
+            },
+        });
+    };
 
+    const runAutoDetect = async () => {
         try {
             const detectedBoxes = await detectFrameSlots(frame.url, layoutDef.photoCount);
             if (detectedBoxes.length > 0) {
@@ -308,10 +344,18 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     };
 
     const resetGrid = () => {
-        if (confirm("Đặt lại tất cả các hộp về lưới mặc định?")) {
-            setConfig({ ...config, boxes: getDefaultBoxes() });
-            setSelectedBoxIndices([]);
-        }
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Đặt lại vị trí?',
+            message: 'Tất cả hộp ảnh sẽ được đưa về lưới mặc định của layout này.',
+            confirmText: 'Đặt lại',
+            type: 'info',
+            onConfirm: () => {
+                setConfig({ ...config, boxes: getDefaultBoxes() });
+                setSelectedBoxIndices([]);
+                closeConfirmDialog();
+            },
+        });
     };
 
     return (
@@ -619,6 +663,16 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                type={confirmDialog.type}
+                confirmText={confirmDialog.confirmText}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={closeConfirmDialog}
+            />
         </div>
     );
 };

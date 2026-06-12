@@ -30,6 +30,8 @@ const StaffPanel = ({ onClose }) => {
     const [message, setMessage] = useState(null);
     const [printingId, setPrintingId] = useState(null);
     const [previewSession, setPreviewSession] = useState(null);
+    const [extraPrintSession, setExtraPrintSession] = useState(null);
+    const [extraCopies, setExtraCopies] = useState('1');
 
     const fetchSessions = async () => {
         setLoading(true);
@@ -47,10 +49,8 @@ const StaffPanel = ({ onClose }) => {
         fetchSessions();
     }, []);
 
-    const reprint = async (session, mode) => {
-        const copies = mode === 'extra'
-            ? Number(window.prompt('Nhập số bản in thêm:', '1') || 0)
-            : 1;
+    const reprint = async (session, mode, requestedCopies = 1) => {
+        const copies = Number(requestedCopies || 0);
         if (!Number.isFinite(copies) || copies < 1) return;
 
         setPrintingId(`${session.uuid}-${mode}`);
@@ -178,7 +178,10 @@ const StaffPanel = ({ onClose }) => {
                                             </button>
                                             <button
                                                 disabled={!session.canReprint || isPrinting}
-                                                onClick={() => reprint(session, 'extra')}
+                                                onClick={() => {
+                                                    setExtraPrintSession(session);
+                                                    setExtraCopies('1');
+                                                }}
                                                 className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full bg-[#D5B895] px-4 py-2 font-black text-white disabled:opacity-40"
                                             >
                                                 <Printer size={18} />
@@ -228,6 +231,54 @@ const StaffPanel = ({ onClose }) => {
                             alt={previewSession.sessionId}
                             className="max-h-[78vh] max-w-[86vw] rounded-2xl object-contain"
                         />
+                    </div>
+                </div>
+            )}
+
+            {extraPrintSession && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-6"
+                    onClick={() => setExtraPrintSession(null)}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h3 className="text-2xl font-black text-[#2F3E46]">In thêm bản</h3>
+                        <p className="mt-1 text-sm font-bold text-[#7B5E43]">
+                            {extraPrintSession.sessionId} · {extraPrintSession.layout || '--'}
+                        </p>
+                        <label className="mt-5 block">
+                            <span className="mb-2 block text-sm font-black text-[#3F3127]">Số bản in thêm</span>
+                            <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={extraCopies}
+                                onChange={(event) => setExtraCopies(event.target.value)}
+                                className="h-14 w-full rounded-2xl border border-[#E7D3B7] bg-[#FFF8E7] px-4 text-center text-2xl font-black text-[#3F3127]"
+                                autoFocus
+                            />
+                        </label>
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setExtraPrintSession(null)}
+                                className="rounded-2xl border border-[#D5B895] bg-white py-3 font-black text-[#7B5E43]"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const session = extraPrintSession;
+                                    const copies = extraCopies;
+                                    setExtraPrintSession(null);
+                                    reprint(session, 'extra', copies);
+                                }}
+                                className="rounded-2xl bg-[#8E6B4D] py-3 font-black text-white"
+                            >
+                                In thêm
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

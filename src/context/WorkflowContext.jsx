@@ -191,10 +191,8 @@ export const WorkflowProvider = ({ children }) => {
 
             let deviceName = getDeviceName();
             if (!deviceName) {
-                deviceName = prompt("Vui lòng đặt tên cho máy này (VD: Máy Chụp 1, Máy Chỉnh Sửa, Máy In):", "Máy Chụp 1");
-                if (deviceName) {
-                    setDeviceName(deviceName);
-                }
+                deviceName = "Máy Chụp 1";
+                setDeviceName(deviceName);
             }
 
             try {
