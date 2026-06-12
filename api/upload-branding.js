@@ -100,6 +100,10 @@ function cleanExtension(filename, mimetype) {
     return 'bin';
 }
 
+function withVersion(url, version = Date.now()) {
+    return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(version))}`;
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
     if (req.method !== 'POST') return methodNotAllowed(res);
@@ -133,11 +137,13 @@ export default async function handler(req, res) {
             .from(bucket)
             .getPublicUrl(objectPath);
 
-        const url = publicData.publicUrl;
+        const revision = Date.now();
+        const url = withVersion(publicData.publicUrl, revision);
         const current = await readConfig(supabase, bucket);
         const next = {
             ...current,
             [key]: url,
+            branding_revision: revision,
             updated_at: new Date().toISOString(),
         };
         await writeConfig(supabase, bucket, next);

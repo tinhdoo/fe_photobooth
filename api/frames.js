@@ -67,6 +67,11 @@ function publicUrl(supabase, bucket, objectPath) {
     return supabase.storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
 }
 
+function withVersion(url, version) {
+    const safeVersion = encodeURIComponent(String(version || Date.now()));
+    return `${url}${url.includes('?') ? '&' : '?'}v=${safeVersion}`;
+}
+
 async function bumpFrameRevision(supabase, layout) {
     const now = new Date().toISOString();
     const { data: row, error: readError } = await supabase
@@ -145,13 +150,17 @@ async function listFrames(req, res, supabase, bucket) {
             const name = item.name;
             const objectPath = framePath(layout, name);
             const iconName = icons.get(name);
+            const frameVersion = item.updated_at || item.created_at || Date.now();
+            const iconItem = iconName ? files.find((file) => file.name === iconName) : null;
+            const iconVersion = iconItem?.updated_at || iconItem?.created_at || frameVersion;
+            const frameUrl = withVersion(publicUrl(supabase, bucket, objectPath), frameVersion);
             return {
                 id: `${layout}-${name}`,
                 name,
                 layout,
-                url: publicUrl(supabase, bucket, objectPath),
-                image: publicUrl(supabase, bucket, objectPath),
-                icon_url: iconName ? publicUrl(supabase, bucket, framePath(layout, iconName)) : null,
+                url: frameUrl,
+                image: frameUrl,
+                icon_url: iconName ? withVersion(publicUrl(supabase, bucket, framePath(layout, iconName)), iconVersion) : null,
                 created_at: item.created_at,
                 updated_at: item.updated_at,
             };
@@ -195,7 +204,7 @@ async function uploadFrame(req, res, supabase, bucket) {
         id: `${layout}-${filename}`,
         name: filename,
         layout,
-        url: publicUrl(supabase, bucket, objectPath),
+        url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()),
     });
 }
 
@@ -264,7 +273,7 @@ async function uploadIcon(req, res, supabase, bucket, layout, name) {
 
     if (error) throw error;
     await bumpFrameRevision(supabase, layout);
-    return json(res, 200, { success: true, icon_url: publicUrl(supabase, bucket, objectPath) });
+    return json(res, 200, { success: true, icon_url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()) });
 }
 
 async function deleteFrame(req, res, supabase, bucket, layout, name) {
