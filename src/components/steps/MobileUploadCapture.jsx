@@ -21,6 +21,28 @@ const samePhotos = (a = [], b = []) => (
     a.length === b.length && a.every((url, index) => url === b[index])
 );
 
+const uploadsToPhotos = (uploads = [], limit) => {
+    const ordered = [...uploads]
+        .filter((item) => item?.url)
+        .sort((a, b) => {
+            const aSlot = Number.isInteger(a.slot_index) ? a.slot_index : 9999;
+            const bSlot = Number.isInteger(b.slot_index) ? b.slot_index : 9999;
+            if (aSlot !== bSlot) return aSlot - bSlot;
+            return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        });
+
+    return ordered.slice(0, limit).map((item) => item.url);
+};
+
+const mergePhotoBySlot = (prev, url, slotIndex, limit) => {
+    if (!url || prev.includes(url)) return prev;
+    const next = [...prev];
+    const normalizedSlot = Number.isInteger(slotIndex) && slotIndex >= 0 ? slotIndex : next.length;
+    if (normalizedSlot >= limit) return prev;
+    next[normalizedSlot] = url;
+    return next.filter(Boolean).slice(0, limit);
+};
+
 const MobileUploadCapture = () => {
     const { nextStep, sessionData, updateSessionData, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
@@ -85,8 +107,8 @@ const MobileUploadCapture = () => {
             console.log('Received socket event mobile_photo_uploaded:', data);
             if (data.session_id === sessionId && data.url) {
                 setPhotosTaken(prev => {
-                    if (prev.includes(data.url) || prev.length >= TOTAL_PHOTOS) return prev;
-                    return [...prev, data.url].slice(0, TOTAL_PHOTOS);
+                    const next = mergePhotoBySlot(prev, data.url, data.slot_index, TOTAL_PHOTOS);
+                    return samePhotos(prev, next) ? prev : next;
                 });
             }
         });
@@ -103,13 +125,13 @@ const MobileUploadCapture = () => {
 
         const applyUploads = (uploads) => {
             if (stopped || !Array.isArray(uploads)) return;
-            const nextPhotos = uploads.slice(0, TOTAL_PHOTOS).map((item) => item.url).filter(Boolean);
+            const nextPhotos = uploadsToPhotos(uploads, TOTAL_PHOTOS);
             setPhotosTaken(prev => samePhotos(prev, nextPhotos) ? prev : nextPhotos);
         };
 
         const pollUploads = async () => {
             try {
-                const res = await fetch(`${CLOUD_API_URL}/api/mobile-uploads?session_id=${encodeURIComponent(sessionId)}`);
+                const res = await fetch(`${CLOUD_API_URL}/api/mobile-uploads/${encodeURIComponent(sessionId)}`);
                 if (!res.ok) return;
                 const uploads = await res.json();
                 applyUploads(uploads);
@@ -133,8 +155,8 @@ const MobileUploadCapture = () => {
                         const url = payload.new?.url;
                         if (!url) return;
                         setPhotosTaken(prev => {
-                            if (prev.includes(url) || prev.length >= TOTAL_PHOTOS) return prev;
-                            return [...prev, url].slice(0, TOTAL_PHOTOS);
+                            const next = mergePhotoBySlot(prev, url, payload.new?.slot_index, TOTAL_PHOTOS);
+                            return samePhotos(prev, next) ? prev : next;
                         });
                     }
                 )
@@ -147,7 +169,7 @@ const MobileUploadCapture = () => {
         const interval = setInterval(() => {
             if (realtimeReady || document.visibilityState !== 'visible') return;
             pollUploads();
-        }, 5000);
+        }, 2500);
         return () => {
             stopped = true;
             clearInterval(interval);

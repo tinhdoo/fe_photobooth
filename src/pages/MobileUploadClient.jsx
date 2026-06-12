@@ -10,6 +10,100 @@ const BEIGE = '#D5B895';
 const BEIGE_DARK = '#8E6B4D';
 const TEXT_PRIMARY = '#7B5E43';
 const TEXT_SECONDARY = '#5E6B78';
+const MAX_UPLOAD_DIMENSION = 1800;
+const JPEG_QUALITY = 0.86;
+const UPLOAD_TIMEOUT_MS = 45000;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const formatBytes = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const canvasToBlob = (canvas, type = 'image/jpeg', quality = JPEG_QUALITY) => new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+});
+
+const loadImageFromFile = (file) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+    };
+    img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Không đọc được ảnh trên thiết bị này.'));
+    };
+    img.src = url;
+});
+
+const compressImageFile = async (file, index) => {
+    if (!file.type.startsWith('image/')) return file;
+
+    try {
+        const img = await loadImageFromFile(file);
+        const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
+
+        if (scale >= 1 && file.type === 'image/jpeg' && file.size <= 3 * 1024 * 1024) {
+            return file;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const blob = await canvasToBlob(canvas);
+        if (!blob) return file;
+
+        return new File([blob], `mobile_${index + 1}.jpg`, { type: 'image/jpeg' });
+    } catch (error) {
+        console.warn('Image compression skipped:', error);
+        return file;
+    }
+};
+
+const uploadWithRetry = async (url, formData, retries = 2) => {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const error = new Error(data.error || 'Upload thất bại');
+                error.status = response.status;
+                error.data = data;
+                throw error;
+            }
+
+            return data;
+        } catch (error) {
+            lastError = error;
+            if (attempt === retries || error.status === 409) break;
+            await wait(800 * (attempt + 1));
+        } finally {
+            window.clearTimeout(timeout);
+        }
+    }
+
+    throw lastError || new Error('Upload thất bại');
+};
 
 const MobileUploadClient = () => {
     const { sessionId } = useParams();
@@ -23,6 +117,7 @@ const MobileUploadClient = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadStatus, setUploadStatus] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [currentUpload, setCurrentUpload] = useState(null);
 
     React.useEffect(() => {
         if (localStorage.getItem(`uploaded_session_${sessionId}`) === 'true') {
@@ -39,6 +134,13 @@ const MobileUploadClient = () => {
         if (!e.target.files || e.target.files.length === 0) return;
 
         let selectedFiles = Array.from(e.target.files);
+        const invalidFile = selectedFiles.find((file) => !file.type.startsWith('image/'));
+
+        if (invalidFile) {
+            setErrorMsg('Vui lòng chỉ chọn file ảnh.');
+            return;
+        }
+
         if (selectedFiles.length > limit) {
             setErrorMsg(`Bạn chỉ được chọn tối đa ${limit} ảnh. Các ảnh thừa đã được bỏ qua.`);
             selectedFiles = selectedFiles.slice(0, limit);
@@ -47,28 +149,37 @@ const MobileUploadClient = () => {
         } else {
             setErrorMsg('');
         }
+
+        setUploadStatus(null);
         setFiles(selectedFiles);
     };
 
     const handleUpload = async () => {
-        if (files.length !== limit) return;
+        if (files.length !== limit || isUploading) return;
+
         setIsUploading(true);
         setUploadStatus(null);
+        setErrorMsg('');
+        setCurrentUpload({ index: 0, total: files.length, phase: 'Đang chuẩn bị ảnh...' });
 
         try {
-            for (const file of files) {
+            for (let index = 0; index < files.length; index += 1) {
+                const file = files[index];
+                setCurrentUpload({ index: index + 1, total: files.length, phase: `Đang nén ảnh ${index + 1}/${files.length}...` });
+                const uploadFile = await compressImageFile(file, index);
+
                 const formData = new FormData();
-                formData.append('file', file);
+                formData.append('file', uploadFile);
                 formData.append('session_id', sessionId);
+                formData.append('slot_index', String(index));
+                formData.append('expected_count', String(limit));
 
-                const response = await fetch(`${CLOUD_API_URL}/api/upload/mobile`, {
-                    method: 'POST',
-                    body: formData,
+                setCurrentUpload({
+                    index: index + 1,
+                    total: files.length,
+                    phase: `Đang tải ảnh ${index + 1}/${files.length} (${formatBytes(uploadFile.size)})...`,
                 });
-
-                if (!response.ok) {
-                    throw new Error('Upload thất bại');
-                }
+                await uploadWithRetry(`${CLOUD_API_URL}/api/upload/mobile`, formData);
             }
 
             setUploadStatus('success');
@@ -77,8 +188,17 @@ const MobileUploadClient = () => {
         } catch (error) {
             console.error('Lỗi upload:', error);
             setUploadStatus('error');
+
+            if (error.status === 409) {
+                setErrorMsg(error.data?.error || 'Phiên này đã nhận đủ ảnh. Vui lòng quay lại màn hình photobooth.');
+            } else if (error.name === 'AbortError') {
+                setErrorMsg('Mạng yếu hoặc ảnh quá nặng, upload bị quá thời gian. Vui lòng thử lại gần WiFi hơn.');
+            } else {
+                setErrorMsg(error.message || 'Upload thất bại. Vui lòng thử lại.');
+            }
         } finally {
             setIsUploading(false);
+            setCurrentUpload(null);
         }
     };
 
@@ -125,7 +245,7 @@ const MobileUploadClient = () => {
                             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 flex flex-col items-center text-red-500">
                                 <AlertCircle size={48} className="mb-2" />
                                 <p className="text-center text-lg font-bold">Có lỗi xảy ra!</p>
-                                <p className="mt-1 text-center text-sm opacity-80">Vui lòng thử lại sau.</p>
+                                <p className="mt-1 text-center text-sm opacity-80">{errorMsg || 'Vui lòng thử lại sau.'}</p>
                             </motion.div>
                         )}
 
@@ -200,9 +320,14 @@ const MobileUploadClient = () => {
                         {isUploading && (
                             <div className="flex flex-col items-center justify-center py-8">
                                 <Loader className="mb-4 animate-spin" style={{ color: TEXT_PRIMARY }} size={40} />
-                                <p className="animate-pulse font-semibold" style={{ color: TEXT_SECONDARY }}>
-                                    Đang tải ảnh lên...
+                                <p className="animate-pulse text-center font-semibold" style={{ color: TEXT_SECONDARY }}>
+                                    {currentUpload?.phase || 'Đang tải ảnh lên...'}
                                 </p>
+                                {currentUpload && (
+                                    <p className="mt-2 text-sm font-bold" style={{ color: TEXT_PRIMARY }}>
+                                        {currentUpload.index}/{currentUpload.total}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>
