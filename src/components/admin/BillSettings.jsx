@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Banknote, Monitor, Power, RefreshCw, Save } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getDeviceId } from '../../utils/deviceId';
+import { isLocalHost } from '../../utils/runtime';
 
 const defaultHexCodes = ['40', '41', '42', '43', '44', '45', '46', '47'];
 
@@ -19,8 +20,11 @@ const BillSettings = () => {
     const [message, setMessage] = useState(null);
 
     const selectedIsLocal = selectedDeviceId && selectedDeviceId === currentDeviceId;
+    const isLocalAdmin = isLocalHost();
 
     useEffect(() => {
+        if (!isLocalAdmin) return undefined;
+
         const socket = io('/', {
             transports: ['polling'],
             auth: { deviceId: getDeviceId() }
@@ -50,18 +54,20 @@ const BillSettings = () => {
         });
 
         return () => socket.disconnect();
-    }, [selectedDeviceId]);
+    }, [selectedDeviceId, isLocalAdmin]);
 
     useEffect(() => {
+        if (!isLocalAdmin) return;
         fetchDevices();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [isLocalAdmin]);
 
     useEffect(() => {
+        if (!isLocalAdmin) return;
         if (selectedDeviceId) {
             fetchConfig(selectedDeviceId);
         }
-    }, [selectedDeviceId]);
+    }, [selectedDeviceId, isLocalAdmin]);
 
     const fetchDevices = async () => {
         setLoading(true);
@@ -165,6 +171,22 @@ const BillSettings = () => {
 
         setTimeout(() => setMessage(null), 3000);
     };
+
+    if (!isLocalAdmin) {
+        return (
+            <div className="mx-auto max-w-2xl rounded-2xl border border-amber-100 bg-white p-8 text-center shadow-sm">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                    <Banknote size={28} />
+                </div>
+                <h2 className="text-2xl font-bold text-[#2f3e46]">Cau hinh dau doc tien chi chay tren may booth</h2>
+                <p className="mt-3 text-sm leading-6 text-[#52796f]">
+                    Trang Vercel khong ket noi truc tiep duoc cong COM hoac dau doc tien. Hay mo admin bang
+                    <span className="font-semibold"> http://localhost:5173/admin/bill-settings </span>
+                    tren may photobooth dang cam thiet bi.
+                </p>
+            </div>
+        );
+    }
 
     if (loading && !selectedDeviceId) {
         return <div className="p-8 text-center text-gray-500">Đang tải danh sách thiết bị...</div>;

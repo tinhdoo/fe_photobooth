@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Save, RefreshCw, Settings as SettingsIcon, Monitor } from 'lucide-react';
 import DeviceManager from './DeviceManager';
+import { isLocalHost } from '../../utils/runtime';
 
 const Settings = () => {
+    const isLocalAdmin = isLocalHost();
     const [activeTab, setActiveTab] = useState('general');
     const [configs, setConfigs] = useState({
         price: '60000',
@@ -119,6 +121,13 @@ const Settings = () => {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-8">
+                            {!isLocalAdmin && (
+                                <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
+                                    Admin Vercel dung de cau hinh cloud va dong bo cho cac may. Cac thiet lap phan cung nhu camera,
+                                    hot folder, may in va dau doc tien can kiem tra tren may booth local dang cam thiet bi.
+                                </div>
+                            )}
+
                             {message && (
                                 <div className={`p-4 mb-8 rounded-xl border ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} animate-fadeIn`}>
                                     <div className="flex items-center gap-2 font-bold">

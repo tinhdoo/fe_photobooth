@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Layout, DollarSign, TrendingUp, Settings, Banknote, Menu, X, LogOut, Palette } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkflow } from '../context/WorkflowContext';
+import { isLocalHost } from '../utils/runtime';
 
 const BrandHeader = ({ compact = false, logoUrl = '/logo_tomato.png' }) => (
     <div className="flex items-center gap-3">
@@ -36,7 +37,7 @@ const AdminLayout = () => {
         { to: '/admin/bill-settings', icon: <Banknote size={20} />, label: 'Đầu đọc tiền' },
         { to: '/admin/branding', icon: <Palette size={20} />, label: 'Giao diện & Branding' },
         { to: '/admin/settings', icon: <Settings size={20} />, label: 'Cài đặt' },
-    ];
+    ].filter((item) => isLocalHost() || item.to !== '/admin/bill-settings');
 
     return (
         <div className="flex h-screen bg-[#F0F2E9]">
