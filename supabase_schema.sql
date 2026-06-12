@@ -105,12 +105,16 @@ using (true);
 create table if not exists mobile_uploads (
   id uuid primary key default gen_random_uuid(),
   session_uuid text not null,
+  slot_index integer,
   url text not null,
   public_id text,
   created_at timestamptz not null default now()
 );
 
+alter table mobile_uploads add column if not exists slot_index integer;
+
 create index if not exists mobile_uploads_session_uuid_idx on mobile_uploads (session_uuid);
+create index if not exists mobile_uploads_session_slot_idx on mobile_uploads (session_uuid, slot_index);
 create index if not exists mobile_uploads_created_at_idx on mobile_uploads (created_at);
 
 alter table mobile_uploads enable row level security;

@@ -43,6 +43,27 @@ const mergePhotoBySlot = (prev, url, slotIndex, limit) => {
     return next.filter(Boolean).slice(0, limit);
 };
 
+const fetchMobileUploads = async (baseUrl, sessionId) => {
+    const encodedSessionId = encodeURIComponent(sessionId);
+    const candidates = [
+        `${baseUrl}/api/mobile-uploads?session_id=${encodedSessionId}`,
+        `${baseUrl}/api/mobile-uploads/${encodedSessionId}`,
+    ];
+
+    for (const url of candidates) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (Array.isArray(data)) return data;
+        } catch (error) {
+            console.warn('Mobile uploads fetch failed:', url, error);
+        }
+    }
+
+    return [];
+};
+
 const MobileUploadCapture = () => {
     const { nextStep, sessionData, updateSessionData, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
@@ -131,9 +152,7 @@ const MobileUploadCapture = () => {
 
         const pollUploads = async () => {
             try {
-                const res = await fetch(`${CLOUD_API_URL}/api/mobile-uploads/${encodeURIComponent(sessionId)}`);
-                if (!res.ok) return;
-                const uploads = await res.json();
+                const uploads = await fetchMobileUploads(CLOUD_API_URL, sessionId);
                 applyUploads(uploads);
             } catch (error) {
                 console.error('Failed to poll mobile uploads:', error);

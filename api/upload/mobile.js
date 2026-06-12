@@ -69,7 +69,9 @@ export default async function handler(req, res) {
     try {
         const { fields, files } = await parseForm(req);
         const sessionId = String(firstValue(fields.session_id) || '').trim();
+        const rawSlotIndex = firstValue(fields.slot_index);
         const file = firstValue(files.file);
+        const slotIndex = Number.isFinite(Number(rawSlotIndex)) ? Number(rawSlotIndex) : null;
 
         if (!sessionId) return json(res, 400, { error: 'Missing session_id' });
         if (!file) return json(res, 400, { error: 'Missing file' });
@@ -95,15 +97,51 @@ export default async function handler(req, res) {
             .createSignedUrl(objectPath, 72 * 60 * 60);
 
         const url = signedData?.signedUrl || publicData.publicUrl;
-        const { data, error } = await supabase
+        if (slotIndex !== null) {
+            const { data: existingSlot } = await supabase
+                .from('mobile_uploads')
+                .select('*')
+                .eq('session_uuid', sessionId)
+                .eq('slot_index', slotIndex)
+                .maybeSingle();
+
+            if (existingSlot) {
+                return json(res, 200, {
+                    success: true,
+                    duplicate: true,
+                    url: existingSlot.url,
+                    public_id: existingSlot.public_id,
+                    upload: existingSlot,
+                });
+            }
+        }
+
+        const insertPayload = {
+            session_uuid: sessionId,
+            url,
+            public_id: `${bucket}/${objectPath}`,
+        };
+        if (slotIndex !== null) insertPayload.slot_index = slotIndex;
+
+        let { data, error } = await supabase
             .from('mobile_uploads')
-            .insert({
-                session_uuid: sessionId,
-                url,
-                public_id: `${bucket}/${objectPath}`,
-            })
+            .insert(insertPayload)
             .select()
             .single();
+
+        if (error && /slot_index|schema cache|column/i.test(error.message || '') && slotIndex !== null) {
+            const retry = await supabase
+                .from('mobile_uploads')
+                .insert({
+                    session_uuid: sessionId,
+                    url,
+                    public_id: `${bucket}/${objectPath}`,
+                })
+                .select()
+                .single();
+            data = retry.data;
+            error = retry.error;
+        }
 
         if (error && !/Could not find the table|schema cache|does not exist/i.test(error.message || '')) throw error;
 
