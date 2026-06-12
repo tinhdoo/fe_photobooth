@@ -15,6 +15,7 @@ const toPercentBox = (bounds, width, height, expansion = 0.15) => {
         height: Math.min(100, (hPx / height) * 100 + expansion * 2),
         rotation: 0,
         isSquare: pixelRatio > 0.85 && pixelRatio < 1.15,
+        areaScore: wPx * hPx,
     };
 };
 
@@ -138,11 +139,23 @@ const detectLightRectSlots = (data, width, height) => {
         .filter((box, index, arr) => arr.findIndex((other) => overlaps(box, other)) === index);
 };
 
+const limitToExpectedCount = (boxes, expectedCount) => {
+    const count = Number(expectedCount);
+    if (!Number.isFinite(count) || count <= 0 || boxes.length <= count) return boxes;
+
+    const selected = [...boxes]
+        .sort((a, b) => (b.areaScore || b.width * b.height) - (a.areaScore || a.width * a.height))
+        .slice(0, count)
+        .map(({ areaScore, ...box }) => box);
+
+    return sortBoxes(selected);
+};
+
 /**
  * Detects photo slots in a frame image. Supports both transparent PNG holes
  * and light/low-saturation placeholder rectangles.
  */
-export const detectFrameSlots = (imageUrl) => {
+export const detectFrameSlots = (imageUrl, expectedCount = null) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'Anonymous';
@@ -158,7 +171,7 @@ export const detectFrameSlots = (imageUrl) => {
             const lightBoxes = detectLightRectSlots(data, width, height);
             const boxes = lightBoxes.length >= transparentBoxes.length ? lightBoxes : transparentBoxes;
 
-            resolve(sortBoxes(boxes));
+            resolve(limitToExpectedCount(sortBoxes(boxes), expectedCount));
         };
 
         img.onerror = () => reject(new Error('Could not load image for analysis.'));

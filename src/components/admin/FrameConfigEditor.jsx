@@ -287,7 +287,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         if (!confirm("Tự động phát hiện sẽ thay thế tất cả các hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình. Tiếp tục?")) return;
 
         try {
-            const detectedBoxes = await detectFrameSlots(frame.url);
+            const detectedBoxes = await detectFrameSlots(frame.url, layoutDef.photoCount);
             if (detectedBoxes.length > 0) {
                 // Just use detected boxes as photo slots
                 const finalBoxes = detectedBoxes.map(b => ({

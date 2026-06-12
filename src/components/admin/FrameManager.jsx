@@ -191,7 +191,8 @@ const FrameManager = () => {
 
                 try {
                     // 1. Detect slots locally
-                    const boxes = await detectFrameSlots(frame.url);
+                    const layoutDef = LAYOUTS.find(l => l.id === frame.layout);
+                    const boxes = await detectFrameSlots(frame.url, layoutDef?.photoCount);
 
                     if (boxes.length > 0) {
                         // 2. Save config to backend
