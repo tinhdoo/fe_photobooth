@@ -225,11 +225,11 @@ const BillSettings = () => {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
                     <Banknote size={28} />
                 </div>
-                <h2 className="text-2xl font-bold text-[#2f3e46]">Cau hinh dau doc tien chi chay tren may booth</h2>
+                <h2 className="text-2xl font-bold text-[#2f3e46]">Cấu hình đầu đọc tiền chỉ chạy trên máy booth</h2>
                 <p className="mt-3 text-sm leading-6 text-[#52796f]">
-                    Trang Vercel khong ket noi truc tiep duoc cong COM hoac dau doc tien. Hay mo admin bang
+                    Trang Vercel không kết nối trực tiếp được cổng COM hoặc đầu đọc tiền. Hãy mở admin bằng
                     <span className="font-semibold"> http://localhost:5173/admin/bill-settings </span>
-                    tren may photobooth dang cam thiet bi.
+                    trên máy photobooth đang cắm thiết bị.
                 </p>
             </div>
         );

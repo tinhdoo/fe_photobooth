@@ -320,27 +320,27 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#2f3e46]">May in</h2>
-                                <p className="mt-1 text-sm text-[#52796f]">Dung cho DNP RX1HS hoac may in Windows tuong thich.</p>
+                                <h2 className="text-xl font-bold text-[#2f3e46]">Máy in</h2>
+                                <p className="mt-1 text-sm text-[#52796f]">Dùng cho DNP RX1HS hoặc máy in Windows tương thích.</p>
                             </div>
                             <Monitor className="text-[#52796f]" size={24} />
                         </div>
 
                         <div className="space-y-5">
                             <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Ten may in Windows</span>
+                                <span className="mb-2 block text-sm font-bold text-gray-700">Tên máy in Windows</span>
                                 <input
                                     type="text"
                                     name="printer_name"
                                     value={configs.printer_name}
                                     onChange={handleChange}
-                                    placeholder="RX1HS hoac DNP DS-RX1HS"
+                                    placeholder="RX1HS hoặc DNP DS-RX1HS"
                                     className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
                                 />
                             </label>
 
                             <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">So ban in mac dinh</span>
+                                <span className="mb-2 block text-sm font-bold text-gray-700">Số bản in mặc định</span>
                                 <input
                                     type="number"
                                     min="1"
@@ -356,15 +356,15 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#2f3e46]">May anh</h2>
-                                <p className="mt-1 text-sm text-[#52796f]">Chon cach may booth nhan anh tu camera.</p>
+                                <h2 className="text-xl font-bold text-[#2f3e46]">Máy ảnh</h2>
+                                <p className="mt-1 text-sm text-[#52796f]">Chọn cách máy booth nhận ảnh từ camera.</p>
                             </div>
                             <SettingsIcon className="text-[#52796f]" size={24} />
                         </div>
 
                         <div className="space-y-5">
                             <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Che do camera</span>
+                                <span className="mb-2 block text-sm font-bold text-gray-700">Chế độ camera</span>
                                 <select
                                     name="camera_mode"
                                     value={configs.camera_mode}
@@ -380,7 +380,7 @@ const Settings = () => {
                             {configs.camera_mode === 'hotfolder' && (
                                 <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
                                     <label className="block">
-                                        <span className="mb-2 block text-sm font-bold text-gray-700">Thu muc nhan anh</span>
+                                        <span className="mb-2 block text-sm font-bold text-gray-700">Thư mục nhận ảnh</span>
                                         <input
                                             type="text"
                                             name="hot_folder"
@@ -392,7 +392,7 @@ const Settings = () => {
                                     </label>
 
                                     <label className="mt-4 block">
-                                        <span className="mb-2 block text-sm font-bold text-gray-700">Phim chup</span>
+                                        <span className="mb-2 block text-sm font-bold text-gray-700">Phím chụp</span>
                                         <input
                                             type="text"
                                             name="trigger_key"
@@ -407,7 +407,7 @@ const Settings = () => {
 
                             {configs.camera_mode === 'canon' && (
                                 <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm leading-6 text-blue-700">
-                                    Can chay Canon middleware tren may local. LiveView va capture dung cong
+                                    Cần chạy Canon middleware trên máy local. LiveView và capture dùng cổng
                                     <span className="font-mono font-bold"> http://localhost:5000</span>.
                                 </div>
                             )}
@@ -424,12 +424,12 @@ const Settings = () => {
                         {saving ? (
                             <>
                                 <RefreshCw size={20} className="animate-spin" />
-                                Dang luu...
+                                Đang lưu...
                             </>
                         ) : (
                             <>
                                 <Save size={20} />
-                                Luu cau hinh phan cung
+                                Lưu cấu hình phần cứng
                             </>
                         )}
                     </button>
@@ -497,8 +497,8 @@ const Settings = () => {
                         <div className="flex-1 overflow-y-auto p-8">
                             {!isLocalAdmin && (
                                 <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
-                                    Admin Vercel dung de cau hinh cloud va dong bo cho cac may. Cac thiet lap phan cung nhu camera,
-                                    hot folder, may in va dau doc tien can kiem tra tren may booth local dang cam thiet bi.
+                                    Admin Vercel dùng để cấu hình cloud và đồng bộ cho các máy. Các thiết lập phần cứng như camera,
+                                    hot folder, máy in và đầu đọc tiền cần kiểm tra trên máy booth local đang cắm thiết bị.
                                 </div>
                             )}
 
