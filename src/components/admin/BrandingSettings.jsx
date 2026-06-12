@@ -124,19 +124,56 @@ const BrandingSettings = () => {
         setUploadingKey(key);
         showLoading(`Đang tải lên ${file.name}...`);
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', key);
-
         try {
-            const response = await fetch(apiPath('/api/upload-branding'), {
+            const prepareResponse = await fetch(apiPath('/api/upload-branding'), {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'prepare',
+                    key,
+                    filename: file.name,
+                    mimetype: file.type,
+                }),
             });
-            const data = await response.json().catch(() => ({}));
+            const prepared = await prepareResponse.json().catch(() => ({}));
 
-            if (!response.ok) {
-                throw new Error(data.error || `Không thể tải lên file (${response.status}).`);
+            if (!prepareResponse.ok) {
+                throw new Error(prepared.error || `Không thể chuẩn bị upload (${prepareResponse.status}).`);
+            }
+
+            showLoading(`Đang gửi ${file.name} lên Supabase...`);
+            const uploadResponse = await fetch(prepared.signedUrl, {
+                method: 'PUT',
+                headers: {
+                    'x-upsert': 'true',
+                },
+                body: (() => {
+                    const data = new FormData();
+                    data.append('cacheControl', '3600');
+                    data.append('', file);
+                    return data;
+                })(),
+            });
+
+            if (!uploadResponse.ok) {
+                const errorText = await uploadResponse.text().catch(() => '');
+                throw new Error(errorText || `Không thể upload file lên Supabase (${uploadResponse.status}).`);
+            }
+
+            showLoading('Đang lưu cấu hình background...');
+            const finalizeResponse = await fetch(apiPath('/api/upload-branding'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'finalize',
+                    key,
+                    objectPath: prepared.objectPath,
+                }),
+            });
+            const data = await finalizeResponse.json().catch(() => ({}));
+
+            if (!finalizeResponse.ok) {
+                throw new Error(data.error || `Không thể lưu cấu hình (${finalizeResponse.status}).`);
             }
 
             const nextConfig = { [key]: data.url };

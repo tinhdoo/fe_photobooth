@@ -23,6 +23,16 @@ function parseForm(req) {
     });
 }
 
+async function parseJson(req) {
+    const chunks = [];
+    for await (const chunk of req) {
+        chunks.push(chunk);
+    }
+
+    const raw = Buffer.concat(chunks).toString('utf8');
+    return raw ? JSON.parse(raw) : {};
+}
+
 function firstValue(value) {
     return Array.isArray(value) ? value[0] : value;
 }
@@ -109,6 +119,66 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {
+        const isJson = String(req.headers['content-type'] || '').includes('application/json');
+        if (isJson) {
+            const body = await parseJson(req);
+            const action = String(body.action || '');
+            const jsonKey = cleanKey(body.key);
+            const supabase = getSupabaseAdmin();
+            const bucket = await resolveBucket(supabase);
+            await supabase.storage.updateBucket(bucket, { public: true }).catch(() => null);
+
+            if (action === 'prepare') {
+                if (!jsonKey) return json(res, 400, { error: 'Missing config key' });
+
+                const extension = cleanExtension(body.filename, body.mimetype);
+                const objectPath = `branding/${jsonKey}-${Date.now()}.${extension}`;
+                const { data, error } = await supabase.storage
+                    .from(bucket)
+                    .createSignedUploadUrl(objectPath, { upsert: true });
+
+                if (error) throw error;
+
+                return json(res, 200, {
+                    bucket,
+                    objectPath,
+                    signedUrl: data.signedUrl,
+                    token: data.token,
+                });
+            }
+
+            if (action === 'finalize') {
+                const objectPath = String(body.objectPath || '');
+                if (!jsonKey) return json(res, 400, { error: 'Missing config key' });
+                if (!objectPath || !objectPath.startsWith(`branding/${jsonKey}-`)) {
+                    return json(res, 400, { error: 'Invalid object path' });
+                }
+
+                const { data: publicData } = supabase.storage
+                    .from(bucket)
+                    .getPublicUrl(objectPath);
+
+                const revision = Date.now();
+                const url = withVersion(publicData.publicUrl, revision);
+                const current = await readConfig(supabase, bucket);
+                const next = {
+                    ...current,
+                    [jsonKey]: url,
+                    branding_revision: revision,
+                    updated_at: new Date().toISOString(),
+                };
+                await writeConfig(supabase, bucket, next);
+
+                return json(res, 200, {
+                    success: true,
+                    key: jsonKey,
+                    url,
+                });
+            }
+
+            return json(res, 400, { error: 'Invalid upload action' });
+        }
+
         const { fields, files } = await parseForm(req);
         const file = firstValue(files.file);
         const key = cleanKey(firstValue(fields.key));
