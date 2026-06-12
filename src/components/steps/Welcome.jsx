@@ -14,7 +14,7 @@ const Welcome = () => {
     const [pinError, setPinError] = useState('');
     const longPressTimer = useRef(null);
     const longPressTriggered = useRef(false);
-    const staffPin = String(configs?.staff_pin || '2606');
+    const staffPin = String(configs?.staff_pin || '1310');
 
     const clearLongPress = () => {
         if (longPressTimer.current) {

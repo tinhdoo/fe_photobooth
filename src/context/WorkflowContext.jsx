@@ -30,7 +30,7 @@ const DEFAULT_CONFIGS = {
     countdown: 5,
     camera_mode: 'webcam',
     hot_folder: 'C:/Photobooth_Input',
-    staff_pin: '2606'
+    staff_pin: '1310'
 };
 
 const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
