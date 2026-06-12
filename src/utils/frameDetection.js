@@ -1,109 +1,166 @@
-/**
- * Detects transparent slots in a frame image.
- * @param {string} imageUrl - The URL of the frame image.
- * @returns {Promise<Array<{x: number, y: number, width: number, height: number, rotation: number}>>} - A promise resolving to an array of detected boxes in percentage.
- */
-export const detectFrameSlots = (imageUrl) => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = imageUrl;
+const sortBoxes = (boxes) => boxes.sort((a, b) => {
+    if (Math.abs(a.y - b.y) < 5) return a.x - b.x;
+    return a.y - b.y;
+});
 
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
+const toPercentBox = (bounds, width, height, expansion = 0.15) => {
+    const wPx = bounds.maxX - bounds.minX + 1;
+    const hPx = bounds.maxY - bounds.minY + 1;
+    const pixelRatio = wPx / hPx;
 
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            const width = canvas.width;
-            const height = canvas.height;
-            const visited = new Uint8Array(width * height); // 0: unvisited, 1: visited
-            const detectedBoxes = [];
+    return {
+        x: Math.max(0, (bounds.minX / width) * 100 - expansion),
+        y: Math.max(0, (bounds.minY / height) * 100 - expansion),
+        width: Math.min(100, (wPx / width) * 100 + expansion * 2),
+        height: Math.min(100, (hPx / height) * 100 + expansion * 2),
+        rotation: 0,
+        isSquare: pixelRatio > 0.85 && pixelRatio < 1.15,
+    };
+};
 
-            const getIndex = (x, y) => (y * width + x);
+const overlaps = (a, b) => {
+    const ax2 = a.x + a.width;
+    const ay2 = a.y + a.height;
+    const bx2 = b.x + b.width;
+    const by2 = b.y + b.height;
+    const xOverlap = Math.max(0, Math.min(ax2, bx2) - Math.max(a.x, b.x));
+    const yOverlap = Math.max(0, Math.min(ay2, by2) - Math.max(a.y, b.y));
+    const overlapArea = xOverlap * yOverlap;
+    const minArea = Math.min(a.width * a.height, b.width * b.height);
+    return minArea > 0 && overlapArea / minArea > 0.35;
+};
 
-            // Scan pixels
-            // Increased precision by scanning every 2nd pixel
-            for (let y = 0; y < height; y += 2) {
-                for (let x = 0; x < width; x += 2) {
-                    const idx = getIndex(x, y);
-                    // Check alpha (transparency)
-                    if (!visited[idx] && data[idx * 4 + 3] < 50) {
-                        // Found a hole! Start Flood Fill to find bounds
-                        let minX = x, maxX = x, minY = y, maxY = y;
-                        let pixelCount = 0;
-                        const stack = [[x, y]];
-                        visited[idx] = 1;
+const connectedComponents = (width, height, isTarget) => {
+    const visited = new Uint8Array(width * height);
+    const boxes = [];
+    const getIndex = (x, y) => y * width + x;
+    const minArea = width * height * 0.012;
+    const maxArea = width * height * 0.55;
 
-                        while (stack.length) {
-                            const [cx, cy] = stack.pop();
-                            pixelCount++;
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            const startIndex = getIndex(x, y);
+            if (visited[startIndex] || !isTarget(x, y)) continue;
 
-                            if (cx < minX) minX = cx;
-                            if (cx > maxX) maxX = cx;
-                            if (cy < minY) minY = cy;
-                            if (cy > maxY) maxY = cy;
+            let minX = x;
+            let maxX = x;
+            let minY = y;
+            let maxY = y;
+            let pixelCount = 0;
+            const stack = [[x, y]];
+            visited[startIndex] = 1;
 
-                            // Check 4 neighbors
-                            const neighbors = [
-                                [cx + 1, cy], [cx - 1, cy],
-                                [cx, cy + 1], [cx, cy - 1]
-                            ];
+            while (stack.length) {
+                const [cx, cy] = stack.pop();
+                pixelCount += 1;
+                if (cx < minX) minX = cx;
+                if (cx > maxX) maxX = cx;
+                if (cy < minY) minY = cy;
+                if (cy > maxY) maxY = cy;
 
-                            for (const [nx, ny] of neighbors) {
-                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                                    const nIdx = getIndex(nx, ny);
-                                    // If transparent and not visited (using same threshold < 50)
-                                    if (!visited[nIdx] && data[nIdx * 4 + 3] < 50) {
-                                        visited[nIdx] = 1;
-                                        stack.push([nx, ny]);
-                                    }
-                                }
-                            }
-                        }
+                const neighbors = [
+                    [cx + 1, cy],
+                    [cx - 1, cy],
+                    [cx, cy + 1],
+                    [cx, cy - 1],
+                ];
 
-                        // Ignore small noise (less than 0.1% of total area)
-                        if (pixelCount > (width * height * 0.001)) {
-                            // Expand box slightly (0.3%) to prevent white edges
-                            const expansion = 0.3;
-
-                            let xPct = (minX / width) * 100;
-                            let yPct = (minY / height) * 100;
-                            let wPct = ((maxX - minX) / width) * 100;
-                            let hPct = ((maxY - minY) / height) * 100;
-
-                            // Check squareness in PIXELS (independent of frame aspect ratio)
-                            const wPx = maxX - minX;
-                            const hPx = maxY - minY;
-                            const pixelRatio = wPx / hPx;
-                            const isSquare = pixelRatio > 0.85 && pixelRatio < 1.15;
-
-                            detectedBoxes.push({
-                                x: Math.max(0, xPct - expansion),
-                                y: Math.max(0, yPct - expansion),
-                                width: Math.min(100, wPct + (expansion * 2)),
-                                height: Math.min(100, hPct + (expansion * 2)),
-                                rotation: 0,
-                                isSquare: isSquare // Add this flag
-                            });
-                        }
+                for (const [nx, ny] of neighbors) {
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    const nIdx = getIndex(nx, ny);
+                    if (!visited[nIdx] && isTarget(nx, ny)) {
+                        visited[nIdx] = 1;
+                        stack.push([nx, ny]);
                     }
                 }
             }
 
-            // Sort boxes: Top-to-Bottom, Left-to-Right
-            detectedBoxes.sort((a, b) => {
-                // If Y is similar (within 5%), sort by X
-                if (Math.abs(a.y - b.y) < 5) return a.x - b.x;
-                return a.y - b.y;
-            });
+            const boxW = maxX - minX + 1;
+            const boxH = maxY - minY + 1;
+            const area = boxW * boxH;
+            const fillRatio = pixelCount / area;
+            const aspect = boxW / boxH;
 
-            resolve(detectedBoxes);
+            if (
+                pixelCount >= minArea
+                && pixelCount <= maxArea
+                && fillRatio > 0.72
+                && aspect > 0.35
+                && aspect < 3.2
+            ) {
+                boxes.push({ minX, maxX, minY, maxY, pixelCount, area });
+            }
+        }
+    }
+
+    return boxes;
+};
+
+const downsampleImage = (img, maxSide = 900) => {
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { canvas, ctx };
+};
+
+const detectTransparentSlots = (data, width, height) => connectedComponents(
+    width,
+    height,
+    (x, y) => data[(y * width + x) * 4 + 3] < 80
+).map((bounds) => toPercentBox(bounds, width, height, 0.2));
+
+const detectLightRectSlots = (data, width, height) => {
+    const edgeMarginX = Math.round(width * 0.035);
+    const edgeMarginY = Math.round(height * 0.035);
+
+    const components = connectedComponents(width, height, (x, y) => {
+        if (x < edgeMarginX || x > width - edgeMarginX || y < edgeMarginY || y > height - edgeMarginY) return false;
+        const idx = (y * width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
+        if (a < 200) return false;
+
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const brightness = (r + g + b) / 3;
+        const saturation = max - min;
+
+        return brightness > 182 && saturation < 42;
+    });
+
+    return components
+        .map((bounds) => toPercentBox(bounds, width, height, 0.1))
+        .filter((box, index, arr) => arr.findIndex((other) => overlaps(box, other)) === index);
+};
+
+/**
+ * Detects photo slots in a frame image. Supports both transparent PNG holes
+ * and light/low-saturation placeholder rectangles.
+ */
+export const detectFrameSlots = (imageUrl) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = imageUrl;
+
+        img.onload = () => {
+            const { canvas, ctx } = downsampleImage(img);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const { data } = imageData;
+            const { width, height } = canvas;
+
+            const transparentBoxes = detectTransparentSlots(data, width, height);
+            const lightBoxes = detectLightRectSlots(data, width, height);
+            const boxes = lightBoxes.length >= transparentBoxes.length ? lightBoxes : transparentBoxes;
+
+            resolve(sortBoxes(boxes));
         };
 
-        img.onerror = () => reject(new Error("Could not load image for analysis."));
+        img.onerror = () => reject(new Error('Could not load image for analysis.'));
     });
 };

@@ -284,7 +284,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     };
 
     const handleAutoDetect = async () => {
-        if (!confirm("Tự động phát hiện sẽ thay thế tất cả các hộp hiện tại dựa trên vùng trong suốt của khung hình. Tiếp tục?")) return;
+        if (!confirm("Tự động phát hiện sẽ thay thế tất cả các hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình. Tiếp tục?")) return;
 
         try {
             const detectedBoxes = await detectFrameSlots(frame.url);
@@ -299,7 +299,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
                 setNotification({ show: true, message: `Đã phát hiện ${detectedBoxes.length} ô ảnh.`, type: 'success' });
             } else {
-                setNotification({ show: true, message: "Không tìm thấy ô ảnh trong suốt. Hãy đảm bảo khung hình PNG của bạn có độ trong suốt.", type: 'error' });
+                setNotification({ show: true, message: "Không tìm thấy ô ảnh. Hãy kiểm tra lại vùng đặt ảnh hoặc chỉnh thủ công.", type: 'error' });
             }
         } catch (error) {
             console.error("Auto detect failed", error);
