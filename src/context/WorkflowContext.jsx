@@ -29,7 +29,8 @@ const DEFAULT_CONFIGS = {
     mobile_session_timeout: 300,
     countdown: 5,
     camera_mode: 'webcam',
-    hot_folder: 'C:/Photobooth_Input'
+    hot_folder: 'C:/Photobooth_Input',
+    staff_pin: '2606'
 };
 
 const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
@@ -43,7 +44,8 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? fallback.mobile_session_timeout) || DEFAULT_CONFIGS.mobile_session_timeout,
     countdown: parseInt(nextConfigs.countdown ?? fallback.countdown) || DEFAULT_CONFIGS.countdown,
     camera_mode: nextConfigs.camera_mode || fallback.camera_mode || DEFAULT_CONFIGS.camera_mode,
-    hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder
+    hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder,
+    staff_pin: String(nextConfigs.staff_pin || fallback.staff_pin || DEFAULT_CONFIGS.staff_pin)
 });
 
 const readCachedConfigs = () => {
