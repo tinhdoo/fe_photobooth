@@ -115,6 +115,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
             }
         };
         fetchConfig();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [frame]);
 
     const handleSave = async () => {

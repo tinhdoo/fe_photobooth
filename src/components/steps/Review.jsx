@@ -38,7 +38,7 @@ const Review = () => {
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
-    const photos = sessionData.photos || [];
+    const photos = useMemo(() => sessionData.photos || [], [sessionData.photos]);
     const currentLayout = sessionData.layout || { photoCount: 4, type: 'grid', cols: 2, rows: 2 };
     const [showError, setShowError] = useState(false);
 

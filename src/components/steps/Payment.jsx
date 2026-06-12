@@ -175,6 +175,7 @@ const Payment = () => {
             cancelled = true;
             if (qrRequestRef.current === requestId) setLoading(false);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [method, qrOrder, qrError, remainingAmount]);
 
     useEffect(() => {

@@ -163,6 +163,7 @@ const Edit = () => {
         console.log('5. filteredPhotos state:', filteredPhotos);
         console.log('6. layout:', layout);
         console.log('=====================================');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -338,6 +339,7 @@ const Edit = () => {
             };
             autoFinish();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timeLeft, isSessionActive, frames]);
 
 

@@ -300,6 +300,7 @@ export const WorkflowProvider = ({ children }) => {
             setIsSessionActive(true);
             setTimeLeft(freshDuration);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionData.paymentStatus]);
 
     // Timer Countdown

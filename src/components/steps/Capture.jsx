@@ -160,6 +160,7 @@ const Capture = () => {
                 currentStream.getTracks().forEach(track => track.stop());
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -169,6 +170,7 @@ const Capture = () => {
         if (cameraReady && (needsRetake || needsMorePhotos)) {
             startCountdown();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraReady]); // Only depend on cameraReady (initially), logic internal checks sessionData/photos
 
     const getEffectiveCountdown = () => TOTAL_PHOTOS > 4 ? 3 : (parseInt(configs.countdown) || 5);
@@ -195,6 +197,7 @@ const Capture = () => {
         } else {
             takePhoto();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [countdown, configs.countdown, TOTAL_PHOTOS]);
 
     const takePhoto = async () => {

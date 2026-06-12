@@ -42,6 +42,7 @@ const FrameManager = () => {
     useEffect(() => {
         fetchFrames();
         setSelectedFrames(new Set()); // Reset selection on layout change
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedLayout]);
 
     useEffect(() => {
