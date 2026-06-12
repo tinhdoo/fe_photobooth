@@ -181,6 +181,49 @@ async function listPaymentTransactions(supabase) {
     }));
 }
 
+async function readRevenueResetAt(supabase) {
+    const { data, error } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (error && isMissingTable(error)) return null;
+    if (error) throw error;
+
+    const value = data?.config?.revenue_reset_at;
+    return value ? new Date(value).toISOString() : null;
+}
+
+async function writeRevenueResetAt(supabase) {
+    const resetAt = new Date().toISOString();
+    const { data, error } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (error && !isMissingTable(error)) throw error;
+
+    const currentConfig = data?.config && typeof data.config === 'object' && !Array.isArray(data.config)
+        ? data.config
+        : {};
+
+    const { error: writeError } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: 'app',
+            config: {
+                ...currentConfig,
+                revenue_reset_at: resetAt,
+            },
+            updated_at: resetAt,
+        }, { onConflict: 'key' });
+
+    if (writeError && !isMissingTable(writeError)) throw writeError;
+    return resetAt;
+}
+
 function mergeTransactions(payments, dbSessions, storageSessions) {
     const bySession = new Map();
     const merged = [];
@@ -220,8 +263,8 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             if (req.body?.code !== '8686') return json(res, 403, { error: 'Invalid reset code' });
 
-            await supabase.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            return json(res, 200, { success: true });
+            const resetAt = await writeRevenueResetAt(supabase);
+            return json(res, 200, { success: true, reset_at: resetAt });
         }
 
         if (req.method !== 'GET') return methodNotAllowed(res);
@@ -230,13 +273,15 @@ export default async function handler(req, res) {
         const endDate = req.query?.endDate || '';
         const paymentMethod = req.query?.paymentMethod || '';
 
-        const [payments, dbSessions, storageSessions] = await Promise.all([
+        const [payments, dbSessions, storageSessions, revenueResetAt] = await Promise.all([
             listPaymentTransactions(supabase),
             listDbSessions(supabase),
             listStorageSessions(supabase),
+            readRevenueResetAt(supabase),
         ]);
 
         const transactions = mergeTransactions(payments, dbSessions, storageSessions)
+            .filter((tx) => !revenueResetAt || new Date(txDate(tx)).getTime() >= new Date(revenueResetAt).getTime())
             .filter((tx) => inRange(tx, startDate, endDate))
             .filter((tx) => matchesMethod(tx, paymentMethod));
 
@@ -252,6 +297,7 @@ export default async function handler(req, res) {
             transactions,
             paymentBreakdown,
             chartData: [],
+            revenueResetAt,
         });
     } catch (error) {
         console.error('Revenue API failed:', error);
