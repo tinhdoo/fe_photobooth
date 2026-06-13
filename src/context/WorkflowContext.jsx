@@ -30,7 +30,13 @@ const DEFAULT_CONFIGS = {
     countdown: 5,
     camera_mode: 'webcam',
     hot_folder: 'C:/Photobooth_Input',
-    staff_pin: '1310'
+    staff_pin: '1310',
+    print_brightness: 0,
+    print_contrast: 0,
+    print_saturation: 0,
+    print_pink: 8,
+    print_skin_whitening: 6,
+    print_warmth: 2,
 };
 
 const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
@@ -45,7 +51,13 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     countdown: parseInt(nextConfigs.countdown ?? fallback.countdown) || DEFAULT_CONFIGS.countdown,
     camera_mode: nextConfigs.camera_mode || fallback.camera_mode || DEFAULT_CONFIGS.camera_mode,
     hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder,
-    staff_pin: String(nextConfigs.staff_pin || fallback.staff_pin || DEFAULT_CONFIGS.staff_pin)
+    staff_pin: String(nextConfigs.staff_pin || fallback.staff_pin || DEFAULT_CONFIGS.staff_pin),
+    print_brightness: parseInt(nextConfigs.print_brightness ?? fallback.print_brightness) || 0,
+    print_contrast: parseInt(nextConfigs.print_contrast ?? fallback.print_contrast) || 0,
+    print_saturation: parseInt(nextConfigs.print_saturation ?? fallback.print_saturation) || 0,
+    print_pink: parseInt(nextConfigs.print_pink ?? fallback.print_pink) || 0,
+    print_skin_whitening: parseInt(nextConfigs.print_skin_whitening ?? fallback.print_skin_whitening) || 0,
+    print_warmth: parseInt(nextConfigs.print_warmth ?? fallback.print_warmth) || 0,
 });
 
 const readCachedConfigs = () => {

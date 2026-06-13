@@ -17,6 +17,12 @@ const Settings = () => {
         countdown: '5',
         printer_name: 'RX1HS',
         printer_copies: '1',
+        print_brightness: '0',
+        print_contrast: '0',
+        print_saturation: '0',
+        print_pink: '8',
+        print_skin_whitening: '6',
+        print_warmth: '2',
         camera_mode: 'webcam',
         hot_folder: 'C:/Photobooth_Input',
         trigger_key: '{F8}'
@@ -104,7 +110,15 @@ const Settings = () => {
         setTestLoading('printer');
         setMessage(null);
         try {
-            await axios.post('/api/printer/test', { printer_name: configs.printer_name });
+            await axios.post('/api/printer/test', {
+                printer_name: configs.printer_name,
+                print_brightness: configs.print_brightness,
+                print_contrast: configs.print_contrast,
+                print_saturation: configs.print_saturation,
+                print_pink: configs.print_pink,
+                print_skin_whitening: configs.print_skin_whitening,
+                print_warmth: configs.print_warmth,
+            });
             setMessage({ type: 'success', text: 'Đã gửi lệnh in thử sang máy in.' });
             fetchHardwareStatus();
         } catch (error) {
@@ -170,6 +184,73 @@ const Settings = () => {
             </span>
             {ok ? <CheckCircle2 size={18} className="text-green-600" /> : <XCircle size={18} className="text-red-500" />}
         </div>
+    );
+
+    const printColorControls = [
+        { name: 'print_brightness', label: 'Độ sáng', min: -30, max: 30, step: 1 },
+        { name: 'print_contrast', label: 'Tương phản', min: -30, max: 30, step: 1 },
+        { name: 'print_saturation', label: 'Bão hòa màu', min: -30, max: 30, step: 1 },
+        { name: 'print_pink', label: 'Độ hồng da', min: 0, max: 30, step: 1 },
+        { name: 'print_skin_whitening', label: 'Làm trắng da', min: 0, max: 30, step: 1 },
+        { name: 'print_warmth', label: 'Độ ấm màu', min: -20, max: 20, step: 1 },
+    ];
+
+    const renderPrintColorControls = () => (
+        <section className="rounded-2xl border border-[#ead8bd] bg-[#fffaf0] p-6 shadow-sm lg:col-span-2">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h2 className="text-xl font-bold text-[#2f3e46]">Màu ảnh in</h2>
+                    <p className="mt-1 text-sm text-[#7B5E43]">
+                        Áp dụng trực tiếp lên file gửi máy in. Ảnh tải QR/cloud vẫn giữ màu gốc.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setConfigs(prev => ({
+                        ...prev,
+                        print_brightness: '0',
+                        print_contrast: '0',
+                        print_saturation: '0',
+                        print_pink: '8',
+                        print_skin_whitening: '6',
+                        print_warmth: '2',
+                    }))}
+                    className="rounded-xl border border-[#d8c0a0] bg-white px-4 py-2 text-sm font-bold text-[#7B5E43]"
+                >
+                    Về trắng hồng vừa
+                </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+                {printColorControls.map((control) => (
+                    <label key={control.name} className="rounded-2xl border border-[#ead8bd] bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between gap-4">
+                            <span className="text-sm font-extrabold text-[#2f3e46]">{control.label}</span>
+                            <input
+                                type="number"
+                                name={control.name}
+                                min={control.min}
+                                max={control.max}
+                                step={control.step}
+                                value={configs[control.name]}
+                                onChange={handleChange}
+                                className="h-10 w-20 rounded-xl border border-[#ead8bd] bg-[#fffaf0] text-center text-sm font-bold text-[#7B5E43]"
+                            />
+                        </div>
+                        <input
+                            type="range"
+                            name={control.name}
+                            min={control.min}
+                            max={control.max}
+                            step={control.step}
+                            value={configs[control.name]}
+                            onChange={handleChange}
+                            className="h-2 w-full accent-[#d8b98e]"
+                        />
+                    </label>
+                ))}
+            </div>
+        </section>
     );
 
     if (isLocalAdmin) {
@@ -352,6 +433,8 @@ const Settings = () => {
                             </label>
                         </div>
                     </section>
+
+                    {renderPrintColorControls()}
 
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
