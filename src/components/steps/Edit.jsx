@@ -772,7 +772,7 @@ const Edit = () => {
             const printOutput = buildPrintCanvas(baseCanvas, printMode);
             const printCanvas = printOutput.canvas;
             const cutMode = printOutput.cutMode;
-            const compositeCanvas = baseCanvas;
+            const compositeCanvas = printMode === 'double_strip' ? cloneCanvas(printCanvas) : baseCanvas;
             applyPrintColorSettings(printCanvas);
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
