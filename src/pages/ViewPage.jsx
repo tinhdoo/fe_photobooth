@@ -214,7 +214,7 @@ const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions }) => {
                                         playsInline
                                         preload="metadata"
                                         className="h-full w-full object-cover"
-                                        style={{ objectPosition: `${position.x * 100}% ${position.y * 100}%` }}
+                                        style={{ objectPosition: `${position.x * 100}% ${position.y * 100}%`, transform: 'scaleX(-1)' }}
                                     />
                                 ) : (
                                     <img
