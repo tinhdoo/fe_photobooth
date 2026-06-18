@@ -47,7 +47,9 @@ const Review = () => {
         [currentLayout.photoCount, photos]
     );
 
-    const sourcePhotos = sessionData.capturedPhotos || sessionData.photos || [];
+    const sourcePhotos = sessionData.capturedPhotos?.length > 0
+        ? sessionData.capturedPhotos
+        : (sessionData.photos || []);
     const activeSlot = sessionData.activeSlot;
     const setActiveSlot = (value) => updateSessionData('activeSlot', value);
     const previewGrid = getReviewGrid(currentLayout);

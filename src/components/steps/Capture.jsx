@@ -22,6 +22,7 @@ const Capture = () => {
     const [stream, setStream] = useState(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState(null);
+    const cameraMode = configs?.camera_mode || 'webcam';
 
     // Motion Photo Refs
     const videoChunksRef = useRef([]);
@@ -34,7 +35,7 @@ const Capture = () => {
     }, []);
 
     const startRecording = () => {
-        if (configs.camera_mode !== 'webcam' || !stream) return;
+        if (cameraMode !== 'webcam' || !stream) return;
         try {
             console.log("🎥 [Motion] Starting recording...");
             videoChunksRef.current = [];
@@ -118,7 +119,11 @@ const Capture = () => {
 
     useEffect(() => {
         let currentStream = null;
-        if (configs.camera_mode !== 'webcam') {
+        setCameraReady(false);
+        setCameraError(null);
+        setStream(null);
+
+        if (cameraMode !== 'webcam') {
             setCameraReady(true); // Always ready in hotfolder/canon mode
             return;
         }
@@ -161,7 +166,7 @@ const Capture = () => {
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [cameraMode]);
 
     useEffect(() => {
         const needsRetake = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
@@ -209,10 +214,11 @@ const Capture = () => {
         audio?.play().catch(e => { });
 
         // --- CANON MIDDLEWARE MODE ---
-        if (configs.camera_mode === 'canon') {
+        if (cameraMode === 'canon') {
             try {
                 console.log("📷 [Capture] Requesting Canon capture...");
-                const res = await fetch('http://localhost:5000/capture');
+                const timeout = parseInt(configs.canon_capture_timeout, 10) || 30;
+                const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`);
                 const data = await res.json();
 
                 if (data.success && data.url) {
@@ -222,6 +228,7 @@ const Capture = () => {
                     const newPhotos = [...photosTaken, url];
                     setPhotosTaken(newPhotos);
                     updateSessionData('photos', newPhotos);
+                    updateSessionData('capturedPhotos', newPhotos);
                     setLatestPhoto(url);
 
                     setTimeout(() => {
@@ -247,7 +254,7 @@ const Capture = () => {
         }
 
         // --- HOT FOLDER MODE ---
-        if (configs.camera_mode === 'hotfolder') {
+        if (cameraMode === 'hotfolder') {
             try {
                 // Call Backend to wait for photo
                 // We use a longer timeout on frontend? Or just wait for promise.
@@ -262,6 +269,7 @@ const Capture = () => {
                     const newPhotos = [...photosTaken, url];
                     setPhotosTaken(newPhotos);
                     updateSessionData('photos', newPhotos);
+                    updateSessionData('capturedPhotos', newPhotos);
                     setLatestPhoto(url);
 
                     setTimeout(() => {
@@ -281,7 +289,8 @@ const Capture = () => {
                 console.error("Hot Folder Capture Failed", error);
                 setIsShooting(false);
                 setFlash(false);
-                setCameraError("Không tìm thấy ảnh sau 30s. Vui lòng thử lại.");
+                const timeout = parseInt(configs.hotfolder_capture_timeout, 10) || 30;
+                setCameraError(`Không tìm thấy ảnh sau ${timeout}s. Vui lòng thử lại.`);
                 // Reset error after 3s
                 setTimeout(() => setCameraError(null), 3000);
             }
@@ -387,7 +396,7 @@ const Capture = () => {
                 <div className="flex-1 relative overflow-hidden">
                     {/* Webcam Video - Always rendered so stream stays active */}
                     {/* Webcam Video OR Hot Folder Placeholder */}
-                    {configs.camera_mode === 'webcam' ? (
+                    {cameraMode === 'webcam' ? (
                         <video
                             ref={videoRef}
                             autoPlay
@@ -396,15 +405,15 @@ const Capture = () => {
                             className="w-full h-full object-cover"
                             style={{ transform: 'scaleX(-1)' }}
                         />
-                    ) : configs.camera_mode === 'canon' ? (
+                    ) : cameraMode === 'canon' ? (
                         <div className="w-full h-full bg-black relative">
                             <img
-                                src="http://localhost:5000/liveview"
-                                className="w-full h-full object-contain"
+                                src="http://localhost:5001/liveview"
+                                className="w-full h-full object-cover scale-[1.16]"
                                 alt="LiveView"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
-                                    setCameraError("Không thể kết nối Canon Middleware (Port 5000)");
+                                    setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
                                 }}
                             />
                         </div>
@@ -427,9 +436,13 @@ const Capture = () => {
                     {cameraError && (
                         <div className="absolute inset-0 bg-red-50 flex items-center justify-center">
                             <div className="text-center p-8">
-                                <p className="text-red-600 text-xl mb-4 font-semibold">Không thể truy cập webcam</p>
+                                <p className="text-red-600 text-xl mb-4 font-semibold">
+                                    {cameraMode === 'canon' ? 'Không thể kết nối Canon' : 'Không thể truy cập webcam'}
+                                </p>
                                 <p className="text-gray-600">{cameraError}</p>
-                                <p className="text-gray-500 text-sm mt-2">Vui lòng cho phép quyền truy cập camera</p>
+                                <p className="text-gray-500 text-sm mt-2">
+                                    {cameraMode === 'canon' ? 'Vui lòng kiểm tra Canon middleware cổng 5001' : 'Vui lòng cho phép quyền truy cập camera'}
+                                </p>
                             </div>
                         </div>
                     )}

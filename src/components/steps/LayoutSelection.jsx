@@ -4,6 +4,11 @@ import { useWorkflow } from '../../context/WorkflowContext';
 import { LAYOUTS } from '../../data/layouts';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 
+const layoutIconUrls = Object.fromEntries(
+    Object.entries(import.meta.glob('../../assets/icons/*', { eager: true, query: '?url', import: 'default' }))
+        .map(([path, url]) => [path.split('/').pop(), url])
+);
+
 const LayoutSelection = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
     const isUploadFlow = sessionData.source === 'upload';
@@ -111,7 +116,7 @@ const LayoutSelection = () => {
                                     </div>
                                 ) : (
                                     <img
-                                        src={`/src/assets/icons/${layout.icon}`}
+                                        src={layoutIconUrls[layout.icon]}
                                         alt={layout.name}
                                         className="w-full h-full object-contain mix-blend-multiply opacity-90"
                                     />

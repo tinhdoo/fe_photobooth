@@ -479,13 +479,17 @@ const Edit = () => {
         ctx.imageSmoothingQuality = 'high';
 
         if (printMode === 'double_strip') {
-            ctx.drawImage(sourceCanvas, 0, 0, 600, 1800);
-            ctx.drawImage(sourceCanvas, 600, 0, 600, 1800);
+            const stripSafeMargin = 28;
+            const stripWidth = 600 - (stripSafeMargin * 2);
+            const stripHeight = 1800 - (stripSafeMargin * 2);
+            ctx.drawImage(sourceCanvas, stripSafeMargin, stripSafeMargin, stripWidth, stripHeight);
+            ctx.drawImage(sourceCanvas, 600 + stripSafeMargin, stripSafeMargin, stripWidth, stripHeight);
             return { canvas, cutMode: '2x6' };
         }
 
         if (printMode === 'single_strip') {
-            ctx.drawImage(sourceCanvas, 300, 0, 600, 1800);
+            const stripSafeMargin = 28;
+            ctx.drawImage(sourceCanvas, 300 + stripSafeMargin, stripSafeMargin, 600 - (stripSafeMargin * 2), 1800 - (stripSafeMargin * 2));
             return { canvas, cutMode: 'none' };
         }
 

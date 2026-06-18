@@ -19,6 +19,7 @@ const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
+const CLOUD_SYNC_KEYS = ['price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule'];
 
 const DEFAULT_CONFIGS = {
     price: 60000,
@@ -28,6 +29,8 @@ const DEFAULT_CONFIGS = {
     session_timeout: 600,
     mobile_session_timeout: 300,
     countdown: 5,
+    hotfolder_capture_timeout: 30,
+    canon_capture_timeout: 30,
     camera_mode: 'webcam',
     hot_folder: 'C:/Photobooth_Input',
     staff_pin: '1310',
@@ -37,6 +40,7 @@ const DEFAULT_CONFIGS = {
     print_pink: 8,
     print_skin_whitening: 6,
     print_warmth: 2,
+    price_schedule: '[]',
 };
 
 const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
@@ -49,6 +53,8 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     session_timeout: parseInt(nextConfigs.session_timeout ?? fallback.session_timeout) || DEFAULT_CONFIGS.session_timeout,
     mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? fallback.mobile_session_timeout) || DEFAULT_CONFIGS.mobile_session_timeout,
     countdown: parseInt(nextConfigs.countdown ?? fallback.countdown) || DEFAULT_CONFIGS.countdown,
+    hotfolder_capture_timeout: parseInt(nextConfigs.hotfolder_capture_timeout ?? fallback.hotfolder_capture_timeout) || DEFAULT_CONFIGS.hotfolder_capture_timeout,
+    canon_capture_timeout: parseInt(nextConfigs.canon_capture_timeout ?? fallback.canon_capture_timeout) || DEFAULT_CONFIGS.canon_capture_timeout,
     camera_mode: nextConfigs.camera_mode || fallback.camera_mode || DEFAULT_CONFIGS.camera_mode,
     hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder,
     staff_pin: String(nextConfigs.staff_pin || fallback.staff_pin || DEFAULT_CONFIGS.staff_pin),
@@ -58,6 +64,7 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     print_pink: parseInt(nextConfigs.print_pink ?? fallback.print_pink) || 0,
     print_skin_whitening: parseInt(nextConfigs.print_skin_whitening ?? fallback.print_skin_whitening) || 0,
     print_warmth: parseInt(nextConfigs.print_warmth ?? fallback.print_warmth) || 0,
+    price_schedule: nextConfigs.price_schedule ?? fallback.price_schedule ?? DEFAULT_CONFIGS.price_schedule,
 });
 
 const readCachedConfigs = () => {
@@ -104,17 +111,40 @@ export const WorkflowProvider = ({ children }) => {
         try {
             if (!API_URL && !CLOUD_API_URL && !isLocalApp()) return;
             let res = null;
+            let configData = null;
 
-            if (CLOUD_API_URL) {
-                res = await fetch(`${cloudApiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
-            }
-
-            if ((!res || !res.ok) && (API_URL || isLocalApp())) {
+            if (API_URL || isLocalApp()) {
                 res = await fetch(`${apiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
+                if (res.ok) configData = await res.json();
             }
 
-            if (res.ok) {
-                const data = await res.json();
+            if (isLocalApp() && CLOUD_API_URL) {
+                const cloudRes = await fetch(`${cloudApiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
+                if (cloudRes.ok) {
+                    const cloudData = await cloudRes.json();
+                    const syncedConfig = {};
+                    CLOUD_SYNC_KEYS.forEach((key) => {
+                        if (cloudData[key] !== undefined) syncedConfig[key] = cloudData[key];
+                    });
+
+                    if (Object.keys(syncedConfig).length) {
+                        configData = { ...(configData || {}), ...syncedConfig };
+                        fetch(apiPath('/api/config'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(syncedConfig),
+                        }).catch((error) => console.error('Failed to sync cloud price config:', error));
+                    }
+                }
+            }
+
+            if (!configData && (!res || !res.ok) && CLOUD_API_URL) {
+                res = await fetch(`${cloudApiPath('/api/config')}?t=${Date.now()}`, { cache: 'no-store' });
+                if (res.ok) configData = await res.json();
+            }
+
+            if (configData) {
+                const data = configData;
                 setConfigs(prev => {
                     const normalized = normalizeConfigs(data, prev);
                     if (sameConfig(prev, normalized)) return prev;
@@ -166,7 +196,7 @@ export const WorkflowProvider = ({ children }) => {
         fallbackInterval = setInterval(() => {
             if (realtimeReady || document.visibilityState !== 'visible') return;
             fetchConfigs();
-        }, 300000);
+        }, isLocalApp() ? 60000 : 300000);
 
         const handleFocus = () => fetchConfigs();
         window.addEventListener('focus', handleFocus);
