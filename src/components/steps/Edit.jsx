@@ -479,7 +479,7 @@ const Edit = () => {
         ctx.imageSmoothingQuality = 'high';
 
         if (printMode === 'double_strip') {
-            const stripSafeMargin = 28;
+            const stripSafeMargin = 60;
             const stripWidth = 600 - (stripSafeMargin * 2);
             const stripHeight = 1800 - (stripSafeMargin * 2);
             ctx.drawImage(sourceCanvas, stripSafeMargin, stripSafeMargin, stripWidth, stripHeight);
@@ -488,7 +488,7 @@ const Edit = () => {
         }
 
         if (printMode === 'single_strip') {
-            const stripSafeMargin = 28;
+            const stripSafeMargin = 60;
             ctx.drawImage(sourceCanvas, 300 + stripSafeMargin, stripSafeMargin, 600 - (stripSafeMargin * 2), 1800 - (stripSafeMargin * 2));
             return { canvas, cutMode: 'none' };
         }
