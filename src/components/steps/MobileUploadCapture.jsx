@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import QRCodeStyling from 'qr-code-styling';

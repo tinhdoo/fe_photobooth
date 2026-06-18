@@ -1,4 +1,4 @@
-﻿import { useWorkflow } from '../context/WorkflowContext';
+import { useWorkflow } from '../context/WorkflowContext';
 import SessionTimer from '../components/common/SessionTimer';
 
 const MainLayout = ({ children }) => {

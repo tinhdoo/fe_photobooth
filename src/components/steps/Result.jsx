@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCodeStyling from 'qr-code-styling';
 import { CheckCircle2, QrCode } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';

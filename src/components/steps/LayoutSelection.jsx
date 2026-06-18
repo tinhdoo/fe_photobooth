@@ -1,8 +1,9 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { LAYOUTS } from '../../data/layouts';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getCurrentPricing } from '../../utils/pricing';
 
 const layoutIconUrls = Object.fromEntries(
     Object.entries(import.meta.glob('../../assets/icons/*', { eager: true, query: '?url', import: 'default' }))
@@ -12,9 +13,9 @@ const layoutIconUrls = Object.fromEntries(
 const LayoutSelection = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
     const isUploadFlow = sessionData.source === 'upload';
-    const layoutPrice = isUploadFlow
-        ? parseInt(configs?.mobile_price || 30000)
-        : parseInt(configs?.price || 60000);
+    
+    const pricing = getCurrentPricing(configs);
+    const layoutPrice = isUploadFlow ? pricing.mobile_price : pricing.price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 

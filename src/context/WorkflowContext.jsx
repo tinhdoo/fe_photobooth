@@ -19,7 +19,12 @@ const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
-const CLOUD_SYNC_KEYS = ['price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule'];
+const CLOUD_SYNC_KEYS = [
+    'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
+    'bg_welcome', 'bg_source-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
+    'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_print-photo', 'bg_wait-print-photo', 'bg_qr-photo',
+    'brand_text_primary', 'brand_text_secondary'
+];
 
 const DEFAULT_CONFIGS = {
     price: 60000,

@@ -1,14 +1,16 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';
+import { getCurrentPricing } from '../../utils/pricing';
 
 const PrintQuantity = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
     const layout = sessionData.layout || {};
     const isUploadFlow = sessionData.source === 'upload';
 
-    const basePrice = isUploadFlow ? parseInt(configs?.mobile_price || 30000) : parseInt(configs?.price || 60000);
-    const increment = isUploadFlow ? parseInt(configs?.mobile_print_price || 10000) : parseInt(configs?.print_price || 20000);
+    const pricing = getCurrentPricing(configs);
+    const basePrice = isUploadFlow ? pricing.mobile_price : pricing.price;
+    const increment = isUploadFlow ? pricing.mobile_print_price : pricing.print_price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 

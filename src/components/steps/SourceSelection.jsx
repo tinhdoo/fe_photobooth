@@ -1,12 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Smartphone } from 'lucide-react';
+import { Camera, Smartphone, ArrowLeft } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';
 
 const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
 
 const SourceSelection = () => {
-    const { nextStep, updateSessionData, configs } = useWorkflow();
+    const { nextStep, prevStep, updateSessionData, configs } = useWorkflow();
     const backgroundUrl = configs?.['bg_source-selection'];
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
@@ -18,6 +18,15 @@ const SourceSelection = () => {
 
     return (
         <div className="relative flex h-full min-h-screen w-full flex-col items-center justify-center space-y-8 overflow-hidden bg-[#FFF8E7] p-8">
+            <button
+                onClick={prevStep}
+                className="absolute top-6 left-6 z-20 flex items-center gap-2 rounded-full border border-[#D5B895]/20 bg-white px-6 py-3 font-serif font-bold shadow-sm transition-none active:scale-95"
+                style={{ color: primaryTextColor }}
+            >
+                <ArrowLeft size={24} />
+                <span>Quay lại</span>
+            </button>
+
             {backgroundUrl && (
                 isVideoUrl(backgroundUrl) ? (
                     <video

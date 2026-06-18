@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote } from 'lucide-react';
 import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
 
@@ -31,8 +31,7 @@ const Settings = () => {
         price_schedule: '[]'
     });
     const [priceScheduleForm, setPriceScheduleForm] = useState({
-        start_time: '',
-        end_time: '',
+        run_at: '',
         price: '',
         print_price: '',
         mobile_price: '',
@@ -110,27 +109,25 @@ const Settings = () => {
     };
 
     const addPriceSchedule = () => {
-        if (!priceScheduleForm.start_time) {
+        if (!priceScheduleForm.run_at) {
             setMessage({ type: 'error', text: 'Chọn thời gian áp dụng giá.' });
             return;
         }
 
         const item = {
             id: `${Date.now()}`,
-            start_time: priceScheduleForm.start_time,
-            end_time: priceScheduleForm.end_time,
+            run_at: priceScheduleForm.run_at,
             price: priceScheduleForm.price || configs.price,
             print_price: priceScheduleForm.print_price || configs.print_price,
             mobile_price: priceScheduleForm.mobile_price || configs.mobile_price,
             mobile_print_price: priceScheduleForm.mobile_print_price || configs.mobile_print_price,
-            enabled: true,
+            applied: false,
         };
 
-        const nextSchedule = [...getPriceSchedule(), item].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+        const nextSchedule = [...getPriceSchedule(), item].sort((a, b) => String(a.run_at).localeCompare(String(b.run_at)));
         setPriceSchedule(nextSchedule);
         setPriceScheduleForm({
-            start_time: '',
-            end_time: '',
+            run_at: '',
             price: '',
             print_price: '',
             mobile_price: '',
@@ -147,8 +144,14 @@ const Settings = () => {
         if (!isLocalAdmin) return;
         setHardwareLoading(true);
         try {
-            const res = await axios.get('/api/hardware/status');
-            setHardware(res.data);
+            const [hwRes, billRes] = await Promise.all([
+                axios.get('/api/hardware/status'),
+                axios.get('/api/bill/status').catch(() => ({ data: { enabled: false, status: 'error' } }))
+            ]);
+            setHardware({
+                ...hwRes.data,
+                bill: billRes.data
+            });
         } catch (error) {
             console.error("Error fetching hardware status:", error);
             setHardware({
@@ -157,7 +160,8 @@ const Settings = () => {
                 printer: { online: false, message: 'Không đọc được trạng thái máy in' },
                 camera: { online: false, message: 'Không đọc được trạng thái máy ảnh' },
                 internet: { online: false, message: 'Không kiểm tra được Internet' },
-                supabase: { online: false, message: 'Không kiểm tra được Supabase' }
+                supabase: { online: false, message: 'Không kiểm tra được Supabase' },
+                bill: { enabled: false, status: 'error' }
             });
         } finally {
             setHardwareLoading(false);
@@ -314,8 +318,10 @@ const Settings = () => {
     if (isLocalAdmin) {
         const printer = hardware?.printer || {};
         const camera = hardware?.camera || {};
-        const checks = { ...(hardware?.checks || {}), camera: cameraTestOk || Boolean(hardware?.checks?.camera) };
-        const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.supabase);
+        const bill = hardware?.bill || {};
+        const billOk = !bill.enabled || bill.status === 'connected';
+        const checks = { ...(hardware?.checks || {}), camera: cameraTestOk || Boolean(hardware?.checks?.camera), bill: billOk };
+        const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.supabase && checks.bill);
 
         return (
             <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
@@ -349,6 +355,7 @@ const Settings = () => {
                             {healthItem('Camera', checks.camera, Camera)}
                             {healthItem('Internet', checks.internet, Wifi)}
                             {healthItem('Supabase', checks.supabase, Database)}
+                            {bill.enabled && healthItem('Đầu đọc tiền', checks.bill, Banknote)}
                         </div>
                     </div>
                 </div>
@@ -453,6 +460,43 @@ const Settings = () => {
                             </button>
                         </div>
                     </section>
+
+                    {bill.enabled && (
+                        <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <div className="mb-5 flex items-start justify-between gap-4">
+                                <div>
+                                    <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
+                                        <Banknote size={22} className="text-[#52796f]" />
+                                        Máy đọc tiền
+                                    </h2>
+                                    <p className="mt-1 text-sm font-bold text-[#52796f]">Cổng {bill.port || 'Chưa thiết lập'}</p>
+                                </div>
+                                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(billOk)}`}>
+                                    {statusDot(billOk)}
+                                    {!bill.enabled ? 'Đang tắt' : (bill.status === 'connected' ? 'Đã kết nối' : 'Mất kết nối')}
+                                </span>
+                            </div>
+                            <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#2f3e46]">
+                                <div className="flex justify-between gap-4">
+                                    <span className="font-bold text-gray-500">Trạng thái cấu hình</span>
+                                    <span className="text-right font-bold">{bill.enabled ? 'Bật' : 'Tắt'}</span>
+                                </div>
+                                <div className="mt-3 flex justify-between gap-4">
+                                    <span className="font-bold text-gray-500">Tình trạng kết nối</span>
+                                    <span className="text-right font-bold">{bill.status === 'connected' ? 'OK' : 'Lỗi'}</span>
+                                </div>
+                            </div>
+                            <div className="mt-5 flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={fetchHardwareStatus}
+                                    className="rounded-xl border border-[#d8c0a0] px-5 py-2.5 text-sm font-bold text-[#7B5E43]"
+                                >
+                                    Kiểm tra
+                                </button>
+                            </div>
+                        </section>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -778,30 +822,23 @@ const Settings = () => {
                                     <div className="rounded-2xl border border-[#E7D3B7] bg-white p-6 shadow-sm">
                                         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                             <div>
-                                                <h4 className="text-base font-bold text-[#354f52]">Khung gio doi gia hang ngay</h4>
-                                                <p className="text-xs font-semibold text-gray-500">Lap lai moi ngay den khi xoa. De trong gio ket thuc neu muon ap dung tu gio bat dau tro di.</p>
+                                                <h4 className="text-base font-bold text-[#354f52]">Hen gio doi gia</h4>
+                                                <p className="text-xs font-semibold text-gray-500">Luu tren cloud va tu dong dong bo xuong may local.</p>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={addPriceSchedule}
                                                 className="rounded-full bg-[#52796f] px-5 py-2 text-sm font-black text-white"
                                             >
-                                                Them khung gio
+                                                Them lich
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                                             <input
-                                                type="time"
-                                                value={priceScheduleForm.start_time}
-                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, start_time: event.target.value }))}
-                                                className="rounded-xl border-gray-200 px-4 py-2.5 text-sm"
-                                            />
-                                            <input
-                                                type="time"
-                                                value={priceScheduleForm.end_time}
-                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, end_time: event.target.value }))}
-                                                placeholder="Den gio"
+                                                type="datetime-local"
+                                                value={priceScheduleForm.run_at}
+                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, run_at: event.target.value }))}
                                                 className="rounded-xl border-gray-200 px-4 py-2.5 text-sm"
                                             />
                                             {[
@@ -825,11 +862,11 @@ const Settings = () => {
                                             {getPriceSchedule().length === 0 ? (
                                                 <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chua co lich doi gia.</div>
                                             ) : getPriceSchedule().map((item) => (
-                                                <div key={item.id || `${item.start_time}-${item.end_time}`} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                                                <div key={item.id || item.run_at} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                                                     <div className="min-w-0 text-sm">
                                                         <div className="font-black text-[#2f3e46]">
-                                                            {item.start_time || '--:--'} - {item.end_time || 'tro di'}
-                                                            <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Lap moi ngay</span>
+                                                            {new Date(item.run_at).toLocaleString('vi-VN')}
+                                                            {item.applied ? <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Da ap dung</span> : <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Dang cho</span>}
                                                         </div>
                                                         <div className="mt-1 truncate font-semibold text-gray-500">
                                                             Chup {Number(item.price || 0).toLocaleString('vi-VN')}d · In them {Number(item.print_price || 0).toLocaleString('vi-VN')}d · Mobile {Number(item.mobile_price || 0).toLocaleString('vi-VN')}d · Mobile in {Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}d

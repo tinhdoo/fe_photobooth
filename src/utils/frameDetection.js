@@ -1,7 +1,23 @@
-const sortBoxes = (boxes) => boxes.sort((a, b) => {
-    if (Math.abs(a.y - b.y) < 5) return a.x - b.x;
-    return a.y - b.y;
-});
+const sortBoxes = (boxes) => {
+    const sortedByY = [...boxes].sort((a, b) => a.y - b.y);
+    const rows = [];
+    let currentRow = [];
+    for (const box of sortedByY) {
+        if (currentRow.length === 0) {
+            currentRow.push(box);
+        } else {
+            if (Math.abs(box.y - currentRow[0].y) < 5) {
+                currentRow.push(box);
+            } else {
+                rows.push(currentRow);
+                currentRow = [box];
+            }
+        }
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+    rows.forEach(row => row.sort((a, b) => a.x - b.x));
+    return rows.flat();
+};
 
 const toPercentBox = (bounds, width, height, expansion = 0.15) => {
     const wPx = bounds.maxX - bounds.minX + 1;

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Banknote, Clock, Monitor, Power, RefreshCw, Save } from 'lucide-react';
 import { io } from 'socket.io-client';
@@ -14,7 +14,7 @@ const BillSettings = () => {
     const [config, setConfig] = useState({ port: 'COM3', baudrate: 9600, enabled: false });
     const [mapping, setMapping] = useState({});
     const [ports, setPorts] = useState([]);
-    const [status, setStatus] = useState({ state: 'disconnected', message: 'ChÆ°a káº¿t ná»‘i' });
+    const [status, setStatus] = useState({ state: 'disconnected', message: 'Chưa kết nối' });
     const [lastDebug, setLastDebug] = useState(null);
     const [cashHistory, setCashHistory] = useState({ total: 0, count: 0, entries: [], date: '' });
     const [loading, setLoading] = useState(true);
@@ -36,8 +36,8 @@ const BillSettings = () => {
                 setStatus({
                     state: data.status,
                     message: data.status === 'connected'
-                        ? `ÄÃ£ káº¿t ná»‘i ${data.port || ''}`.trim()
-                        : `Lá»—i: ${data.message || 'KhÃ´ng xÃ¡c Ä‘á»‹nh'}`
+                        ? `Đã kết nối ${data.port || ''}`.trim()
+                        : `Lỗi: ${data.message || 'Không xác định'}`
                 });
             }
         });
@@ -103,16 +103,16 @@ const BillSettings = () => {
             setStatus({
                 state: statusRes.data?.status || 'disconnected',
                 message: statusRes.data?.status === 'connected'
-                    ? `ÄÃ£ káº¿t ná»‘i ${statusRes.data?.port || ''}`.trim()
+                    ? `Đã kết nối ${statusRes.data?.port || ''}`.trim()
                     : statusRes.data?.enabled
-                        ? 'ChÆ°a káº¿t ná»‘i'
-                        : 'Äang táº¯t'
+                        ? 'Chưa kết nối'
+                        : 'Đang tắt'
             });
             setDevices(Array.isArray(devicesRes.data) ? devicesRes.data : []);
             fetchPorts();
         } catch (error) {
             console.error('Failed to fetch bill devices', error);
-            setMessage({ type: 'error', text: 'KhÃ´ng táº£i Ä‘Æ°á»£c danh sÃ¡ch thiáº¿t bá»‹.' });
+            setMessage({ type: 'error', text: 'Không tải được danh sách thiết bị.' });
         } finally {
             setLoading(false);
         }
@@ -163,7 +163,7 @@ const BillSettings = () => {
             }
         } catch (error) {
             console.error('Failed to load bill config', error);
-            setMessage({ type: 'error', text: 'KhÃ´ng táº£i Ä‘Æ°á»£c cáº¥u hÃ¬nh Ä‘áº§u Ä‘á»c tiá»n.' });
+            setMessage({ type: 'error', text: 'Không tải được cấu hình đầu đọc tiền.' });
         } finally {
             setLoading(false);
         }
@@ -194,15 +194,15 @@ const BillSettings = () => {
                 bill_enabled: config.enabled,
                 bill_mapping: JSON.stringify(mapping)
             });
-            setMessage({ type: 'success', text: `ÄÃ£ lÆ°u cáº¥u hÃ¬nh cho ${selectedDeviceId}.` });
+            setMessage({ type: 'success', text: `Đã lưu cấu hình cho ${selectedDeviceId}.` });
             if (selectedIsLocal) {
                 setStatus({
                     state: config.enabled ? 'restarting' : 'disabled',
-                    message: config.enabled ? 'Äang khá»Ÿi Ä‘á»™ng láº¡i Ä‘áº§u Ä‘á»c...' : 'Äang táº¯t'
+                    message: config.enabled ? 'Đang khởi động lại đầu đọc...' : 'Đang tắt'
                 });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: `Lá»—i lÆ°u cáº¥u hÃ¬nh: ${error.message}` });
+            setMessage({ type: 'error', text: `Lỗi lưu cấu hình: ${error.message}` });
         }
 
         setTimeout(() => setMessage(null), 3000);
@@ -225,27 +225,27 @@ const BillSettings = () => {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
                     <Banknote size={28} />
                 </div>
-                <h2 className="text-2xl font-bold text-[#2f3e46]">Cáº¥u hÃ¬nh Ä‘áº§u Ä‘á»c tiá»n chá»‰ cháº¡y trÃªn mÃ¡y booth</h2>
+                <h2 className="text-2xl font-bold text-[#2f3e46]">Cấu hình đầu đọc tiền chỉ chạy trên máy booth</h2>
                 <p className="mt-3 text-sm leading-6 text-[#52796f]">
-                    Trang Vercel khÃ´ng káº¿t ná»‘i trá»±c tiáº¿p Ä‘Æ°á»£c cá»•ng COM hoáº·c Ä‘áº§u Ä‘á»c tiá»n. HÃ£y má»Ÿ admin báº±ng
+                    Trang Vercel không kết nối trực tiếp được cổng COM hoặc đầu đọc tiền. Hãy mở admin bằng
                     <span className="font-semibold"> http://localhost:5173/admin/bill-settings </span>
-                    trÃªn mÃ¡y photobooth Ä‘ang cáº¯m thiáº¿t bá»‹.
+                    trên máy photobooth đang cắm thiết bị.
                 </p>
             </div>
         );
     }
 
     if (loading && !selectedDeviceId) {
-        return <div className="p-8 text-center text-gray-500">Äang táº£i danh sÃ¡ch thiáº¿t bá»‹...</div>;
+        return <div className="p-8 text-center text-gray-500">Đang tải danh sách thiết bị...</div>;
     }
 
     const statusIsConnected = status.state === 'connected';
 
     return (
-        <div className="space-y-8">
+        <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
             <div>
-                <h2 className="text-3xl font-bold text-[#2f3e46]">CÃ i Ä‘áº·t Ä‘áº§u Ä‘á»c tiá»n</h2>
-                <p className="text-[#52796f]">Cáº¥u hÃ¬nh cá»•ng COM, baudrate vÃ  má»‡nh giÃ¡ nháº­n tiá»n máº·t.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cài đặt đầu đọc tiền</h1>
+                <p className="mt-1 text-sm md:text-base text-[#52796f]">Cấu hình cổng COM, baudrate và mệnh giá nhận tiền mặt.</p>
             </div>
 
             {message && (
@@ -259,25 +259,25 @@ const BillSettings = () => {
                     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center gap-3">
                             <Monitor className="text-[#52796f]" />
-                            <h3 className="text-xl font-bold text-[#2f3e46]">Thiáº¿t bá»‹</h3>
+                            <h3 className="text-xl font-bold text-[#2f3e46]">Thiết bị</h3>
                         </div>
 
-                        <label className="mb-2 block text-sm font-medium text-gray-700">Chá»n thiáº¿t bá»‹ cáº¥u hÃ¬nh</label>
+                        <label className="mb-2 block text-sm font-medium text-gray-700">Chọn thiết bị cấu hình</label>
                         <select
                             value={selectedDeviceId}
                             onChange={(event) => setSelectedDeviceId(event.target.value)}
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 shadow-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
                         >
                             {devices.map((device) => (
                                 <option key={device.device_id} value={device.device_id}>
-                                    {device.name} {device.device_id === currentDeviceId ? '(MÃ¡y nÃ y)' : ''}
+                                    {device.name} {device.device_id === currentDeviceId ? '(Máy này)' : ''}
                                 </option>
                             ))}
                         </select>
 
                         {!selectedIsLocal && selectedDeviceId && (
                             <div className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600">
-                                Báº¡n Ä‘ang cáº¥u hÃ¬nh thiáº¿t bá»‹ khÃ¡c. Tráº¡ng thÃ¡i live chá»‰ chÃ­nh xÃ¡c khi mÃ¡y Ä‘Ã³ Ä‘ang má»Ÿ.
+                                Bạn đang cấu hình thiết bị khác. Trạng thái live chỉ chính xác khi máy đó đang mở.
                             </div>
                         )}
                     </div>
@@ -286,7 +286,7 @@ const BillSettings = () => {
                         <div className="mb-6 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Power size={20} className={config.enabled ? 'text-green-600' : 'text-gray-400'} />
-                                <h3 className="text-xl font-bold text-[#2f3e46]">Káº¿t ná»‘i</h3>
+                                <h3 className="text-xl font-bold text-[#2f3e46]">Kết nối</h3>
                             </div>
                             <label className="relative inline-flex cursor-pointer items-center">
                                 <input
@@ -296,19 +296,19 @@ const BillSettings = () => {
                                     onChange={handleConfigChange}
                                     className="peer sr-only"
                                 />
-                                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-[#52796f] peer-checked:after:translate-x-full peer-checked:after:border-white" />
+                                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-[#d8b98e] peer-checked:after:translate-x-full peer-checked:after:border-white" />
                             </label>
                         </div>
 
                         <div className="space-y-4">
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-gray-700">Cá»•ng COM</label>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Cổng COM</label>
                                 {ports.length > 0 ? (
                                     <select
                                         name="port"
                                         value={config.port}
                                         onChange={handleConfigChange}
-                                        className="block w-full rounded-lg border border-gray-200 px-3 py-2.5 shadow-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
                                     >
                                         {ports.map((port) => (
                                             <option key={port.device} value={port.device}>
@@ -326,7 +326,7 @@ const BillSettings = () => {
                                         value={config.port}
                                         onChange={handleConfigChange}
                                         placeholder="COM3"
-                                        className="block w-full rounded-lg border border-gray-200 px-3 py-2.5 shadow-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
                                     />
                                 )}
                                 <button
@@ -334,7 +334,7 @@ const BillSettings = () => {
                                     onClick={fetchPorts}
                                     className="mt-2 text-sm font-semibold text-[#52796f]"
                                 >
-                                    QuÃ©t láº¡i cá»•ng COM
+                                    Quét lại cổng COM
                                 </button>
                             </div>
 
@@ -344,7 +344,7 @@ const BillSettings = () => {
                                     name="baudrate"
                                     value={config.baudrate}
                                     onChange={handleConfigChange}
-                                    className="block w-full rounded-lg border border-gray-200 px-3 py-2.5 shadow-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                    className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
                                 >
                                     <option value="9600">9600</option>
                                     <option value="19200">19200</option>
@@ -353,7 +353,7 @@ const BillSettings = () => {
                             </div>
 
                             <div className="flex items-center justify-between border-t border-gray-50 pt-4">
-                                <span className="text-sm text-gray-500">Tráº¡ng thÃ¡i</span>
+                                <span className="text-sm text-gray-500">Trạng thái</span>
                                 <div className="flex items-center gap-2">
                                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusIsConnected ? 'bg-green-500' : 'bg-red-500'}`} />
                                     <span className={`text-sm font-bold ${statusIsConnected ? 'text-green-600' : 'text-red-500'}`}>
@@ -368,31 +368,31 @@ const BillSettings = () => {
                 <div className="w-full space-y-6 xl:w-2/3">
                     <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
                         <div className="mb-6 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-[#2f3e46]">Cáº¥u hÃ¬nh má»‡nh giÃ¡</h3>
+                            <h3 className="text-xl font-bold text-[#2f3e46]">Cấu hình mệnh giá</h3>
                             <button
                                 type="button"
                                 onClick={saveConfig}
-                                className="inline-flex items-center rounded-xl bg-[#52796f] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-green-900/10"
+                                className="inline-flex items-center rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#d8b98e]/20"
                             >
                                 <Save size={18} className="mr-2" />
-                                LÆ°u cáº¥u hÃ¬nh
+                                Lưu cấu hình
                             </button>
                         </div>
 
                         <p className="mb-6 rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
-                            Nháº­p giÃ¡ trá»‹ tiá»n VND tÆ°Æ¡ng á»©ng vá»›i tá»«ng mÃ£ Hex Ä‘áº§u Ä‘á»c gá»­i vá». Äáº·t 0 Ä‘á»ƒ vÃ´ hiá»‡u hÃ³a má»‡nh giÃ¡ Ä‘Ã³.
+                            Nhập giá trị tiền VND tương ứng với từng mã Hex đầu đọc gửi về. Đặt 0 để vô hiệu hóa mệnh giá đó.
                         </p>
 
                         <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
                             {defaultHexCodes.map((hex) => (
                                 <div key={hex} className="space-y-2">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">MÃ£ 0x{hex}</label>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">Mã 0x{hex}</label>
                                     <div className="relative rounded-lg shadow-sm">
                                         <input
                                             type="number"
                                             value={mapping[hex] || ''}
                                             onChange={(event) => handleMappingChange(hex, event.target.value)}
-                                            className="block w-full rounded-lg border border-gray-200 py-3 pl-4 pr-12 font-mono text-lg font-medium focus:border-[#52796f] focus:ring-[#52796f]"
+                                            className="block w-full rounded-xl border border-gray-200 py-3 pl-4 pr-12 font-mono text-lg font-medium focus:border-[#d8b98e] focus:ring-[#d8b98e]"
                                             placeholder="0"
                                         />
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
@@ -413,14 +413,14 @@ const BillSettings = () => {
                         </div>
 
                         <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 p-6">
-                            <span className="text-gray-400">MÃ£ Hex nháº­n gáº§n nháº¥t</span>
+                            <span className="text-gray-400">Mã Hex nhận gần nhất</span>
                             <div className="font-mono text-3xl font-bold tracking-wider text-green-400">
                                 {lastDebug ? `0x${lastDebug}` : '--'}
                             </div>
                         </div>
                         <p className="mt-4 flex items-center gap-2 text-xs text-gray-400">
                             <Banknote size={14} />
-                            ÄÃºt thá»­ tiá»n vÃ o mÃ¡y Ä‘á»ƒ xem mÃ£ Hex xuáº¥t hiá»‡n táº¡i Ä‘Ã¢y.
+                            Đút thử tiền vào máy để xem mã Hex xuất hiện tại đây.
                         </p>
                     </div>
 
@@ -429,29 +429,29 @@ const BillSettings = () => {
                             <div>
                                 <h3 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
                                     <Clock size={20} className="text-[#52796f]" />
-                                    Lá»‹ch sá»­ tiá»n máº·t hÃ´m nay
+                                    Lịch sử tiền mặt hôm nay
                                 </h3>
                                 <p className="mt-1 text-sm text-gray-500">
-                                    Tá»± Ä‘á»™ng reset hiá»ƒn thá»‹ khi sang ngÃ y má»›i{cashHistory.date ? ` (${cashHistory.date})` : ''}.
+                                    Tự động reset hiển thị khi sang ngày mới{cashHistory.date ? ` (${cashHistory.date})` : ''}.
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => fetchCashHistory()}
-                                className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-[#52796f]"
+                                className="inline-flex items-center justify-center rounded-xl border border-[#d8c0a0] px-4 py-2 text-sm font-bold text-[#7B5E43]"
                             >
                                 <RefreshCw size={16} className="mr-2" />
-                                LÃ m má»›i
+                                Làm mới
                             </button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="rounded-2xl bg-[#F6F1E8] p-5">
-                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tá»•ng tiá»n</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tổng tiền</p>
                                 <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{formatVnd(cashHistory.total)}</p>
                             </div>
                             <div className="rounded-2xl bg-[#F6F1E8] p-5">
-                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Sá»‘ láº§n nháº­n</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Số lần nhận</p>
                                 <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{cashHistory.count}</p>
                             </div>
                         </div>
@@ -461,8 +461,8 @@ const BillSettings = () => {
                                 <table className="w-full text-left text-sm">
                                     <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wider text-gray-400">
                                         <tr>
-                                            <th className="px-4 py-3">Thá»i gian</th>
-                                            <th className="px-4 py-3">Má»‡nh giÃ¡</th>
+                                            <th className="px-4 py-3">Thời gian</th>
+                                            <th className="px-4 py-3">Mệnh giá</th>
                                             <th className="px-4 py-3">Hex</th>
                                         </tr>
                                     </thead>
@@ -478,7 +478,7 @@ const BillSettings = () => {
                                 </table>
                             ) : (
                                 <div className="p-8 text-center text-sm text-gray-400">
-                                    ChÆ°a cÃ³ láº§n nháº­n tiá»n máº·t nÃ o trong ngÃ y.
+                                    Chưa có lần nhận tiền mặt nào trong ngày.
                                 </div>
                             )}
                         </div>

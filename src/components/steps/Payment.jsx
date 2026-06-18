@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useRef } from 'react';
 import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';

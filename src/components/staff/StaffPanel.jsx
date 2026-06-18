@@ -24,7 +24,7 @@ const formatTime = (value) => value ? new Date(value).toLocaleString('vi-VN', {
     month: '2-digit',
 }) : '--';
 
-const StaffPanel = ({ onClose }) => {
+const StaffPanel = ({ onClose, embedded = false }) => {
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState(null);
@@ -74,12 +74,16 @@ const StaffPanel = ({ onClose }) => {
 
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6 font-sans"
+            className={embedded
+                ? "relative h-full w-full font-sans"
+                : "fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6 font-sans"}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onPointerUp={(event) => event.stopPropagation()}
         >
-            <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#E7D3B7] bg-[#FFF8E7] shadow-2xl">
+            <div className={embedded
+                ? "flex h-full w-full flex-col overflow-hidden bg-[#FFF8E7]"
+                : "flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#E7D3B7] bg-[#FFF8E7] shadow-2xl"}>
                 <div className="flex items-center justify-between border-b border-[#E7D3B7] bg-white px-6 py-4">
                     <div>
                         <h2 className="text-2xl font-black text-[#3F3127]">Staff Panel</h2>
@@ -93,13 +97,15 @@ const StaffPanel = ({ onClose }) => {
                             <RefreshCcw size={18} />
                             Tải lại
                         </button>
-                        <button
-                            onClick={onClose}
-                            className="rounded-full bg-[#8E6B4D] p-3 text-white"
-                            aria-label="Đóng"
-                        >
-                            <X size={20} />
-                        </button>
+                        {onClose && (
+                            <button
+                                onClick={onClose}
+                                className="rounded-full bg-[#8E6B4D] p-3 text-white"
+                                aria-label="Đóng"
+                            >
+                                <X size={20} />
+                            </button>
+                        )}
                     </div>
                 </div>
 

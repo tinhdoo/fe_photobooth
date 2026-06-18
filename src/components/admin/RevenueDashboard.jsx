@@ -3,10 +3,7 @@ import axios from 'axios';
 import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2 } from 'lucide-react';
 import { io } from "socket.io-client";
 
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || '';
 const apiPath = (path) => `${CLOUD_API_URL}${path}`;
 
 const RevenueDashboard = () => {

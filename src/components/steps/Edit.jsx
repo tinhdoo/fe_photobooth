@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import axios from 'axios';
@@ -844,7 +844,7 @@ const Edit = () => {
                         }
                     });
 
-                    const sessionBaseUrl = CLOUD_API_URL || API_URL;
+                    const sessionBaseUrl = API_URL;
                     const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
                     const printerCopies = printMode === 'double_strip'
                         ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))

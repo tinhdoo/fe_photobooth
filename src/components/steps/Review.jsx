@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, RotateCcw } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';

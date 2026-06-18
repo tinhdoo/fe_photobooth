@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useWorkflow } from '../../context/WorkflowContext';
-import StaffPanel from '../staff/StaffPanel';
+import ManagementPanel from '../staff/ManagementPanel';
 import { Lock, X } from 'lucide-react';
 
 const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
@@ -8,7 +8,7 @@ const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
 const Welcome = () => {
     const { nextStep, configs } = useWorkflow();
     const backgroundUrl = configs?.bg_welcome || '/1.png';
-    const [showStaffPanel, setShowStaffPanel] = useState(false);
+    const [showManagementPanel, setShowManagementPanel] = useState(false);
     const [showPinCard, setShowPinCard] = useState(false);
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
@@ -23,7 +23,11 @@ const Welcome = () => {
         }
     };
 
-    const startLongPress = () => {
+    const startLongPress = (e) => {
+        // Prevent default to avoid context menu on touch
+        if (e && e.preventDefault && e.type !== 'pointerdown') {
+            e.preventDefault();
+        }
         longPressTriggered.current = false;
         clearLongPress();
         longPressTimer.current = window.setTimeout(() => {
@@ -31,7 +35,7 @@ const Welcome = () => {
             setPinInput('');
             setPinError('');
             setShowPinCard(true);
-        }, 5000);
+        }, 3000); // Giảm xuống 3 giây cho dễ thao tác
     };
 
     const handleRelease = () => {
@@ -55,7 +59,7 @@ const Welcome = () => {
     const submitPin = (value = pinInput) => {
         if (String(value) === staffPin) {
             closePinCard();
-            setShowStaffPanel(true);
+            setShowManagementPanel(true);
             return;
         }
         setPinError('PIN không đúng.');
@@ -78,7 +82,9 @@ const Welcome = () => {
             onPointerUp={handleRelease}
             onPointerCancel={handleRelease}
             onPointerLeave={handleRelease}
+            onContextMenu={(e) => e.preventDefault()}
             onClick={handleClick}
+            style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
         >
             {isVideoUrl(backgroundUrl) ? (
                 <video
@@ -97,8 +103,8 @@ const Welcome = () => {
                 />
             )}
 
-            {showStaffPanel && (
-                <StaffPanel onClose={() => setShowStaffPanel(false)} />
+            {showManagementPanel && (
+                <ManagementPanel onClose={() => setShowManagementPanel(false)} />
             )}
 
             {showPinCard && (

@@ -143,7 +143,7 @@ async function listStorageSessions(supabase) {
 async function listDbSessions(supabase) {
     const { data, error } = await supabase
         .from('photo_sessions')
-        .select('id, uuid, payment_method, amount, meta_data, status, created_at, updated_at')
+        .select('id, uuid, payment_method, amount, meta_data, status, created_at')
         .order('created_at', { ascending: false })
         .limit(1000);
 
