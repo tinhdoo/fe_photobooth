@@ -5,6 +5,7 @@ const DEFAULT_CONFIG = {
     print_price: 20000,
     mobile_price: 30000,
     mobile_print_price: 10000,
+    price_schedule: '[]',
     session_timeout: 600,
     mobile_session_timeout: 300,
     countdown: 5,
