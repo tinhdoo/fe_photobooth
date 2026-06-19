@@ -668,38 +668,34 @@ const Settings = () => {
             <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-6">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt & Thiết bị</h1>
-                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
+                    <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
                 </div>
 
-                <nav className="space-y-2">
-                    <button
-                        onClick={() => setActiveTab('general')}
-                        className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl font-bold transition-all text-left ${activeTab === 'general'
-                            ? 'bg-white text-[#e63946] shadow-sm border border-green-100'
-                            : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
-                            }`}
-                    >
-                        <div className={`p-2 rounded-lg ${activeTab === 'general' ? 'bg-[#e63946]/10' : 'bg-transparent'}`}>
-                            <SettingsIcon size={20} />
-                        </div>
-                        Cài đặt chung
-                    </button>
-
-                    {isLocalAdmin && (
+                {isLocalAdmin && (
+                    <nav className="space-y-2">
                         <button
-                            onClick={() => setActiveTab('devices')}
-                            className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl font-bold transition-all text-left ${activeTab === 'devices'
-                                ? 'bg-white text-[#e63946] shadow-sm border border-green-100'
+                            onClick={() => setActiveTab('general')}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-left ${activeTab === 'general'
+                                ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
                                 : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
                                 }`}
                         >
-                            <div className={`p-2 rounded-lg ${activeTab === 'devices' ? 'bg-[#e63946]/10' : 'bg-transparent'}`}>
-                                <Monitor size={20} />
-                            </div>
+                            <SettingsIcon size={20} />
+                            Cài đặt chung
+                        </button>
+
+                        <button
+                            onClick={() => setActiveTab('devices')}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-left ${activeTab === 'devices'
+                                ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
+                                : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
+                                }`}
+                        >
+                            <Monitor size={20} />
                             Quản lý Thiết bị
                         </button>
-                    )}
-                </nav>
+                    </nav>
+                )}
             </div>
 
             {/* Right Content Area */}

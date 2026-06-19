@@ -320,7 +320,7 @@ const FrameManager = () => {
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 lg:gap-6">
                 <div className="w-full lg:w-auto">
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Quản lý khung hình</h1>
-                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Quản lý khung viền cho máy ảnh của bạn</p>
+                    <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý khung viền cho máy ảnh của bạn</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">

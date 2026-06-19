@@ -100,7 +100,7 @@ const CodeManager = () => {
         <div className="animate-fadeIn">
             <div className="mb-6 lg:mb-8">
                 <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Mã thanh toán</h1>
-                <p className="text-sm md:text-base text-[#e63946] mt-1">Tạo và quản lý các mã kích hoạt.</p>
+                <p className="text-sm md:text-base text-gray-500 mt-1">Tạo và quản lý các mã kích hoạt.</p>
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6">

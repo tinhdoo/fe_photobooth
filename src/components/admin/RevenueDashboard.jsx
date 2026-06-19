@@ -231,7 +231,7 @@ const RevenueDashboard = () => {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 lg:mb-8">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Thống kê doanh thu</h1>
-                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
+                    <p className="text-gray-500 mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
                 </div>
             </div>
 

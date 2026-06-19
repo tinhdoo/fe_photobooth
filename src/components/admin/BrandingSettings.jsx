@@ -247,10 +247,15 @@ const BrandingSettings = () => {
     };
 
     return (
-        <div className="mx-auto max-w-6xl space-y-8 pb-12">
+        <div className="mx-auto max-w-6xl space-y-6 md:space-y-8 animate-fadeIn pb-20 md:pb-0">
             <StatusBanner message={statusMessage} />
 
-            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-6 shadow-sm">
+            <div className="mb-6 lg:mb-8">
+                <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Giao diện & Thương hiệu</h1>
+                <p className="text-sm md:text-base text-gray-500 mt-1">Cấu hình logo, hình nền và màu sắc hiển thị trên quầy booth.</p>
+            </div>
+
+            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-4 sm:p-6 shadow-sm">
                 <div className="mb-6">
                     <h2 className="mb-1 text-xl font-bold text-[#3F3127]">Thương hiệu</h2>
                     <p className="text-sm text-[#7A5A3B]">Hình ảnh hiển thị trên giao diện booth.</p>
@@ -271,7 +276,7 @@ const BrandingSettings = () => {
                 </div>
             </section>
 
-            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-4 sm:p-6 shadow-sm">
                 <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 className="mb-1 text-xl font-bold text-[#3F3127]">Màu chữ giao diện</h2>
@@ -309,7 +314,7 @@ const BrandingSettings = () => {
                 </div>
             </section>
 
-            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-[#F1DDBE] bg-white p-4 sm:p-6 shadow-sm">
                 <div className="mb-6">
                     <h2 className="mb-1 text-xl font-bold text-[#3F3127]">Hình nền từng trang</h2>
                     <p className="text-sm text-[#7A5A3B]">Cấu hình ảnh nền riêng cho từng màn hình trong luồng chụp.</p>
