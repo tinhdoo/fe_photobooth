@@ -212,13 +212,13 @@ const CodeManager = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-4 text-xs text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                        <div className="flex items-center gap-1.5">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                        <div className="flex items-center gap-1.5 min-w-fit">
                                             <Calendar size={12} />
                                             <span>Tạo: {new Date(code.created_at).toLocaleDateString('vi-VN')}</span>
                                         </div>
                                         {code.expires_at && (
-                                            <div className="flex items-center gap-1.5 text-orange-600/80">
+                                            <div className="flex items-center gap-1.5 text-orange-600/80 min-w-fit">
                                                 <Clock size={12} />
                                                 <span>Hết hạn: {new Date(code.expires_at).toLocaleDateString('vi-VN')}</span>
                                             </div>

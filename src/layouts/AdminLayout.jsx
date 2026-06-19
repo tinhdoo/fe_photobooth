@@ -27,7 +27,7 @@ const AdminLayout = () => {
 
     const menuItems = [
         { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán' },
-        { to: '/admin', icon: <Layout size={22} />, label: 'Dashboard' },
+        { to: '/admin', icon: <Layout size={22} />, label: 'Frame' },
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt' },
@@ -46,7 +46,7 @@ const AdminLayout = () => {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* Desktop Sidebar */}
             <div className="hidden lg:flex w-64 flex-col border-r border-gray-100 bg-white">
                 <div className="border-b border-gray-100 p-6">
@@ -121,7 +121,7 @@ const AdminLayout = () => {
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-auto pb-20 lg:pb-0">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">
                     <main className="p-4 md:p-8">
                         <Outlet />
                     </main>
