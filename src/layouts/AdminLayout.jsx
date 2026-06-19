@@ -26,8 +26,8 @@ const AdminLayout = () => {
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
 
     const menuItems = [
-        { to: '/admin', icon: <Layout size={22} />, label: 'Dashboard' },
         { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán' },
+        { to: '/admin', icon: <Layout size={22} />, label: 'Dashboard' },
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt' },
@@ -37,8 +37,8 @@ const AdminLayout = () => {
             : item.to !== '/admin/bill-settings'
     ));
 
-    // For bottom nav on mobile, pick the most important 4 items
-    const mobileNavItems = menuItems.slice(0, 4);
+    // For bottom nav on mobile, pick the most important 4 items (which now starts with Codes)
+    const mobileNavItems = menuItems.filter(item => item.to !== '/admin/settings');
 
     const isActive = (to) => {
         if (to === '/admin') return location.pathname === '/admin';
