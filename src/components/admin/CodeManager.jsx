@@ -132,7 +132,7 @@ const CodeManager = () => {
                                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="datetime-local"
-                                    className="w-full max-w-full min-w-0 pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-sm text-[#1a1a2e]"
+                                    className="w-full max-w-full min-w-0 box-border pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-xs md:text-sm text-[#1a1a2e]"
                                     value={formData.expiresAt}
                                     onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
                                     min={getMinDateTime()}

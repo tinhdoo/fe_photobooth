@@ -122,7 +122,7 @@ const AdminLayout = () => {
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">
-                    <main className="p-4 md:p-8">
+                    <main className="p-4 md:p-8 w-full max-w-full overflow-x-hidden box-border">
                         <Outlet />
                     </main>
                 </div>
