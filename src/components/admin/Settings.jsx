@@ -857,7 +857,7 @@ const Settings = () => {
                                                 type="datetime-local"
                                                 value={priceScheduleForm.run_at}
                                                 onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, run_at: event.target.value }))}
-                                                className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
+                                                className="w-full max-w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
                                             />
                                             {[
                                                 ['price', 'Giá chụp'],
@@ -871,7 +871,7 @@ const Settings = () => {
                                                     placeholder={label}
                                                     value={priceScheduleForm[key]}
                                                     onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                                                    className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
+                                                    className="w-full max-w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
                                                 />
                                             ))}
                                         </div>
