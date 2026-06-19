@@ -458,8 +458,8 @@ const RevenueDashboard = () => {
                                     onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
+                            <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
+                                <div className="min-w-0 w-full overflow-hidden">
                                     <label htmlFor="startTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Từ giờ</label>
                                     <input
                                         type="time"
@@ -470,7 +470,7 @@ const RevenueDashboard = () => {
                                         onChange={(e) => setDateRange({ ...dateRange, startTime: e.target.value })}
                                     />
                                 </div>
-                                <div>
+                                <div className="min-w-0 w-full overflow-hidden">
                                     <label htmlFor="endTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Đến giờ</label>
                                     <input
                                         type="time"
