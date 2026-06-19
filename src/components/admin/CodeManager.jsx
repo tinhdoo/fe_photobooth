@@ -99,15 +99,15 @@ const CodeManager = () => {
     return (
         <div className="animate-fadeIn">
             <div className="mb-6 lg:mb-8">
-                <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Mã thanh toán</h1>
-                <p className="text-sm md:text-base text-[#52796f] mt-1">Tạo và quản lý các mã kích hoạt.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Mã thanh toán</h1>
+                <p className="text-sm md:text-base text-[#e63946] mt-1">Tạo và quản lý các mã kích hoạt.</p>
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6">
                 {/* --- 1. GENERATION FORM --- */}
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit">
-                    <h3 className="text-lg md:text-xl font-bold text-[#2f3e46] mb-5 flex items-center gap-2 pb-4 border-b border-gray-100">
-                        <ArrowRight className="bg-[#52796f] text-white rounded-full p-1" size={24} />
+                    <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-5 flex items-center gap-2 pb-4 border-b border-gray-100">
+                        <ArrowRight className="bg-[#e63946] text-white rounded-full p-1" size={24} />
                         Tạo mã mới
                     </h3>
 
@@ -118,7 +118,7 @@ const CodeManager = () => {
                                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="number"
-                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#52796f] bg-gray-50 focus:bg-white transition-all font-medium"
+                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
                                     value={formData.value}
                                     onChange={e => setFormData({ ...formData, value: parseInt(e.target.value) || 0 })}
                                     step="1000"
@@ -132,7 +132,7 @@ const CodeManager = () => {
                                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="datetime-local"
-                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#52796f] bg-gray-50 focus:bg-white transition-all text-sm"
+                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-sm"
                                     value={formData.expiresAt}
                                     onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
                                     min={getMinDateTime()}
@@ -147,7 +147,7 @@ const CodeManager = () => {
                                 <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="number"
-                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#52796f] bg-gray-50 focus:bg-white transition-all font-medium"
+                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
                                     value={formData.quantity}
                                     onChange={e => setFormData({ ...formData, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                                     min="1" max="100"
@@ -158,7 +158,7 @@ const CodeManager = () => {
                         <button
                             onClick={handleGenerate}
                             disabled={loading}
-                            className="w-full py-3.5 bg-[#52796f] text-white rounded-xl font-bold hover:bg-[#3f6158] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#52796f]/20 active:scale-[0.98] mt-2 text-base"
+                            className="w-full py-3.5 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] mt-2 text-base"
                         >
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -173,7 +173,7 @@ const CodeManager = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
                     <div className="p-5 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <div>
-                            <h3 className="text-lg md:text-xl font-bold text-[#2f3e46]">Danh sách mã</h3>
+                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">Danh sách mã</h3>
                             <p className="text-xs text-gray-500 mt-0.5 md:hidden">Vuốt để xem thêm</p>
                         </div>
                         <button
@@ -195,7 +195,7 @@ const CodeManager = () => {
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="font-mono text-lg font-bold text-[#2f3e46] tracking-wide">{code.code}</span>
+                                                <span className="font-mono text-lg font-bold text-[#1a1a2e] tracking-wide">{code.code}</span>
                                             </div>
                                             <div className="text-emerald-600 font-bold text-base">
                                                 {formatCurrency(code.value)}
@@ -251,7 +251,7 @@ const CodeManager = () => {
                                     codes.map((code) => (
                                         <tr key={code.id} className="hover:bg-gray-50/80 transition-colors group">
                                             <td className="py-4 pl-6">
-                                                <span className="font-mono font-bold text-[#2f3e46] text-lg bg-gray-100/50 px-2 py-1 rounded">{code.code}</span>
+                                                <span className="font-mono font-bold text-[#1a1a2e] text-lg bg-gray-100/50 px-2 py-1 rounded">{code.code}</span>
                                             </td>
                                             <td className="py-4 font-bold text-emerald-600">{formatCurrency(code.value)}</td>
                                             <td className="py-4 text-center">
@@ -306,7 +306,7 @@ const CodeManager = () => {
                             <button
                                 onClick={() => setNotification({ ...notification, show: false })}
                                 className={`w-full py-3.5 rounded-xl font-bold text-white transition-all active:scale-[0.98] ${notification.type === 'success'
-                                    ? 'bg-[#52796f] hover:bg-[#3f6158] shadow-lg shadow-[#52796f]/30'
+                                    ? 'bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30'
                                     : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30'
                                     }`}
                             >

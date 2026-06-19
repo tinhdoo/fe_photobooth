@@ -24,6 +24,7 @@ export default async function handler(req, res) {
         const accountNumber = process.env.SEPAY_ACCOUNT_NUMBER || '96247LZ0ZM';
         const template = process.env.SEPAY_TEMPLATE || 'compact';
         const sessionId = req.body?.session_id || null;
+        const deviceId = req.body?.device_id || null;
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
         let payment = null;
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
                     bank,
                     account_number: accountNumber,
                     expires_at: expiresAt,
+                    raw_payload: deviceId ? { device_id: deviceId } : null,
                 })
                 .select()
                 .single();

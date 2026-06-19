@@ -92,6 +92,7 @@ function normalizeSessionTransaction(session, source = 'session') {
         method_label: methodLabel(paymentMethod),
         detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
         source,
+        device_id: meta.device_id || null,
     };
 }
 
@@ -165,20 +166,24 @@ async function listPaymentTransactions(supabase) {
     if (error && isMissingTable(error)) return [];
     if (error) throw error;
 
-    return (Array.isArray(data) ? data : []).map((payment) => ({
-        id: payment.session_id || payment.id,
-        code: payment.code,
-        value: toNumber(payment.amount),
-        status: payment.status,
-        used_at: payment.paid_at || payment.created_at,
-        created_at: payment.created_at,
-        payment_method: 'qr',
-        payment_code: null,
-        sepay_order_code: payment.code,
-        method_label: methodLabel('qr'),
-        detail_label: detailLabel('qr', null, payment.code),
-        source: 'payment',
-    }));
+    return (Array.isArray(data) ? data : []).map((payment) => {
+        const payload = normalizeMeta(payment.raw_payload);
+        return {
+            id: payment.session_id || payment.id,
+            code: payment.code,
+            value: toNumber(payment.amount),
+            status: payment.status,
+            used_at: payment.paid_at || payment.created_at,
+            created_at: payment.created_at,
+            payment_method: 'qr',
+            payment_code: null,
+            sepay_order_code: payment.code,
+            method_label: methodLabel('qr'),
+            detail_label: detailLabel('qr', null, payment.code),
+            source: 'payment',
+            device_id: payload.device_id || null,
+        };
+    });
 }
 
 async function readRevenueResetAt(supabase) {

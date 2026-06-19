@@ -21,6 +21,7 @@ const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
     'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
+    'session_timeout', 'mobile_session_timeout', 'countdown', 'hotfolder_capture_timeout', 'canon_capture_timeout',
     'bg_welcome', 'bg_source-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
     'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_print-photo', 'bg_wait-print-photo', 'bg_qr-photo',
     'brand_text_primary', 'brand_text_secondary'
@@ -242,12 +243,27 @@ export const WorkflowProvider = ({ children }) => {
                 setDeviceName(deviceName);
             }
 
+            let activeDeviceId = deviceId;
+            try {
+                const sysRes = await fetch(apiPath('/api/config/system'));
+                if (sysRes.ok) {
+                    const sysData = await sysRes.json();
+                    if (sysData.device_id) {
+                        activeDeviceId = sysData.device_id;
+                        localStorage.setItem("device_id", activeDeviceId);
+                        localStorage.setItem("DEVICE_ID", activeDeviceId);
+                    }
+                }
+            } catch (error) {
+                console.warn("Could not fetch system device_id, using fallback", error);
+            }
+
             try {
                 // Initial registration / sync on the local backend.
                 const res = await fetch(apiPath('/api/devices/heartbeat'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, name: deviceName })
+                    body: JSON.stringify({ deviceId: activeDeviceId, name: deviceName })
                 });
 
                 if (res.ok) {
@@ -265,7 +281,7 @@ export const WorkflowProvider = ({ children }) => {
                     const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'heartbeat', deviceId, name: deviceName })
+                        body: JSON.stringify({ action: 'heartbeat', deviceId: activeDeviceId, name: deviceName })
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();

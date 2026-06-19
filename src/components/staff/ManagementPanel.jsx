@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState } from 'react';
-import { Printer, Settings, X, Banknote } from 'lucide-react';
+import { Printer, Settings, X, Banknote, Zap, DollarSign } from 'lucide-react';
 import StaffPanel from './StaffPanel';
+import { useWorkflow } from '../../context/WorkflowContext';
 
 const SettingsPanel = lazy(() => import('../admin/Settings'));
 const BillSettingsPanel = lazy(() => import('../admin/BillSettings'));
@@ -13,6 +14,7 @@ const tabs = [
 
 const ManagementPanel = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('prints');
+    const { isEventMode, toggleEventMode } = useWorkflow();
 
     return (
         <div
@@ -29,6 +31,21 @@ const ManagementPanel = ({ onClose }) => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={toggleEventMode}
+                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black transition-colors ${
+                                isEventMode 
+                                    ? 'bg-purple-500 text-white hover:bg-purple-600 shadow-sm' 
+                                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
+                            }`}
+                        >
+                            {isEventMode ? (
+                                <>Sự kiện <Zap size={18} /></>
+                            ) : (
+                                <>Trả phí <DollarSign size={18} /></>
+                            )}
+                        </button>
+
                         <div className="flex rounded-full border border-[#E7D3B7] bg-[#FFF8E7] p-1">
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;

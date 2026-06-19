@@ -230,8 +230,8 @@ const RevenueDashboard = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 lg:mb-8">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Thống kê doanh thu</h1>
-                    <p className="text-[#52796f] mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Thống kê doanh thu</h1>
+                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
                 </div>
             </div>
 
@@ -260,7 +260,7 @@ const RevenueDashboard = () => {
                         </div>
 
                         {/* SỬA: Bỏ 'truncate', thêm 'break-words', chỉnh font size mobile xuống text-base */}
-                        <h2 className="text-base sm:text-lg md:text-2xl font-black text-[#2f3e46] break-words leading-tight">
+                        <h2 className="text-base sm:text-lg md:text-2xl font-black text-[#1a1a2e] break-words leading-tight">
                             {formatCurrency(item.value)}
                         </h2>
                     </div>
@@ -313,22 +313,22 @@ const RevenueDashboard = () => {
                         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <h3 className="text-base font-black text-[#2f3e46]">Xu hướng Doanh thu</h3>
+                                    <h3 className="text-base font-black text-[#1a1a2e]">Xu hướng Doanh thu</h3>
                                     <p className="text-gray-400 text-xs mt-0.5">
                                         {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="w-5 h-0.5 rounded-full bg-[#52796f] inline-block" />
+                                    <span className="w-5 h-0.5 rounded-full bg-[#e63946] inline-block" />
                                     Đường xu hướng
                                 </div>
                             </div>
                             <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full" style={{ display: 'block', height: LH }} preserveAspectRatio="xMidYMid meet">
                                 <defs>
                                     <linearGradient id="revGrad2" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#52796f" stopOpacity="0.28" />
-                                        <stop offset="80%" stopColor="#52796f" stopOpacity="0.04" />
-                                        <stop offset="100%" stopColor="#52796f" stopOpacity="0" />
+                                        <stop offset="0%" stopColor="#e63946" stopOpacity="0.28" />
+                                        <stop offset="80%" stopColor="#e63946" stopOpacity="0.04" />
+                                        <stop offset="100%" stopColor="#e63946" stopOpacity="0" />
                                     </linearGradient>
                                     <clipPath id="revClip2"><rect x={LP_L} y={LP_T} width={lPlotW} height={lPlotH} /></clipPath>
                                 </defs>
@@ -342,17 +342,17 @@ const RevenueDashboard = () => {
                                     );
                                 })}
                                 <path d={fillPath} fill="url(#revGrad2)" clipPath="url(#revClip2)" />
-                                <path d={smoothPath} fill="none" stroke="#52796f" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" clipPath="url(#revClip2)" />
+                                <path d={smoothPath} fill="none" stroke="#e63946" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" clipPath="url(#revClip2)" />
                                 {lPts.map((p, i) => {
                                     const isToday = p.key === todayKey;
                                     const showLabel = i === 0 || i === n - 1 || isToday || i % lLabelStep === 0;
                                     return (
                                         <g key={p.key}>
                                             {isToday && <line x1={p.x} y1={LP_T} x2={p.x} y2={LP_T + lPlotH} stroke="#84a98c" strokeWidth="1" strokeDasharray="3 3" opacity={0.6} />}
-                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 7 : 5} fill="white" stroke={isToday ? '#84a98c' : '#52796f'} strokeWidth={isToday ? 2 : 1.5} />}
-                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 3.5 : 2.5} fill={isToday ? '#84a98c' : '#52796f'} />}
+                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 7 : 5} fill="white" stroke={isToday ? '#84a98c' : '#e63946'} strokeWidth={isToday ? 2 : 1.5} />}
+                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 3.5 : 2.5} fill={isToday ? '#84a98c' : '#e63946'} />}
                                             <title>{`${p.label}: ${new Intl.NumberFormat('vi-VN').format(p.total)}đ`}</title>
-                                            {showLabel && <text x={p.x} y={LH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#52796f' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{p.label}</text>}
+                                            {showLabel && <text x={p.x} y={LH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{p.label}</text>}
                                         </g>
                                     );
                                 })}
@@ -363,25 +363,25 @@ const RevenueDashboard = () => {
                         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <h3 className="text-base font-black text-[#2f3e46]">Doanh thu từng ngày</h3>
+                                    <h3 className="text-base font-black text-[#1a1a2e]">Doanh thu từng ngày</h3>
                                     <p className="text-gray-400 text-xs mt-0.5">
                                         {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="w-3 h-3 rounded-sm bg-[#52796f] inline-block" />
+                                    <span className="w-3 h-3 rounded-sm bg-[#e63946] inline-block" />
                                     Biểu đồ cột
                                 </div>
                             </div>
                             <svg viewBox={`0 0 ${BW} ${BH}`} className="w-full" style={{ display: 'block', height: BH }} preserveAspectRatio="xMidYMid meet">
                                 <defs>
                                     <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#52796f" stopOpacity="0.9" />
+                                        <stop offset="0%" stopColor="#e63946" stopOpacity="0.9" />
                                         <stop offset="100%" stopColor="#84a98c" stopOpacity="0.7" />
                                     </linearGradient>
                                     <linearGradient id="barGradToday" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#2f3e46" stopOpacity="0.85" />
-                                        <stop offset="100%" stopColor="#52796f" stopOpacity="0.7" />
+                                        <stop offset="0%" stopColor="#1a1a2e" stopOpacity="0.85" />
+                                        <stop offset="100%" stopColor="#e63946" stopOpacity="0.7" />
                                     </linearGradient>
                                 </defs>
                                 {yTicks.map((r, i) => {
@@ -408,7 +408,7 @@ const RevenueDashboard = () => {
                                                 fill={isToday ? 'url(#barGradToday)' : (d.total > 0 ? 'url(#barGrad)' : '#f3f4f6')}
                                             />
                                             <title>{`${d.label}: ${new Intl.NumberFormat('vi-VN').format(d.total)}đ`}</title>
-                                            {showLabel && <text x={bx} y={BH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#52796f' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{d.label}</text>}
+                                            {showLabel && <text x={bx} y={BH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{d.label}</text>}
                                         </g>
                                     );
                                 })}
@@ -424,15 +424,15 @@ const RevenueDashboard = () => {
                 <div className="lg:col-span-1">
                     <button
                         onClick={() => setShowMobileFilter(!showMobileFilter)}
-                        className="lg:hidden w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-4 text-[#2f3e46] font-bold"
+                        className="lg:hidden w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-4 text-[#1a1a2e] font-bold"
                     >
-                        <span className="flex items-center gap-2"><Filter size={18} className="text-[#52796f]" /> Bộ lọc doanh thu</span>
+                        <span className="flex items-center gap-2"><Filter size={18} className="text-[#e63946]" /> Bộ lọc doanh thu</span>
                         {showMobileFilter ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </button>
 
                     <div className={`${showMobileFilter ? 'block' : 'hidden'} lg:block bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:sticky lg:top-8`}>
-                        <h3 className="hidden lg:flex text-lg font-bold text-[#2f3e46] mb-6 items-center gap-2">
-                            <Filter size={20} className="text-[#52796f]" />
+                        <h3 className="hidden lg:flex text-lg font-bold text-[#1a1a2e] mb-6 items-center gap-2">
+                            <Filter size={20} className="text-[#e63946]" />
                             Bộ lọc doanh thu
                         </h3>
                         <form onSubmit={handleFilter} className="space-y-5">
@@ -442,7 +442,7 @@ const RevenueDashboard = () => {
                                     type="date"
                                     id="startDate"
                                     name="startDate"
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                     value={dateRange.startDate}
                                     onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
                                 />
@@ -453,7 +453,7 @@ const RevenueDashboard = () => {
                                     type="date"
                                     id="endDate"
                                     name="endDate"
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                     value={dateRange.endDate}
                                     onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
                                 />
@@ -465,7 +465,7 @@ const RevenueDashboard = () => {
                                         type="time"
                                         id="startTime"
                                         name="startTime"
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                         value={dateRange.startTime}
                                         onChange={(e) => setDateRange({ ...dateRange, startTime: e.target.value })}
                                     />
@@ -476,7 +476,7 @@ const RevenueDashboard = () => {
                                         type="time"
                                         id="endTime"
                                         name="endTime"
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#52796f]/20 focus:border-[#52796f] transition-all font-medium text-gray-700"
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                         value={dateRange.endTime}
                                         onChange={(e) => setDateRange({ ...dateRange, endTime: e.target.value })}
                                     />
@@ -488,19 +488,19 @@ const RevenueDashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
-                                        className={`w-full bg-gray-50/50 border ${showPaymentDropdown ? 'border-[#52796f] ring-4 ring-[#52796f]/10 bg-white' : 'border-gray-100/80 hover:bg-white hover:border-gray-200'} rounded-2xl py-4 pl-4 pr-4 outline-none transition-all flex items-center justify-between group`}
+                                        className={`w-full bg-gray-50/50 border ${showPaymentDropdown ? 'border-[#e63946] ring-4 ring-[#e63946]/10 bg-white' : 'border-gray-100/80 hover:bg-white hover:border-gray-200'} rounded-2xl py-4 pl-4 pr-4 outline-none transition-all flex items-center justify-between group`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`transition-colors ${showPaymentDropdown ? 'text-[#52796f]' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                                            <div className={`transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-gray-400 group-hover:text-gray-500'}`}>
                                                 {selectedMethod.icon}
                                             </div>
-                                            <span className={`font-bold transition-colors ${showPaymentDropdown ? 'text-[#52796f]' : 'text-[#2f3e46]'}`}>
+                                            <span className={`font-bold transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-[#1a1a2e]'}`}>
                                                 {selectedMethod.label}
                                             </span>
                                         </div>
                                         <ChevronDown
                                             size={18}
-                                            className={`text-gray-400 transition-transform duration-200 ${showPaymentDropdown ? 'rotate-180 text-[#52796f]' : ''}`}
+                                            className={`text-gray-400 transition-transform duration-200 ${showPaymentDropdown ? 'rotate-180 text-[#e63946]' : ''}`}
                                         />
                                     </button>
 
@@ -517,8 +517,8 @@ const RevenueDashboard = () => {
                                                             setShowPaymentDropdown(false);
                                                         }}
                                                         className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${paymentMethod === method.value
-                                                            ? 'bg-[#52796f] text-white shadow-md shadow-[#52796f]/20'
-                                                            : 'text-[#2f3e46] hover:bg-gray-50'
+                                                            ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/20'
+                                                            : 'text-[#1a1a2e] hover:bg-gray-50'
                                                             }`}
                                                     >
                                                         <div className="flex items-center gap-3">
@@ -539,7 +539,7 @@ const RevenueDashboard = () => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-[#52796f] text-white py-4 rounded-2xl font-bold hover:bg-[#3f6158] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#52796f]/20 active:scale-[0.98] disabled:opacity-50"
+                                    className="w-full bg-[#e63946] text-white py-4 rounded-2xl font-bold hover:bg-[#c1121f] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 active:scale-[0.98] disabled:opacity-50"
                                 >
                                     {loading ? 'Đang tải...' : <><Filter size={20} /> Áp dụng</>}
                                 </button>
@@ -565,13 +565,13 @@ const RevenueDashboard = () => {
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
                             <div>
-                                <h3 className="text-xl font-black text-[#2f3e46]">Giao dịch</h3>
+                                <h3 className="text-xl font-black text-[#1a1a2e]">Giao dịch</h3>
                                 <p className="text-gray-400 text-sm font-medium mt-1">
                                     {stats.transactions?.length || 0} giao dịch gần nhất
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button className="hidden md:block p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-[#52796f]">
+                                <button className="hidden md:block p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-[#e63946]">
                                     <Download size={20} />
                                 </button>
 
@@ -592,24 +592,29 @@ const RevenueDashboard = () => {
                                     <div key={tx.id} className="p-5 flex flex-col gap-3 hover:bg-gray-50 transition-colors">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <span className="font-bold text-[#2f3e46] text-lg block">{getMethodLabel(tx)}</span>
+                                                <span className="font-bold text-[#1a1a2e] text-lg block">{getMethodLabel(tx)}</span>
                                                 {getMethodDetail(tx) && (
-                                                    <span className="font-mono text-xs font-bold text-[#52796f] block mt-0.5">{getMethodDetail(tx)}</span>
+                                                    <span className="font-mono text-xs font-bold text-[#e63946] block mt-0.5">{getMethodDetail(tx)}</span>
+                                                )}
+                                                {tx.device_id && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-xs font-bold font-mono bg-gray-100 text-gray-500">
+                                                        Máy {tx.device_id.slice(-6).toUpperCase()}
+                                                    </span>
                                                 )}
                                                 <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                                                     <Clock size={12} />
-                                                    {tx.used_at ? new Date(tx.used_at.endsWith('Z') ? tx.used_at : tx.used_at + 'Z').toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
+                                                    {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className="font-black text-[#52796f] text-lg block">{formatCurrency(tx.value)}</span>
+                                                <span className="font-black text-[#e63946] text-lg block">{formatCurrency(tx.value)}</span>
                                                 <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide inline-block mt-1">
                                                     {tx.status}
                                                 </span>
                                             </div>
                                         </div>
                                         <div className="pt-2 border-t border-gray-50 flex justify-end">
-                                            <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-bold text-[#52796f] bg-[#52796f]/10 px-4 py-2 rounded-xl">
+                                            <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-bold text-[#e63946] bg-[#e63946]/10 px-4 py-2 rounded-xl">
                                                 <Eye size={16} /> Xem chi tiết
                                             </a>
                                         </div>
@@ -626,6 +631,7 @@ const RevenueDashboard = () => {
                                 <thead className="bg-gray-50/50">
                                     <tr>
                                         <th className="pl-8 pr-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Phương thức</th>
+                                        <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Máy chụp</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Giá trị</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Thời gian</th>
                                         <th className="px-4 py-5 text-left text-xs font-black text-gray-400 uppercase tracking-widest">Trạng thái</th>
@@ -635,16 +641,25 @@ const RevenueDashboard = () => {
                                 <tbody className="divide-y divide-gray-50">
                                     {stats.transactions?.length > 0 ? (
                                         stats.transactions.map((tx) => (
-                                            <tr key={tx.id} className="hover:bg-[#52796f]/5 transition-colors group">
+                                            <tr key={tx.id} className="hover:bg-[#e63946]/5 transition-colors group">
                                                 <td className="pl-8 pr-4 py-6">
-                                                    <span className="block font-black text-sm text-[#2f3e46]">{getMethodLabel(tx)}</span>
+                                                    <span className="block font-black text-sm text-[#1a1a2e]">{getMethodLabel(tx)}</span>
                                                     {getMethodDetail(tx) && (
-                                                        <span className="mt-1 block font-mono text-xs font-bold text-[#52796f]">{getMethodDetail(tx)}</span>
+                                                        <span className="mt-1 block font-mono text-xs font-bold text-[#e63946]">{getMethodDetail(tx)}</span>
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-6 font-black text-[#52796f]">{formatCurrency(tx.value)}</td>
+                                                <td className="px-4 py-6">
+                                                    {tx.device_id ? (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs font-bold font-mono">
+                                                            {tx.device_id.slice(-6).toUpperCase()}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-6 font-black text-[#e63946]">{formatCurrency(tx.value)}</td>
                                                 <td className="px-4 py-6 text-sm text-gray-500">
-                                                    {tx.used_at ? new Date(tx.used_at.endsWith('Z') ? tx.used_at : tx.used_at + 'Z').toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
+                                                    {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                                 </td>
                                                 <td className="px-4 py-6">
                                                     <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
@@ -656,7 +671,7 @@ const RevenueDashboard = () => {
                                                         href={`/album/${tx.id}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center justify-center p-3 bg-gray-50 text-gray-400 hover:bg-[#52796f] hover:text-white rounded-2xl transition-all active:scale-90"
+                                                        className="inline-flex items-center justify-center p-3 bg-gray-50 text-gray-400 hover:bg-[#e63946] hover:text-white rounded-2xl transition-all active:scale-90"
                                                     >
                                                         <Eye size={20} />
                                                     </a>
@@ -680,7 +695,7 @@ const RevenueDashboard = () => {
             {showResetModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-7 w-[380px] shadow-2xl animate-fadeIn">
-                        <h3 className="text-xl font-black text-[#2f3e46] mb-2">
+                        <h3 className="text-xl font-black text-[#1a1a2e] mb-2">
                             Reset doanh thu
                         </h3>
 

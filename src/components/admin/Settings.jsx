@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote } from 'lucide-react';
+import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Zap, DollarSign } from 'lucide-react';
 import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
+import { useWorkflow } from '../../context/WorkflowContext';
 
 const Settings = () => {
     const isLocalAdmin = isLocalHost();
+    const { isEventMode, toggleEventMode } = useWorkflow();
     const [activeTab, setActiveTab] = useState('general');
     const [configs, setConfigs] = useState({
         price: '60000',
@@ -240,8 +242,8 @@ const Settings = () => {
 
     const healthItem = (label, ok, Icon) => (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-white/80 px-3 py-2">
-            <span className="flex items-center gap-2 text-sm font-bold text-[#2f3e46]">
-                <Icon size={16} className="text-[#52796f]" />
+            <span className="flex items-center gap-2 text-sm font-bold text-[#1a1a2e]">
+                <Icon size={16} className="text-[#e63946]" />
                 {label}
             </span>
             {ok ? <CheckCircle2 size={18} className="text-green-600" /> : <XCircle size={18} className="text-red-500" />}
@@ -261,7 +263,7 @@ const Settings = () => {
         <section className="rounded-2xl border border-[#ead8bd] bg-[#fffaf0] p-6 shadow-sm lg:col-span-2">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                    <h2 className="text-xl font-bold text-[#2f3e46]">Màu ảnh in</h2>
+                    <h2 className="text-xl font-bold text-[#1a1a2e]">Màu ảnh in</h2>
                     <p className="mt-1 text-sm text-[#7B5E43]">
                         Áp dụng trực tiếp lên file gửi máy in. Ảnh tải QR/cloud vẫn giữ màu gốc.
                     </p>
@@ -287,7 +289,7 @@ const Settings = () => {
                 {printColorControls.map((control) => (
                     <label key={control.name} className="rounded-2xl border border-[#ead8bd] bg-white p-4">
                         <div className="mb-3 flex items-center justify-between gap-4">
-                            <span className="text-sm font-extrabold text-[#2f3e46]">{control.label}</span>
+                            <span className="text-sm font-extrabold text-[#1a1a2e]">{control.label}</span>
                             <input
                                 type="number"
                                 name={control.name}
@@ -327,8 +329,8 @@ const Settings = () => {
             <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cài đặt phần cứng</h1>
-                        <p className="mt-1 text-sm md:text-base text-[#52796f]">
+                        <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt phần cứng</h1>
+                        <p className="mt-1 text-sm md:text-base text-[#e63946]">
                             Chỉ cấu hình các thiết bị gắn trực tiếp với máy photobooth local.
                         </p>
                     </div>
@@ -337,14 +339,14 @@ const Settings = () => {
                         <div className="mb-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 {statusDot(hardwareOk)}
-                                <span className="text-base font-extrabold text-[#2f3e46]">
+                                <span className="text-base font-extrabold text-[#1a1a2e]">
                                     {hardwareOk ? 'Hardware OK' : 'Cần kiểm tra phần cứng'}
                                 </span>
                             </div>
                             <button
                                 type="button"
                                 onClick={fetchHardwareStatus}
-                                className="rounded-full p-2 text-[#52796f]"
+                                className="rounded-full p-2 text-[#e63946]"
                                 title="Làm mới trạng thái"
                             >
                                 <RefreshCw size={18} className={hardwareLoading ? 'animate-spin' : ''} />
@@ -370,11 +372,11 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-5 flex items-start justify-between gap-4">
                             <div>
-                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
-                                    <Printer size={22} className="text-[#52796f]" />
+                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
+                                    <Printer size={22} className="text-[#e63946]" />
                                     Máy in
                                 </h2>
-                                <p className="mt-1 text-sm font-bold text-[#52796f]">{printer.name || 'DNP RX1HS'}</p>
+                                <p className="mt-1 text-sm font-bold text-[#e63946]">{printer.name || 'DNP RX1HS'}</p>
                             </div>
                             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(printer.online)}`}>
                                 {statusDot(printer.online)}
@@ -384,19 +386,19 @@ const Settings = () => {
                         <div className="grid gap-3 rounded-2xl bg-[#F8F3E7] p-4 text-sm">
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Status</span>
-                                <span className="text-right font-bold text-[#2f3e46]">{printer.status || printer.message || '--'}</span>
+                                <span className="text-right font-bold text-[#1a1a2e]">{printer.status || printer.message || '--'}</span>
                             </div>
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Paper</span>
-                                <span className="text-right font-bold text-[#2f3e46]">{printer.paper || '4x6'}</span>
+                                <span className="text-right font-bold text-[#1a1a2e]">{printer.paper || '4x6'}</span>
                             </div>
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Remaining</span>
-                                <span className="text-right font-bold text-[#2f3e46]">{printer.remaining ?? printer.remaining_label ?? '--'}</span>
+                                <span className="text-right font-bold text-[#1a1a2e]">{printer.remaining ?? printer.remaining_label ?? '--'}</span>
                             </div>
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Driver</span>
-                                <span className="text-right font-bold text-[#2f3e46]">{printer.driver || 'Unknown'}</span>
+                                <span className="text-right font-bold text-[#1a1a2e]">{printer.driver || 'Unknown'}</span>
                             </div>
                         </div>
                         <div className="mt-5 flex flex-wrap gap-3">
@@ -421,18 +423,18 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-5 flex items-start justify-between gap-4">
                             <div>
-                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
-                                    <Camera size={22} className="text-[#52796f]" />
+                                <h2 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
+                                    <Camera size={22} className="text-[#e63946]" />
                                     Máy ảnh
                                 </h2>
-                                <p className="mt-1 text-sm font-bold text-[#52796f]">{camera.name || 'Webcam / Canon'}</p>
+                                <p className="mt-1 text-sm font-bold text-[#e63946]">{camera.name || 'Webcam / Canon'}</p>
                             </div>
                             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(cameraTestOk || camera.online)}`}>
                                 {statusDot(cameraTestOk || camera.online)}
                                 {cameraTestOk ? 'Đã kết nối' : camera.online === false ? 'Chưa kết nối' : 'Cần chụp thử'}
                             </span>
                         </div>
-                        <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#2f3e46]">
+                        <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#1a1a2e]">
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Mode</span>
                                 <span className="text-right font-bold">{camera.mode || configs.camera_mode}</span>
@@ -465,18 +467,18 @@ const Settings = () => {
                         <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                             <div className="mb-5 flex items-start justify-between gap-4">
                                 <div>
-                                    <h2 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
-                                        <Banknote size={22} className="text-[#52796f]" />
+                                    <h2 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
+                                        <Banknote size={22} className="text-[#e63946]" />
                                         Máy đọc tiền
                                     </h2>
-                                    <p className="mt-1 text-sm font-bold text-[#52796f]">Cổng {bill.port || 'Chưa thiết lập'}</p>
+                                    <p className="mt-1 text-sm font-bold text-[#e63946]">Cổng {bill.port || 'Chưa thiết lập'}</p>
                                 </div>
                                 <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(billOk)}`}>
                                     {statusDot(billOk)}
                                     {!bill.enabled ? 'Đang tắt' : (bill.status === 'connected' ? 'Đã kết nối' : 'Mất kết nối')}
                                 </span>
                             </div>
-                            <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#2f3e46]">
+                            <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#1a1a2e]">
                                 <div className="flex justify-between gap-4">
                                     <span className="font-bold text-gray-500">Trạng thái cấu hình</span>
                                     <span className="text-right font-bold">{bill.enabled ? 'Bật' : 'Tắt'}</span>
@@ -503,10 +505,10 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#2f3e46]">Máy in</h2>
-                                <p className="mt-1 text-sm text-[#52796f]">Dùng cho DNP RX1HS hoặc máy in Windows tương thích.</p>
+                                <h2 className="text-xl font-bold text-[#1a1a2e]">Máy in</h2>
+                                <p className="mt-1 text-sm text-[#e63946]">Dùng cho DNP RX1HS hoặc máy in Windows tương thích.</p>
                             </div>
-                            <Monitor className="text-[#52796f]" size={24} />
+                            <Monitor className="text-[#e63946]" size={24} />
                         </div>
 
                         <div className="space-y-5">
@@ -518,7 +520,7 @@ const Settings = () => {
                                     value={configs.printer_name}
                                     onChange={handleChange}
                                     placeholder="RX1HS hoặc DNP DS-RX1HS"
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
                                 />
                             </label>
 
@@ -530,7 +532,7 @@ const Settings = () => {
                                     name="printer_copies"
                                     value={configs.printer_copies}
                                     onChange={handleChange}
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
                                 />
                             </label>
                         </div>
@@ -539,36 +541,36 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#2f3e46]">Thời gian</h2>
-                                <p className="mt-1 text-sm text-[#52796f]">Cấu hình thời lượng phiên và thời gian chờ camera.</p>
+                                <h2 className="text-xl font-bold text-[#1a1a2e]">Thời gian</h2>
+                                <p className="mt-1 text-sm text-[#e63946]">Cấu hình thời lượng phiên và thời gian chờ camera.</p>
                             </div>
-                            <SettingsIcon className="text-[#52796f]" size={24} />
+                            <SettingsIcon className="text-[#e63946]" size={24} />
                         </div>
 
                         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                             <label className="block">
                                 <span className="mb-2 block text-sm font-bold text-gray-700">Thời gian 1 phiên chụp (giây)</span>
-                                <input type="number" min="30" name="session_timeout" value={configs.session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]" />
+                                <input type="number" min="30" name="session_timeout" value={configs.session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
                             </label>
 
                             <label className="block">
                                 <span className="mb-2 block text-sm font-bold text-gray-700">Đếm ngược mỗi ảnh (giây)</span>
-                                <input type="number" min="1" name="countdown" value={configs.countdown} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]" />
+                                <input type="number" min="1" name="countdown" value={configs.countdown} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
                             </label>
 
                             <label className="block">
                                 <span className="mb-2 block text-sm font-bold text-gray-700">Thời gian tải ảnh điện thoại (giây)</span>
-                                <input type="number" min="30" name="mobile_session_timeout" value={configs.mobile_session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]" />
+                                <input type="number" min="30" name="mobile_session_timeout" value={configs.mobile_session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
                             </label>
 
                             <label className="block">
                                 <span className="mb-2 block text-sm font-bold text-gray-700">Chờ ảnh Hot Folder (giây)</span>
-                                <input type="number" min="5" name="hotfolder_capture_timeout" value={configs.hotfolder_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]" />
+                                <input type="number" min="5" name="hotfolder_capture_timeout" value={configs.hotfolder_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
                             </label>
 
                             <label className="block">
                                 <span className="mb-2 block text-sm font-bold text-gray-700">Chờ ảnh Canon middleware (giây)</span>
-                                <input type="number" min="5" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]" />
+                                <input type="number" min="5" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
                             </label>
                         </div>
                     </section>
@@ -578,10 +580,10 @@ const Settings = () => {
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#2f3e46]">Máy ảnh</h2>
-                                <p className="mt-1 text-sm text-[#52796f]">Chọn cách máy booth nhận ảnh từ camera.</p>
+                                <h2 className="text-xl font-bold text-[#1a1a2e]">Máy ảnh</h2>
+                                <p className="mt-1 text-sm text-[#e63946]">Chọn cách máy booth nhận ảnh từ camera.</p>
                             </div>
-                            <SettingsIcon className="text-[#52796f]" size={24} />
+                            <SettingsIcon className="text-[#e63946]" size={24} />
                         </div>
 
                         <div className="space-y-5">
@@ -591,7 +593,7 @@ const Settings = () => {
                                     name="camera_mode"
                                     value={configs.camera_mode}
                                     onChange={handleChange}
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#52796f] focus:ring-[#52796f]"
+                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
                                 >
                                     <option value="webcam">Webcam USB / laptop</option>
                                     <option value="canon">Canon middleware</option>
@@ -641,7 +643,7 @@ const Settings = () => {
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className={`flex items-center justify-center gap-2 rounded-xl px-8 py-3 font-bold text-white shadow-lg shadow-[#52796f]/20 transition-all duration-200 ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#52796f] hover:bg-[#3f6154]'}`}
+                        className={`flex items-center justify-center gap-2 rounded-xl px-8 py-3 font-bold text-white shadow-lg shadow-[#e63946]/20 transition-all duration-200 ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#e63946] hover:bg-[#3f6154]'}`}
                     >
                         {saving ? (
                             <>
@@ -665,36 +667,38 @@ const Settings = () => {
             {/* Left Sidebar: Navigation & Header */}
             <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-6">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cài đặt & Thiết bị</h1>
-                    <p className="text-[#52796f] mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt & Thiết bị</h1>
+                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
                 </div>
 
                 <nav className="space-y-2">
                     <button
                         onClick={() => setActiveTab('general')}
                         className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl font-bold transition-all text-left ${activeTab === 'general'
-                            ? 'bg-white text-[#52796f] shadow-sm border border-green-100'
-                            : 'text-gray-500 hover:bg-gray-50 hover:text-[#52796f]'
+                            ? 'bg-white text-[#e63946] shadow-sm border border-green-100'
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
                             }`}
                     >
-                        <div className={`p-2 rounded-lg ${activeTab === 'general' ? 'bg-[#52796f]/10' : 'bg-transparent'}`}>
+                        <div className={`p-2 rounded-lg ${activeTab === 'general' ? 'bg-[#e63946]/10' : 'bg-transparent'}`}>
                             <SettingsIcon size={20} />
                         </div>
                         Cài đặt chung
                     </button>
 
-                    <button
-                        onClick={() => setActiveTab('devices')}
-                        className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl font-bold transition-all text-left ${activeTab === 'devices'
-                            ? 'bg-white text-[#52796f] shadow-sm border border-green-100'
-                            : 'text-gray-500 hover:bg-gray-50 hover:text-[#52796f]'
-                            }`}
-                    >
-                        <div className={`p-2 rounded-lg ${activeTab === 'devices' ? 'bg-[#52796f]/10' : 'bg-transparent'}`}>
-                            <Monitor size={20} />
-                        </div>
-                        Quản lý Thiết bị
-                    </button>
+                    {isLocalAdmin && (
+                        <button
+                            onClick={() => setActiveTab('devices')}
+                            className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl font-bold transition-all text-left ${activeTab === 'devices'
+                                ? 'bg-white text-[#e63946] shadow-sm border border-green-100'
+                                : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
+                                }`}
+                        >
+                            <div className={`p-2 rounded-lg ${activeTab === 'devices' ? 'bg-[#e63946]/10' : 'bg-transparent'}`}>
+                                <Monitor size={20} />
+                            </div>
+                            Quản lý Thiết bị
+                        </button>
+                    )}
                 </nav>
             </div>
 
@@ -703,8 +707,8 @@ const Settings = () => {
                 {activeTab === 'general' ? (
                     <div className="h-full flex flex-col">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                            <h2 className="text-xl font-bold text-[#2f3e46] flex items-center gap-2">
-                                <SettingsIcon size={20} className="text-[#52796f]" />
+                            <h2 className="text-xl font-bold text-[#1a1a2e] flex items-center gap-2">
+                                <SettingsIcon size={20} className="text-[#e63946]" />
                                 Cấu hình chung
                             </h2>
                             <button
@@ -717,13 +721,6 @@ const Settings = () => {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-8">
-                            {!isLocalAdmin && (
-                                <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
-                                    Admin Vercel dùng để cấu hình cloud và đồng bộ cho các máy. Các thiết lập phần cứng như camera,
-                                    hot folder, máy in và đầu đọc tiền cần kiểm tra trên máy booth local đang cắm thiết bị.
-                                </div>
-                            )}
-
                             {message && (
                                 <div className={`p-4 mb-8 rounded-xl border ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} animate-fadeIn`}>
                                     <div className="flex items-center gap-2 font-bold">
@@ -736,7 +733,30 @@ const Settings = () => {
                             <div className="space-y-12 max-w-5xl mx-auto pb-12">
                                 {/* SECTION 1: THANH TOÁN & IN ẤN */}
                                 <div className="space-y-4">
-                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider border-b pb-2">Thanh toán & In ấn</h3>
+                                    <div className="flex items-center justify-between border-b pb-2">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Thanh toán & In ấn</h3>
+                                        {isLocalAdmin && (
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-bold text-gray-600">
+                                                    Chế độ hoạt động:
+                                                </span>
+                                                <button
+                                                    onClick={toggleEventMode}
+                                                    className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all shadow-sm flex items-center gap-2 ${
+                                                        isEventMode 
+                                                            ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                                                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                                                    }`}
+                                                >
+                                                    {isEventMode ? (
+                                                        <>Sự kiện <Zap size={14} /></>
+                                                    ) : (
+                                                        <>Trả phí <DollarSign size={14} /></>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}
@@ -749,8 +769,8 @@ const Settings = () => {
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
                                                     Giá mỗi lượt chụp
                                                 </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#52796f]/20">
-                                                    <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#52796f]" />
+                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                    <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
                                                     <div className="absolute inset-y-0 right-0 flex items-center pr-4">
                                                         <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
                                                     </div>
@@ -761,42 +781,44 @@ const Settings = () => {
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
                                                     Giá bản in thêm
                                                 </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#52796f]/20">
-                                                    <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#52796f]" />
+                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                    <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
                                                     <div className="absolute inset-y-0 right-0 flex items-center pr-4">
                                                         <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="group">
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Tên máy in Windows
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="printer_name"
-                                                    value={configs.printer_name}
-                                                    onChange={handleChange}
-                                                    placeholder="RX1HS hoặc tên printer trong Windows"
-                                                    className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-sm focus:border-[#52796f]"
-                                                />
-                                                <p className="mt-2 text-xs text-gray-400">Ví dụ: RX1HS, DNP DS-RX1HS, DS-RX1.</p>
-                                            </div>
+                                            {isLocalAdmin && (
+                                                <div className="group">
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                        Tên máy in Windows
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        name="printer_name"
+                                                        value={configs.printer_name}
+                                                        onChange={handleChange}
+                                                        placeholder="RX1HS hoặc tên printer trong Windows"
+                                                        className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-sm focus:border-[#e63946]"
+                                                    />
+                                                    <p className="mt-2 text-xs text-gray-400">Ví dụ: RX1HS, DNP DS-RX1HS, DS-RX1.</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Mobile Upload Flow */}
                                         <div className="bg-[#f8fcf3] p-6 rounded-2xl border border-[#e6eedf] space-y-6">
-                                            <h4 className="text-base font-bold text-[#52796f] flex items-center gap-2 tracking-wide">
+                                            <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
                                                 📱 Tải trực tuyến
                                             </h4>
 
                                             <div className="group">
-                                                <label className="block text-xs font-bold text-[#52796f] mb-2">
+                                                <label className="block text-xs font-bold text-[#e63946] mb-2">
                                                     Giá mỗi phiên tải
                                                 </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#52796f]/20">
-                                                    <input type="number" name="mobile_price" value={configs.mobile_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#52796f]" />
+                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                    <input type="number" name="mobile_price" value={configs.mobile_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
                                                     <div className="absolute inset-y-0 right-0 flex items-center pr-4">
                                                         <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
                                                     </div>
@@ -804,11 +826,11 @@ const Settings = () => {
                                             </div>
 
                                             <div className="group">
-                                                <label className="block text-xs font-bold text-[#52796f] mb-2">
+                                                <label className="block text-xs font-bold text-[#e63946] mb-2">
                                                     Giá bản in thêm
                                                 </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#52796f]/20">
-                                                    <input type="number" name="mobile_print_price" value={configs.mobile_print_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#52796f]" />
+                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                    <input type="number" name="mobile_print_price" value={configs.mobile_print_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
                                                     <div className="absolute inset-y-0 right-0 flex items-center pr-4">
                                                         <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
                                                     </div>
@@ -822,15 +844,15 @@ const Settings = () => {
                                     <div className="rounded-2xl border border-[#E7D3B7] bg-white p-6 shadow-sm">
                                         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                             <div>
-                                                <h4 className="text-base font-bold text-[#354f52]">Hen gio doi gia</h4>
-                                                <p className="text-xs font-semibold text-gray-500">Luu tren cloud va tu dong dong bo xuong may local.</p>
+                                                <h4 className="text-base font-bold text-[#354f52]">Hẹn giờ đổi giá</h4>
+                                                <p className="text-xs font-semibold text-gray-500">Lưu trên cloud và tự động đồng bộ xuống máy local.</p>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={addPriceSchedule}
-                                                className="rounded-full bg-[#52796f] px-5 py-2 text-sm font-black text-white"
+                                                className="rounded-full bg-[#e63946] px-5 py-2 text-sm font-black text-white"
                                             >
-                                                Them lich
+                                                Thêm lịch
                                             </button>
                                         </div>
 
@@ -842,10 +864,10 @@ const Settings = () => {
                                                 className="rounded-xl border-gray-200 px-4 py-2.5 text-sm"
                                             />
                                             {[
-                                                ['price', 'Gia chup'],
-                                                ['print_price', 'In them'],
+                                                ['price', 'Giá chụp'],
+                                                ['print_price', 'In thêm'],
                                                 ['mobile_price', 'Mobile'],
-                                                ['mobile_print_price', 'Mobile in them'],
+                                                ['mobile_print_price', 'Mobile in thêm'],
                                             ].map(([key, label]) => (
                                                 <input
                                                     key={key}
@@ -860,16 +882,16 @@ const Settings = () => {
 
                                         <div className="mt-5 space-y-2">
                                             {getPriceSchedule().length === 0 ? (
-                                                <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chua co lich doi gia.</div>
+                                                <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
                                             ) : getPriceSchedule().map((item) => (
                                                 <div key={item.id || item.run_at} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                                                     <div className="min-w-0 text-sm">
-                                                        <div className="font-black text-[#2f3e46]">
-                                                            {new Date(item.run_at).toLocaleString('vi-VN')}
-                                                            {item.applied ? <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Da ap dung</span> : <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Dang cho</span>}
+                                                        <div className="font-black text-[#1a1a2e]">
+                                                            {isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}
+                                                            {item.applied ? <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Đã áp dụng</span> : <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Đang chờ</span>}
                                                         </div>
                                                         <div className="mt-1 truncate font-semibold text-gray-500">
-                                                            Chup {Number(item.price || 0).toLocaleString('vi-VN')}d · In them {Number(item.print_price || 0).toLocaleString('vi-VN')}d · Mobile {Number(item.mobile_price || 0).toLocaleString('vi-VN')}d · Mobile in {Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}d
+                                                            Chụp {Number(item.price || 0).toLocaleString('vi-VN')}đ · In thêm {Number(item.print_price || 0).toLocaleString('vi-VN')}đ · Mobile {Number(item.mobile_price || 0).toLocaleString('vi-VN')}đ · Mobile in {Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}đ
                                                         </div>
                                                     </div>
                                                     <button
@@ -877,7 +899,7 @@ const Settings = () => {
                                                         onClick={() => removePriceSchedule(item.id)}
                                                         className="rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black text-red-600"
                                                     >
-                                                        Xoa
+                                                        Xóa
                                                     </button>
                                                 </div>
                                             ))}
@@ -929,75 +951,77 @@ const Settings = () => {
 
 
                                 {/* Full Width Column */}
-                                <div className="col-span-1 md:col-span-2 space-y-6 pt-6 border-t border-gray-100">
-                                    {/* Camera Mode */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                                            Chế độ Camera
-                                        </label>
-                                        <div className="relative rounded-xl shadow-sm">
-                                            <select
-                                                name="camera_mode"
-                                                value={configs.camera_mode}
-                                                onChange={handleChange}
-                                                className="block w-full rounded-xl border-gray-200 pl-4 pr-10 py-3 focus:border-[#52796f] focus:ring-[#52796f] bg-white"
-                                            >
-                                                <option value="webcam">Webcam (USB / Laptop)</option>
-                                                <option value="canon">Canon Direct (Middleware)</option>
-                                                <option value="hotfolder">Máy ảnh chuyên nghiệp (EOS Utility / Hot Folder)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* Hot Folder Settings */}
-                                    {configs.camera_mode === 'hotfolder' && (
-                                        <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4 animate-fadeIn">
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">
-                                                    Đường dẫn thư mục ảnh (Hot Folder)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="hot_folder"
-                                                    value={configs.hot_folder}
+                                {isLocalAdmin && (
+                                    <div className="col-span-1 md:col-span-2 space-y-6 pt-6 border-t border-gray-100">
+                                        {/* Camera Mode */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                Chế độ Camera
+                                            </label>
+                                            <div className="relative rounded-xl shadow-sm">
+                                                <select
+                                                    name="camera_mode"
+                                                    value={configs.camera_mode}
                                                     onChange={handleChange}
-                                                    className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4"
-                                                    placeholder="C:/Photobooth_Input"
-                                                />
-                                                <p className="mt-2 text-xs text-orange-600/80">
-                                                    Thư mục mà EOS Utility sẽ lưu ảnh vào. Backend sẽ giám sát thư mục này.
+                                                    className="block w-full rounded-xl border-gray-200 pl-4 pr-10 py-3 focus:border-[#e63946] focus:ring-[#e63946] bg-white"
+                                                >
+                                                    <option value="webcam">Webcam (USB / Laptop)</option>
+                                                    <option value="canon">Canon Direct (Middleware)</option>
+                                                    <option value="hotfolder">Máy ảnh chuyên nghiệp (EOS Utility / Hot Folder)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Hot Folder Settings */}
+                                        {configs.camera_mode === 'hotfolder' && (
+                                            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4 animate-fadeIn">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                        Đường dẫn thư mục ảnh (Hot Folder)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        name="hot_folder"
+                                                        value={configs.hot_folder}
+                                                        onChange={handleChange}
+                                                        className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4"
+                                                        placeholder="C:/Photobooth_Input"
+                                                    />
+                                                    <p className="mt-2 text-xs text-orange-600/80">
+                                                        Thư mục mà EOS Utility sẽ lưu ảnh vào. Backend sẽ giám sát thư mục này.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                        Phím chụp (Trigger Key)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        name="trigger_key"
+                                                        value={configs.trigger_key}
+                                                        onChange={handleChange}
+                                                        className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4 font-mono"
+                                                        placeholder="{F8}"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Canon Middleware Settings */}
+                                        {configs.camera_mode === 'canon' && (
+                                            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 space-y-4 animate-fadeIn">
+                                                <p className="text-sm text-blue-700">
+                                                    <span className="font-bold">Chế độ này yêu cầu chạy Canon Middleware.</span>
+                                                    <br />
+                                                    Hãy đảm bảo bạn đã chạy file <code>canon_middleware.exe</code> và kết nối máy ảnh.
+                                                    <br />
+                                                    LiveView và Capture sẽ hoạt động qua cổng <code>http://localhost:5001</code>.
                                                 </p>
                                             </div>
-
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">
-                                                    Phím chụp (Trigger Key)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="trigger_key"
-                                                    value={configs.trigger_key}
-                                                    onChange={handleChange}
-                                                    className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4 font-mono"
-                                                    placeholder="{F8}"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Canon Middleware Settings */}
-                                    {configs.camera_mode === 'canon' && (
-                                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 space-y-4 animate-fadeIn">
-                                            <p className="text-sm text-blue-700">
-                                                <span className="font-bold">Chế độ này yêu cầu chạy Canon Middleware.</span>
-                                                <br />
-                                                Hãy đảm bảo bạn đã chạy file <code>canon_middleware.exe</code> và kết nối máy ảnh.
-                                                <br />
-                                                LiveView và Capture sẽ hoạt động qua cổng <code>http://localhost:5001</code>.
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1007,8 +1031,8 @@ const Settings = () => {
                                 onClick={handleSave}
                                 disabled={saving}
                                 className={`
-                                    flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold text-white shadow-lg shadow-[#52796f]/20
-                                    ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#52796f] hover:bg-[#3f6154] hover:shadow-xl hover:scale-[1.02]'}
+                                    flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold text-white shadow-lg shadow-[#e63946]/20
+                                    ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#e63946] hover:bg-[#3f6154] hover:shadow-xl hover:scale-[1.02]'}
                                     transition-all duration-200
                                 `}
                             >

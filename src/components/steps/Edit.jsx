@@ -719,36 +719,20 @@ const Edit = () => {
                     const frameImg = await cachedLoadImage(selectedFrame.url || selectedFrame.image);
                     if (frameImg) targetCtx.drawImage(frameImg, 0, 0, targetCanvas.width, targetCanvas.height);
                 }
+            };
 
-                // 6. Draw QR Code (Manual)
-                if (qrSettings.show) {
-                    const qrW = (qrSettings.size / 100) * targetCanvas.width;
-                    const qrX = (qrSettings.x / 100) * targetCanvas.width - (qrW / 2);
-                    const qrY = (qrSettings.y / 100) * targetCanvas.height - (qrW / 2); // Square center
+            // Draw photos + frame (clean version, no QR/date)
+            await drawComposite(baseCanvas, baseCtx);
 
-                    try {
-                        const qrCode = new QRCodeStyling({
-                            width: 500,
-                            height: 500,
-                            data: downloadUrl,
-                            margin: 25,
-                            qrOptions: { errorCorrectionLevel: 'L' },
-                            dotsOptions: { color: "#000000", type: "square" },
-                            cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
-                            cornersDotOptions: { type: "dot", color: "#000000" },
-                            backgroundOptions: { color: "#ffffff" }
-                        });
-                        const buffer = await qrCode.getRawData("png");
-                        const qrDataUrl = URL.createObjectURL(buffer);
-                        const qrImg = await cachedLoadImage(qrDataUrl);
-                        if (qrImg) {
-                            targetCtx.drawImage(qrImg, qrX, qrY, qrW, qrW);
-                        }
-                        URL.revokeObjectURL(qrDataUrl);
-                    } catch (e) { console.warn("QR Gen failed", e); }
-                }
+            // Clone clean canvas for composite upload (no QR, no date)
+            const cleanCanvas = cloneCanvas(baseCanvas);
 
-                // 7. Draw Date
+            // Now draw QR and Date on baseCanvas for print only
+            const drawQrAndDate = (targetCanvas, targetCtx) => {
+                // Draw QR Code
+                // (QR is async, handle separately below)
+
+                // Draw Date
                 if (dateSettings.show) {
                     const today = new Date();
                     const dateStr = `${String(today.getDate()).padStart(2, '0')} . ${String(today.getMonth() + 1).padStart(2, '0')} . ${today.getFullYear()}`;
@@ -766,13 +750,42 @@ const Edit = () => {
                 }
             };
 
-            await drawComposite(baseCanvas, baseCtx);
+            // Draw QR on baseCanvas for print
+            if (qrSettings.show) {
+                const qrW = (qrSettings.size / 100) * baseCanvas.width;
+                const qrX = (qrSettings.x / 100) * baseCanvas.width - (qrW / 2);
+                const qrY = (qrSettings.y / 100) * baseCanvas.height - (qrW / 2);
+
+                try {
+                    const qrCode = new QRCodeStyling({
+                        width: 500,
+                        height: 500,
+                        data: downloadUrl,
+                        margin: 25,
+                        qrOptions: { errorCorrectionLevel: 'L' },
+                        dotsOptions: { color: "#000000", type: "square" },
+                        cornersSquareOptions: { type: "extra-rounded", color: "#000000" },
+                        cornersDotOptions: { type: "dot", color: "#000000" },
+                        backgroundOptions: { color: "#ffffff" }
+                    });
+                    const buffer = await qrCode.getRawData("png");
+                    const qrDataUrl = URL.createObjectURL(buffer);
+                    const qrImg = await cachedLoadImage(qrDataUrl);
+                    if (qrImg) {
+                        baseCtx.drawImage(qrImg, qrX, qrY, qrW, qrW);
+                    }
+                    URL.revokeObjectURL(qrDataUrl);
+                } catch (e) { console.warn("QR Gen failed", e); }
+            }
+
+            // Draw date on baseCanvas for print
+            drawQrAndDate(baseCanvas, baseCtx);
 
             const printMode = layout.printMode || (layout.type === 'strip' ? 'double_strip' : 'grid_4x6');
             const printOutput = buildPrintCanvas(baseCanvas, printMode);
             const printCanvas = printOutput.canvas;
             const cutMode = printOutput.cutMode;
-            const compositeCanvas = printMode === 'double_strip' ? cloneCanvas(printCanvas) : baseCanvas;
+            const compositeCanvas = cleanCanvas;
             applyPrintColorSettings(printCanvas);
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
@@ -859,6 +872,7 @@ const Edit = () => {
                         amount: sessionData.printPrice || 60000,
                         session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
                         meta_data: {
+                            device_id: getDeviceId(),
                             frame_url: selectedFrame.url || selectedFrame.image,
                             frame_config: frameConfig,
                             photo_positions: photoPositions,

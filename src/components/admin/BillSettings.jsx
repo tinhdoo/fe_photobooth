@@ -225,8 +225,8 @@ const BillSettings = () => {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
                     <Banknote size={28} />
                 </div>
-                <h2 className="text-2xl font-bold text-[#2f3e46]">Cấu hình đầu đọc tiền chỉ chạy trên máy booth</h2>
-                <p className="mt-3 text-sm leading-6 text-[#52796f]">
+                <h2 className="text-2xl font-bold text-[#1a1a2e]">Cấu hình đầu đọc tiền chỉ chạy trên máy booth</h2>
+                <p className="mt-3 text-sm leading-6 text-[#e63946]">
                     Trang Vercel không kết nối trực tiếp được cổng COM hoặc đầu đọc tiền. Hãy mở admin bằng
                     <span className="font-semibold"> http://localhost:5173/admin/bill-settings </span>
                     trên máy photobooth đang cắm thiết bị.
@@ -244,8 +244,8 @@ const BillSettings = () => {
     return (
         <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Cài đặt đầu đọc tiền</h1>
-                <p className="mt-1 text-sm md:text-base text-[#52796f]">Cấu hình cổng COM, baudrate và mệnh giá nhận tiền mặt.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt đầu đọc tiền</h1>
+                <p className="mt-1 text-sm md:text-base text-[#e63946]">Cấu hình cổng COM, baudrate và mệnh giá nhận tiền mặt.</p>
             </div>
 
             {message && (
@@ -258,8 +258,8 @@ const BillSettings = () => {
                 <div className="w-full space-y-6 xl:w-1/3">
                     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center gap-3">
-                            <Monitor className="text-[#52796f]" />
-                            <h3 className="text-xl font-bold text-[#2f3e46]">Thiết bị</h3>
+                            <Monitor className="text-[#e63946]" />
+                            <h3 className="text-xl font-bold text-[#1a1a2e]">Thiết bị</h3>
                         </div>
 
                         <label className="mb-2 block text-sm font-medium text-gray-700">Chọn thiết bị cấu hình</label>
@@ -286,7 +286,7 @@ const BillSettings = () => {
                         <div className="mb-6 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Power size={20} className={config.enabled ? 'text-green-600' : 'text-gray-400'} />
-                                <h3 className="text-xl font-bold text-[#2f3e46]">Kết nối</h3>
+                                <h3 className="text-xl font-bold text-[#1a1a2e]">Kết nối</h3>
                             </div>
                             <label className="relative inline-flex cursor-pointer items-center">
                                 <input
@@ -332,7 +332,7 @@ const BillSettings = () => {
                                 <button
                                     type="button"
                                     onClick={fetchPorts}
-                                    className="mt-2 text-sm font-semibold text-[#52796f]"
+                                    className="mt-2 text-sm font-semibold text-[#e63946]"
                                 >
                                     Quét lại cổng COM
                                 </button>
@@ -368,7 +368,7 @@ const BillSettings = () => {
                 <div className="w-full space-y-6 xl:w-2/3">
                     <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
                         <div className="mb-6 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-[#2f3e46]">Cấu hình mệnh giá</h3>
+                            <h3 className="text-xl font-bold text-[#1a1a2e]">Cấu hình mệnh giá</h3>
                             <button
                                 type="button"
                                 onClick={saveConfig}
@@ -404,7 +404,7 @@ const BillSettings = () => {
                         </div>
                     </div>
 
-                    <div className="rounded-2xl border border-gray-700 bg-[#2f3e46] p-6 text-white shadow-inner">
+                    <div className="rounded-2xl border border-gray-700 bg-[#1a1a2e] p-6 text-white shadow-inner">
                         <div className="mb-4 flex items-center gap-3">
                             <div className="rounded-lg bg-white/10 p-2">
                                 <RefreshCw size={20} className="text-green-400" />
@@ -427,8 +427,8 @@ const BillSettings = () => {
                     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <h3 className="flex items-center gap-2 text-xl font-bold text-[#2f3e46]">
-                                    <Clock size={20} className="text-[#52796f]" />
+                                <h3 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
+                                    <Clock size={20} className="text-[#e63946]" />
                                     Lịch sử tiền mặt hôm nay
                                 </h3>
                                 <p className="mt-1 text-sm text-gray-500">
@@ -448,11 +448,11 @@ const BillSettings = () => {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="rounded-2xl bg-[#F6F1E8] p-5">
                                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tổng tiền</p>
-                                <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{formatVnd(cashHistory.total)}</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{formatVnd(cashHistory.total)}</p>
                             </div>
                             <div className="rounded-2xl bg-[#F6F1E8] p-5">
                                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Số lần nhận</p>
-                                <p className="mt-2 text-3xl font-extrabold text-[#52796f]">{cashHistory.count}</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{cashHistory.count}</p>
                             </div>
                         </div>
 
@@ -470,7 +470,7 @@ const BillSettings = () => {
                                         {cashHistory.entries.map((entry) => (
                                             <tr key={entry.id}>
                                                 <td className="px-4 py-3 font-medium text-gray-600">{formatTime(entry.created_at)}</td>
-                                                <td className="px-4 py-3 font-bold text-[#2f3e46]">{formatVnd(entry.amount)}</td>
+                                                <td className="px-4 py-3 font-bold text-[#1a1a2e]">{formatVnd(entry.amount)}</td>
                                                 <td className="px-4 py-3 font-mono text-gray-500">{entry.hex_code ? `0x${entry.hex_code}` : '--'}</td>
                                             </tr>
                                         ))}

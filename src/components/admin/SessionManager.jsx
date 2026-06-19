@@ -29,7 +29,7 @@ const SessionManager = () => {
 
     return (
         <div className="space-y-8 animate-fadeIn">
-            <h1 className="text-3xl text-[#2f3e46] font-bold">Thư viện Phiên chụp</h1>
+            <h1 className="text-3xl text-[#1a1a2e] font-bold">Thư viện Phiên chụp</h1>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -59,7 +59,7 @@ const SessionManager = () => {
                                             <span className="text-xs text-gray-400">Không có ảnh</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-[#2f3e46]">
+                                    <td className="px-6 py-4 text-sm text-[#1a1a2e]">
                                         {new Date(session.created_at).toLocaleString('vi-VN')}
                                     </td>
                                     <td className="px-6 py-4">
@@ -70,7 +70,7 @@ const SessionManager = () => {
                                             {session.payment_method || 'Không xác định'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 font-bold text-[#52796f]">
+                                    <td className="px-6 py-4 font-bold text-[#e63946]">
                                         {formatCurrency(session.amount)}
                                     </td>
                                     <td className="px-6 py-4">
@@ -79,7 +79,7 @@ const SessionManager = () => {
                                                 href={session.composite_url}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="text-[#52796f] hover:text-[#3f6158] transition-colors"
+                                                className="text-[#e63946] hover:text-[#c1121f] transition-colors"
                                                 title="Xem kích thước đầy đủ"
                                             >
                                                 <Eye size={20} />

@@ -105,13 +105,15 @@ export default async function handler(req, res) {
             || payload?.gatewayTransactionId
             || null;
 
+        const newPayload = { ...(payment.raw_payload || {}), ...payload };
+
         const { error: updateError } = await supabase
             .from('payments')
             .update({
                 status: 'paid',
                 paid_at: new Date().toISOString(),
                 transaction_reference: transactionReference,
-                raw_payload: payload,
+                raw_payload: newPayload,
             })
             .eq('id', payment.id);
 

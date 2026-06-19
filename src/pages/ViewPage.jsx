@@ -608,7 +608,7 @@ const ViewPage = () => {
                         </div>
 
                         <div className="bg-white p-3 shadow-md sm:p-4">
-                            <div className="mx-auto w-full max-w-[680px]">
+                            <div className={`mx-auto grid w-full gap-0 ${strip ? 'grid-cols-2' : 'grid-cols-1'} max-w-[680px]`}>
                                 <img
                                     src={session.composite_url}
                                     alt="Ảnh đã ghép"
@@ -616,6 +616,15 @@ const ViewPage = () => {
                                     loading="eager"
                                     decoding="async"
                                 />
+                                {strip && (
+                                    <img
+                                        src={session.composite_url}
+                                        alt="Ảnh đã ghép bản thứ hai"
+                                        className="h-auto w-full object-contain"
+                                        loading="eager"
+                                        decoding="async"
+                                    />
+                                )}
                             </div>
 
                             <button

@@ -159,6 +159,7 @@ const Payment = () => {
                 const res = await axios.post(`${CLOUD_API_URL}/api/sepay-orders`, {
                     amount: remainingAmount,
                     session_id: sessionData?.sessionId || sessionData?.uuid || null,
+                    device_id: getDeviceId(),
                 });
                 if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);
             } catch (error) {

@@ -113,9 +113,9 @@ const DeviceManager = () => {
                             <AlertTriangle size={32} className="text-red-500" />
                         </div>
                         <div className="text-center">
-                            <h3 className="text-lg font-bold text-[#2f3e46] mb-1">Xóa thiết bị?</h3>
+                            <h3 className="text-lg font-bold text-[#1a1a2e] mb-1">Xóa thiết bị?</h3>
                             <p className="text-sm text-gray-500">
-                                Thiết bị <span className="font-semibold text-[#2f3e46]">"{deleteTarget.name}"</span> sẽ bị xóa khỏi hệ thống.
+                                Thiết bị <span className="font-semibold text-[#1a1a2e]">"{deleteTarget.name}"</span> sẽ bị xóa khỏi hệ thống.
                                 Khi mở lại, máy đó sẽ tự đăng ký lại.
                             </p>
                         </div>
@@ -140,7 +140,7 @@ const DeviceManager = () => {
             <div className="flex justify-end items-center">
                 <button
                     onClick={fetchDevices}
-                    className="p-2 text-gray-500 hover:text-[#52796f] transition-colors"
+                    className="p-2 text-gray-500 hover:text-[#e63946] transition-colors"
                 >
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
@@ -182,7 +182,7 @@ const DeviceManager = () => {
                                     <button onClick={() => setEditingId(null)} className="text-red-500"><X size={18} /></button>
                                 </div>
                             ) : (
-                                <h3 className="text-xl font-bold text-[#2f3e46] flex items-center gap-2 group">
+                                <h3 className="text-xl font-bold text-[#1a1a2e] flex items-center gap-2 group">
                                     {device.name}
                                     <button onClick={() => startEdit(device)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity">
                                         <Edit2 size={14} />

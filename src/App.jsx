@@ -28,7 +28,7 @@ const BillSettings = lazy(() => import('./components/admin/BillSettings'));
 const BrandingSettings = lazy(() => import('./components/admin/BrandingSettings'));
 
 const LoadingScreen = () => (
-    <div className="flex h-full min-h-screen w-full items-center justify-center bg-[#F9FAF7] font-serif text-xl font-bold text-[#52796f]">
+    <div className="flex h-full min-h-screen w-full items-center justify-center bg-gray-50 font-serif text-xl font-bold text-[#e63946]">
         Đang tải...
     </div>
 );

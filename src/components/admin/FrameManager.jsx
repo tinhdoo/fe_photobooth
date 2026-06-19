@@ -300,15 +300,15 @@ const FrameManager = () => {
                     ) : (() => {
                         const medals = ['🥇', '🥈', '🥉', '4', '5'];
                         return topFrames.map((frame, idx) => (
-                            <div key={frame.frame_url} className="flex items-center gap-1.5 bg-[#F9FAF7] border border-gray-100 rounded-xl px-2 py-1">
+                            <div key={frame.frame_url} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-xl px-2 py-1">
                                 <span className="text-sm leading-none">{medals[idx]}</span>
                                 <div className="w-7 h-7 rounded-lg overflow-hidden bg-white border border-gray-100 shrink-0">
                                     <img src={frame.frame_url} alt={frame.frame_name} className="w-full h-full object-contain" />
                                 </div>
-                                <span className="text-xs font-semibold text-[#2f3e46] max-w-[80px] truncate" title={frame.frame_name}>
+                                <span className="text-xs font-semibold text-[#1a1a2e] max-w-[80px] truncate" title={frame.frame_name}>
                                     {frame.frame_name}
                                 </span>
-                                <span className="text-[10px] font-black text-[#52796f] bg-[#52796f]/10 px-1.5 py-0.5 rounded-full shrink-0">
+                                <span className="text-[10px] font-black text-[#e63946] bg-[#e63946]/10 px-1.5 py-0.5 rounded-full shrink-0">
                                     {frame.count}x
                                 </span>
                             </div>
@@ -319,8 +319,8 @@ const FrameManager = () => {
 
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 lg:gap-6">
                 <div className="w-full lg:w-auto">
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#2f3e46] tracking-tight">Quản lý khung hình</h1>
-                    <p className="text-[#52796f] mt-1 text-sm md:text-base">Quản lý khung viền cho máy ảnh của bạn</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Quản lý khung hình</h1>
+                    <p className="text-[#e63946] mt-1 text-sm md:text-base">Quản lý khung viền cho máy ảnh của bạn</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
@@ -361,7 +361,7 @@ const FrameManager = () => {
                                 relative px-5 py-3 text-sm font-semibold transition-all whitespace-nowrap
                                 ${selectedLayout === l.id
                                     ? 'text-[#354f52]'
-                                    : 'text-gray-400 hover:text-[#52796f]'
+                                    : 'text-gray-400 hover:text-[#e63946]'
                                 }
                             `}
                         >
@@ -386,7 +386,7 @@ const FrameManager = () => {
 
                 <label className={`
                     ml-auto
-                    bg-[#52796f] hover:bg-[#3a5a40]
+                    bg-[#e63946] hover:bg-[#3a5a40]
                     text-white
                     px-5 py-2.5
                     rounded-lg
@@ -414,7 +414,7 @@ const FrameManager = () => {
             {selectedFrames.size > 0 && (
                 <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 bg-white shadow-2xl border border-gray-200 rounded-3xl md:rounded-full px-4 md:px-6 py-3 flex flex-col md:flex-row items-center gap-3 md:gap-4 z-40 animate-slideUp w-[95%] md:w-auto">
                     <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
-                        <span className="font-bold text-[#2f3e46] text-sm md:text-base whitespace-nowrap">{selectedFrames.size} đã chọn</span>
+                        <span className="font-bold text-[#1a1a2e] text-sm md:text-base whitespace-nowrap">{selectedFrames.size} đã chọn</span>
                         <button onClick={() => setSelectedFrames(new Set())} className="text-gray-500 hover:text-gray-700 text-sm md:hidden font-medium">
                             Hủy
                         </button>
@@ -463,10 +463,10 @@ const FrameManager = () => {
                     <div className="flex items-center gap-2 mb-4">
                         <button
                             onClick={toggleSelectAll}
-                            className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#52796f] transition-colors"
+                            className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#e63946] transition-colors"
                         >
                             {selectedFrames.size === frames.length && frames.length > 0 ? (
-                                <CheckSquare size={20} className="text-[#52796f]" />
+                                <CheckSquare size={20} className="text-[#e63946]" />
                             ) : (
                                 <Square size={20} />
                             )}
@@ -482,13 +482,13 @@ const FrameManager = () => {
                 onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingOver(false); }}
                 onDrop={handleDropFiles}
-                className={`relative rounded-2xl transition-all duration-200 ${isDraggingOver ? 'ring-4 ring-[#52796f]/40 bg-[#52796f]/5' : ''}`}
+                className={`relative rounded-2xl transition-all duration-200 ${isDraggingOver ? 'ring-4 ring-[#e63946]/40 bg-[#e63946]/5' : ''}`}
             >
                 {isDraggingOver && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#52796f]/10 rounded-2xl border-2 border-dashed border-[#52796f] pointer-events-none">
-                        <Upload size={48} className="text-[#52796f] mb-3" />
-                        <p className="text-[#52796f] font-bold text-lg">Thả để tải lên</p>
-                        <p className="text-[#52796f]/60 text-sm">Chỉ chấp nhận file PNG</p>
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#e63946]/10 rounded-2xl border-2 border-dashed border-[#e63946] pointer-events-none">
+                        <Upload size={48} className="text-[#e63946] mb-3" />
+                        <p className="text-[#e63946] font-bold text-lg">Thả để tải lên</p>
+                        <p className="text-[#e63946]/60 text-sm">Chỉ chấp nhận file PNG</p>
                     </div>
                 )}
 
@@ -497,12 +497,12 @@ const FrameManager = () => {
                     frames.length === 0 && (
                         <div className="mb-8 bg-gradient-to-br from-[#F9FAF7] to-white border-2 border-dashed border-[#CAD2C5] rounded-3xl p-8">
                             <label className="flex flex-col items-center justify-center cursor-pointer group">
-                                <div className="w-20 h-20 bg-[#A8B5A0]/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-[#A8B5A0]/20 transition-all">
-                                    <Plus size={40} className="text-[#A8B5A0]" />
+                                <div className="w-20 h-20 bg-[#e63946]/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-[#e63946]/20 transition-all">
+                                    <Plus size={40} className="text-[#e63946]" />
                                 </div>
-                                <h3 className="text-xl font-bold text-[#52796f] mb-2">Tải lên khung hình</h3>
+                                <h3 className="text-xl font-bold text-[#e63946] mb-2">Tải lên khung hình</h3>
                                 <p className="text-sm text-gray-500 mb-4">Định dạng PNG có độ trong suốt</p>
-                                <div className="bg-[#A8B5A0] hover:bg-[#84a98c] text-white px-6 py-2 rounded-full flex items-center gap-2 transition-colors">
+                                <div className="bg-[#e63946] hover:bg-[#84a98c] text-white px-6 py-2 rounded-full flex items-center gap-2 transition-colors">
                                     <Upload size={18} />
                                     <span className="font-medium">Chọn tệp</span>
                                 </div>
@@ -573,7 +573,7 @@ const FrameManager = () => {
                                     >
                                         {/* Selection Checkbox (Visible on hover or selected) */}
                                         <div className={`absolute top-2 left-2 z-30 transition-all duration-200 ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
-                                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#52796f] border-[#52796f] text-white' : 'bg-white border-gray-300 text-transparent hover:border-[#52796f]'}`}>
+                                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#e63946] border-[#e63946] text-white' : 'bg-white border-gray-300 text-transparent hover:border-[#e63946]'}`}>
                                                 <CheckSquare size={14} fill="currentColor" />
                                             </div>
                                         </div>
@@ -587,7 +587,7 @@ const FrameManager = () => {
 
                                         {/* Frame Preview */}
                                         <div
-                                            className="bg-[#F9FAF7] relative overflow-hidden"
+                                            className="bg-gray-50 relative overflow-hidden"
                                             style={{
                                                 aspectRatio: (() => {
                                                     const layoutDef = LAYOUTS.find(l => l.id === frame.layout);
@@ -633,13 +633,13 @@ const FrameManager = () => {
                                         {/* Frame Info */}
                                         <div className="p-3 border-t border-gray-100">
                                             <h3
-                                                className="font-semibold text-[#2f3e46] truncate text-sm mb-1"
+                                                className="font-semibold text-[#1a1a2e] truncate text-sm mb-1"
                                                 title={frame.name}
                                             >
                                                 {frame.name}
                                             </h3>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] bg-[#F0F2E9] text-[#52796f] px-1.5 py-0.5 rounded-full font-medium">
+                                                <span className="text-[10px] bg-gray-50 text-[#e63946] px-1.5 py-0.5 rounded-full font-medium">
                                                     {frame.layout}
                                                 </span>
                                             </div>
@@ -654,7 +654,7 @@ const FrameManager = () => {
                                 <Upload size={48} className="text-gray-300" />
                             </div>
                             <h3 className="text-xl font-bold text-gray-400 mb-2">Chưa có khung hình nào</h3>
-                            <p className="text-gray-400">Tải lên khung hình PNG cho bố cục <span className="font-semibold text-[#52796f]">{selectedLayout}</span> để bắt đầu!</p>
+                            <p className="text-gray-400">Tải lên khung hình PNG cho bố cục <span className="font-semibold text-[#e63946]">{selectedLayout}</span> để bắt đầu!</p>
                         </div>
                     )
                 }

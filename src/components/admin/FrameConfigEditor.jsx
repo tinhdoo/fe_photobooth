@@ -360,18 +360,18 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-0 md:p-8 backdrop-blur-sm">
-            <div className="bg-[#F9FAF7] w-full max-w-7xl h-full md:h-[90vh] md:rounded-3xl flex flex-col md:flex-row overflow-hidden shadow-2xl">
+            <div className="bg-gray-50 w-full max-w-7xl h-full md:h-[90vh] md:rounded-3xl flex flex-col md:flex-row overflow-hidden shadow-2xl">
 
                 {/* HEADER: Mobile Close Only */}
                 <div className="md:hidden flex justify-between items-center p-4 bg-white border-b border-gray-200">
-                    <h2 className="font-bold text-[#2f3e46]">Cấu hình {frame.name}</h2>
+                    <h2 className="font-bold text-[#1a1a2e]">Cấu hình {frame.name}</h2>
                     <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* TOP (Mobile) / RIGHT (Desktop): Preview */}
-                <div className="flex-1 md:w-3/4 bg-[#2f3e46] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
+                <div className="flex-1 md:w-3/4 bg-[#1a1a2e] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
                     <div className="relative h-full w-full flex items-center justify-center">
                         <div
                             ref={containerRef}
@@ -475,7 +475,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                 {/* BOTTOM (Mobile) / LEFT (Desktop): Controls */}
                 <div className="w-full md:w-1/4 bg-white md:border-r border-gray-200 p-4 md:p-6 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none">
                     <div className="hidden md:flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-[#2f3e46]">Điều chỉnh</h2>
+                        <h2 className="text-xl font-bold text-[#1a1a2e]">Điều chỉnh</h2>
                         <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
                             <X size={20} />
                         </button>
@@ -493,7 +493,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 type="range" min="0" max="100"
                                 value={config.borderRadius}
                                 onChange={e => setConfig({ ...config, borderRadius: parseInt(e.target.value) })}
-                                className="w-full h-2 bg-gray-200 rounded-lg accent-[#52796f]"
+                                className="w-full h-2 bg-gray-200 rounded-lg accent-[#e63946]"
                             />
                         </label>
 
@@ -510,7 +510,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 return (
                                     <div className="space-y-4 animate-fadeIn">
                                         <div className="flex justify-between items-center">
-                                            <h3 className="font-bold text-[#52796f] text-sm md:text-base">
+                                            <h3 className="font-bold text-[#e63946] text-sm md:text-base">
                                                 {isMulti ? `Đang chọn ${selectedBoxIndices.length} ô` : `Ảnh #${primaryIdx + 1}`}
                                             </h3>
                                         </div>
@@ -613,7 +613,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 <RefreshCw size={18} /> Đặt lại vị trí
                             </button>
 
-                            <button onClick={handleSave} className="w-full py-4 bg-[#52796f] text-white rounded-xl font-bold hover:bg-[#3f6158] flex items-center justify-center gap-2 shadow-lg shadow-[#52796f]/20">
+                            <button onClick={handleSave} className="w-full py-4 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20">
                                 <Save size={20} /> Lưu cấu hình
                             </button>
                         </div>
@@ -641,7 +641,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                     {notification.type === 'success' ? <CheckCircle size={40} /> : <XCircle size={40} />}
                                 </div>
 
-                                <h3 className="text-2xl font-bold text-[#2f3e46] mb-2">
+                                <h3 className="text-2xl font-bold text-[#1a1a2e] mb-2">
                                     {notification.type === 'success' ? 'Thành công' : 'Lỗi'}
                                 </h3>
 
@@ -652,7 +652,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 <button
                                     onClick={() => setNotification({ ...notification, show: false })}
                                     className={`w-full py-4 rounded-2xl font-bold text-white transition-all shadow-lg ${notification.type === 'success'
-                                        ? 'bg-[#52796f] hover:bg-[#3f6158] shadow-[#52796f]/30'
+                                        ? 'bg-[#e63946] hover:bg-[#c1121f] shadow-[#e63946]/30'
                                         : 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
                                         }`}
                                 >

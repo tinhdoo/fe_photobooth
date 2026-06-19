@@ -84,7 +84,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
             <div className={embedded
                 ? "flex h-full w-full flex-col overflow-hidden bg-[#FFF8E7]"
                 : "flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#E7D3B7] bg-[#FFF8E7] shadow-2xl"}>
-                <div className="flex items-center justify-between border-b border-[#E7D3B7] bg-white px-6 py-4">
+                <div className={`flex items-center justify-between px-6 py-4 ${embedded ? '' : 'border-b border-[#E7D3B7] bg-white'}`}>
                     <div>
                         <h2 className="text-2xl font-black text-[#3F3127]">Staff Panel</h2>
                         <p className="text-sm font-semibold text-[#7B5E43]">Phiên gần đây, in lại và in thêm</p>
@@ -176,7 +176,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                             )}
                                             <button
                                                 disabled={!session.canReprint || isPrinting}
-                                                onClick={() => reprint(session, 'retry')}
+                                                onClick={() => reprint(session, 'retry', session.copies || 1)}
                                                 className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full bg-[#52796F] px-4 py-2 font-black text-white disabled:opacity-40"
                                             >
                                                 <Printer size={18} />
