@@ -325,23 +325,23 @@ const FrameManager = () => {
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                     {/* Tab Switcher */}
-                    <div className="inline-flex bg-[#edf1ea] rounded-full p-1 shadow-inner">
+                    <div className="inline-flex bg-gray-100/80 rounded-full p-0.5 border border-gray-200/50">
                         <button
                             onClick={() => { setActiveTab('photobooth'); setSelectedLayout(LAYOUTS.find(l => !l.isMobileOnly)?.id || LAYOUTS[0].id); }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition
+                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
                                 ${activeTab === 'photobooth'
-                                    ? 'bg-white shadow text-[#354f52]'
-                                    : 'text-gray-500 hover:text-[#354f52]'
+                                    ? 'bg-white shadow text-[#e63946]'
+                                    : 'text-gray-500 hover:text-[#e63946]'
                                 }`}
                         >
                             📷 Photobooth
                         </button>
                         <button
                             onClick={() => { setActiveTab('upload'); setSelectedLayout(LAYOUTS.find(l => l.isMobileOnly)?.id || LAYOUTS[0].id); }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition
+                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
                                 ${activeTab === 'upload'
-                                    ? 'bg-white shadow text-[#354f52]'
-                                    : 'text-gray-500 hover:text-[#354f52]'
+                                    ? 'bg-white shadow text-[#e63946]'
+                                    : 'text-gray-500 hover:text-[#e63946]'
                                 }`}
                         >
                             📱 Upload
@@ -351,49 +351,45 @@ const FrameManager = () => {
             </div>
 
             {/* Layout Selector - Tabs */}
-            <div className="border-b border-[#e6e8e3] mb-6">
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <div className="mb-6 overflow-hidden">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none -mx-4 px-4">
                     {filteredLayouts.map(l => (
                         <button
                             key={l.id}
                             onClick={() => setSelectedLayout(l.id)}
                             className={`
-                                relative px-5 py-3 text-sm font-semibold transition-all whitespace-nowrap
+                                px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap border
                                 ${selectedLayout === l.id
-                                    ? 'text-[#354f52]'
-                                    : 'text-gray-400 hover:text-[#e63946]'
+                                    ? 'bg-[#e63946] text-white border-[#e63946] shadow-sm shadow-[#e63946]/10'
+                                    : 'bg-white text-gray-500 border-gray-100 hover:text-[#e63946] hover:border-red-100'
                                 }
                             `}
                         >
                             {l.name}
-
-                            {selectedLayout === l.id && (
-                                <span className="absolute left-0 right-0 -bottom-[1px] h-[3px] bg-[#84a98c] rounded-full" />
-                            )}
                         </button>
                     ))}
                 </div>
             </div>
 
             {/* Sticky Toolbar / Layout Header & Upload */}
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-[#354f52] flex items-center">
+            <div className="flex items-center justify-between mb-5">
+                <h2 className="font-bold text-lg text-[#1a1a2e] flex items-center">
                     {LAYOUTS.find(l => l.id === selectedLayout)?.name}
-                    <span className="ml-2 text-gray-400 font-normal text-sm">
+                    <span className="ml-2 text-gray-400 font-semibold text-xs sm:text-sm">
                         • {frames.length} khung
                     </span>
                 </h2>
 
                 <label className={`
                     ml-auto
-                    bg-[#e63946] hover:bg-[#3a5a40]
+                    bg-[#e63946] hover:bg-[#c1121f]
                     text-white
-                    px-5 py-2.5
-                    rounded-lg
+                    px-4 py-2 sm:px-5 sm:py-2.5
+                    rounded-xl
                     flex items-center gap-2
-                    font-semibold
-                    shadow-md hover:shadow-lg
-                    transition
+                    font-bold text-sm
+                    shadow-md hover:shadow-lg hover:shadow-[#e63946]/10
+                    transition-all duration-200
                     active:scale-95
                     cursor-pointer
                     ${uploading ? 'opacity-70 pointer-events-none' : ''}
@@ -495,14 +491,14 @@ const FrameManager = () => {
                 {/* Upload Area */}
                 {
                     frames.length === 0 && (
-                        <div className="mb-8 bg-gradient-to-br from-[#F9FAF7] to-white border-2 border-dashed border-[#CAD2C5] rounded-3xl p-8">
+                        <div className="mb-8 bg-gradient-to-br from-[#FFF8F8] to-white border-2 border-dashed border-red-100 rounded-3xl p-8">
                             <label className="flex flex-col items-center justify-center cursor-pointer group">
                                 <div className="w-20 h-20 bg-[#e63946]/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-[#e63946]/20 transition-all">
                                     <Plus size={40} className="text-[#e63946]" />
                                 </div>
                                 <h3 className="text-xl font-bold text-[#e63946] mb-2">Tải lên khung hình</h3>
                                 <p className="text-sm text-gray-500 mb-4">Định dạng PNG có độ trong suốt</p>
-                                <div className="bg-[#e63946] hover:bg-[#84a98c] text-white px-6 py-2 rounded-full flex items-center gap-2 transition-colors">
+                                <div className="bg-[#e63946] hover:bg-[#c1121f] text-white px-6 py-2 rounded-full flex items-center gap-2 transition-colors">
                                     <Upload size={18} />
                                     <span className="font-medium">Chọn tệp</span>
                                 </div>
@@ -531,7 +527,7 @@ const FrameManager = () => {
                                         className={`group relative bg-white rounded-2xl overflow-hidden
                                             transition-all duration-300
                                             hover:-translate-y-1 hover:shadow-xl cursor-pointer
-                                            ${isSelected ? 'ring-2 ring-[#84a98c] shadow-lg' : 'border border-gray-100 hover:border-[#cad2c5]'}
+                                            ${isSelected ? 'ring-2 ring-[#e63946] shadow-lg' : 'border border-gray-100 hover:border-red-200'}
                                         `}
                                         onClick={() => toggleSelectFrame(frame.id)}
                                         onDragOver={(e) => {
@@ -612,17 +608,17 @@ const FrameManager = () => {
                                             />
 
                                             {/* Hover Actions Overlay */}
-                                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex items-center justify-center gap-3 z-20">
+                                            <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex items-center justify-center gap-4 z-20">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
-                                                    className="bg-white/20 hover:bg-white/40 p-3 rounded-full text-white shadow-lg transition-all transform hover:scale-110"
+                                                    className="bg-white text-gray-700 hover:bg-[#e63946] hover:text-white p-3 rounded-full shadow-lg transition-all transform hover:scale-110 border border-gray-100 duration-200"
                                                     title="Cấu hình lưới"
                                                 >
                                                     <Settings size={20} />
                                                 </button>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); confirmDelete(frame); }}
-                                                    className="bg-red-500/80 hover:bg-red-500 p-3 rounded-full text-white shadow-lg transition-all transform hover:scale-110"
+                                                    className="bg-[#e63946] text-white hover:bg-[#c1121f] p-3 rounded-full shadow-lg transition-all transform hover:scale-110 duration-200"
                                                     title="Xóa khung hình"
                                                 >
                                                     <Trash2 size={20} />
