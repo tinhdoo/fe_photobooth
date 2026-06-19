@@ -430,30 +430,30 @@ const RevenueDashboard = () => {
                         {showMobileFilter ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </button>
 
-                    <div className={`${showMobileFilter ? 'block' : 'hidden'} lg:block bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:sticky lg:top-8`}>
+                    <div className={`${showMobileFilter ? 'block' : 'hidden'} lg:block bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:sticky lg:top-8 w-full max-w-full overflow-hidden`}>
                         <h3 className="hidden lg:flex text-lg font-bold text-[#1a1a2e] mb-6 items-center gap-2">
                             <Filter size={20} className="text-[#e63946]" />
                             Bộ lọc doanh thu
                         </h3>
-                        <form onSubmit={handleFilter} className="space-y-5">
-                            <div>
+                        <form onSubmit={handleFilter} className="space-y-5 w-full max-w-full overflow-hidden">
+                            <div className="w-full max-w-full overflow-hidden">
                                 <label htmlFor="startDate" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Từ ngày</label>
                                 <input
                                     type="date"
                                     id="startDate"
                                     name="startDate"
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
+                                    className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                     value={dateRange.startDate}
                                     onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
                                 />
                             </div>
-                            <div>
+                            <div className="w-full max-w-full overflow-hidden">
                                 <label htmlFor="endDate" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Đến ngày</label>
                                 <input
                                     type="date"
                                     id="endDate"
                                     name="endDate"
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
+                                    className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
                                     value={dateRange.endDate}
                                     onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
                                 />
