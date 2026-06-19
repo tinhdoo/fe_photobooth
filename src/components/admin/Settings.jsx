@@ -30,7 +30,11 @@ const Settings = () => {
         camera_mode: 'webcam',
         hot_folder: 'C:/Photobooth_Input',
         trigger_key: '{F8}',
-        price_schedule: '[]'
+        price_schedule: '[]',
+        print_scale_x: '100',
+        print_scale_y: '100',
+        print_offset_x: '0',
+        print_offset_y: '0'
     });
     const [priceScheduleForm, setPriceScheduleForm] = useState({
         run_at: '',
@@ -833,6 +837,73 @@ const Settings = () => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Cân chỉnh ảnh in */}
+                                        {isLocalAdmin && (
+                                            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm col-span-1 md:col-span-2">
+                                                <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
+                                                    🖨️ Cân chỉnh tỉ lệ & Lệch ảnh in
+                                                </h4>
+                                                <p className="text-xs text-gray-500 font-semibold">
+                                                    Điều chỉnh tỉ lệ co giãn (Scale) và vị trí dịch chuyển (Offset) của ảnh vẽ ra máy in nếu bản in thực tế bị cắt lệch viền.
+                                                </p>
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                            Tỉ lệ rộng (%)
+                                                        </label>
+                                                        <input 
+                                                            type="number" 
+                                                            name="print_scale_x" 
+                                                            value={configs.print_scale_x ?? 100} 
+                                                            onChange={handleChange} 
+                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
+                                                            min="50" max="150"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                            Tỉ lệ cao (%)
+                                                        </label>
+                                                        <input 
+                                                            type="number" 
+                                                            name="print_scale_y" 
+                                                            value={configs.print_scale_y ?? 100} 
+                                                            onChange={handleChange} 
+                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
+                                                            min="50" max="150"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                            Dịch ngang X (pixel)
+                                                        </label>
+                                                        <input 
+                                                            type="number" 
+                                                            name="print_offset_x" 
+                                                            value={configs.print_offset_x ?? 0} 
+                                                            onChange={handleChange} 
+                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                            Dịch dọc Y (pixel)
+                                                        </label>
+                                                        <input 
+                                                            type="number" 
+                                                            name="print_offset_y" 
+                                                            value={configs.print_offset_y ?? 0} 
+                                                            onChange={handleChange} 
+                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <p className="text-[11px] text-gray-400">
+                                                    * Mẹo: Nếu ảnh in bị cắt lệch về bên trái/phía trên, hãy tăng Dịch ngang X / Dịch dọc Y để dịch chuyển ảnh in sang phải/xuống dưới. Nếu ảnh bị co quá mức, hãy giảm tỉ lệ rộng/cao.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
