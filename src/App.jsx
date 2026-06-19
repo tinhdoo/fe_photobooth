@@ -27,11 +27,38 @@ const Settings = lazy(() => import('./components/admin/Settings'));
 const BillSettings = lazy(() => import('./components/admin/BillSettings'));
 const BrandingSettings = lazy(() => import('./components/admin/BrandingSettings'));
 
-const LoadingScreen = () => (
-    <div className="flex h-full min-h-screen w-full items-center justify-center bg-gray-50 font-serif text-xl font-bold text-[#e63946]">
-        Đang tải...
-    </div>
-);
+const LoadingScreen = () => {
+    let logoUrl = '/logo_tomato.png';
+    try {
+        const context = useWorkflow();
+        if (context?.configs?.logo_main) {
+            logoUrl = context.configs.logo_main;
+        }
+    } catch (e) {
+        // Fallback if useWorkflow is used outside WorkflowProvider
+    }
+
+    return (
+        <div className="flex h-full min-h-screen w-full flex-col items-center justify-center bg-white">
+            <div className="flex flex-col items-center gap-5">
+                <img
+                    src={logoUrl}
+                    alt="Loading..."
+                    className="h-24 w-24 animate-pulse rounded-full object-contain shadow-lg"
+                    onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/logo_tomato.png';
+                    }}
+                />
+                <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '0ms' }} />
+                    <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '150ms' }} />
+                    <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '300ms' }} />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const StepSuspense = ({ children }) => (
     <Suspense fallback={<LoadingScreen />}>
