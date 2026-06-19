@@ -29,9 +29,9 @@ const AdminLogin = () => {
     };
 
     return (
-        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#F0F2E9] p-6 pt-24">
-            <div className="absolute left-[-10%] top-[-10%] h-96 w-96 rounded-full bg-[#A8B5A0]/20 blur-3xl" />
-            <div className="absolute bottom-[-10%] right-[-10%] h-96 w-96 rounded-full bg-[#9BAD99]/20 blur-3xl" />
+        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gray-50 p-6 pt-24">
+            <div className="absolute left-[-10%] top-[-10%] h-96 w-96 rounded-full bg-[#e63946]/5 blur-3xl" />
+            <div className="absolute bottom-[-10%] right-[-10%] h-96 w-96 rounded-full bg-[#e63946]/5 blur-3xl" />
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -44,8 +44,8 @@ const AdminLogin = () => {
                         alt="Tomato Photobooth"
                         className="mx-auto mb-4 h-20 w-20 rounded-full object-contain"
                     />
-                    <h1 className="mb-3 font-serif text-4xl font-extrabold text-[#2f3e46]">Tomato Admin</h1>
-                    <p className="text-[#52796f]">Đăng nhập để quản lý hệ thống</p>
+                    <h1 className="mb-3 font-serif text-4xl font-extrabold text-[#1a1a2e]">Tomato Admin</h1>
+                    <p className="text-gray-500">Đăng nhập để quản lý hệ thống</p>
                 </div>
 
                 {error && (
@@ -69,7 +69,7 @@ const AdminLogin = () => {
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20"
+                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#e63946] focus:ring-2 focus:ring-[#e63946]/20 bg-gray-50 focus:bg-white"
                                 placeholder="Nhập tên đăng nhập"
                                 required
                             />
@@ -86,7 +86,7 @@ const AdminLogin = () => {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#52796f] focus:ring-2 focus:ring-[#52796f]/20"
+                                className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition-all focus:border-[#e63946] focus:ring-2 focus:ring-[#e63946]/20 bg-gray-50 focus:bg-white"
                                 placeholder="Nhập mật khẩu"
                                 required
                             />
@@ -99,7 +99,7 @@ const AdminLogin = () => {
                             type="checkbox"
                             checked={rememberMe}
                             onChange={(e) => setRememberMe(e.target.checked)}
-                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-[#52796f] focus:ring-[#52796f]"
+                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-[#e63946] focus:ring-[#e63946]"
                         />
                         <label htmlFor="remember-me" className="ml-2 block cursor-pointer select-none text-sm font-medium text-gray-700">
                             Ghi nhớ đăng nhập
@@ -108,7 +108,7 @@ const AdminLogin = () => {
 
                     <button
                         type="submit"
-                        className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#52796f] py-4 font-bold text-white shadow-lg shadow-[#52796f]/20 transition-colors hover:bg-[#3f6154]"
+                        className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#e63946] py-4 font-bold text-white shadow-lg shadow-[#e63946]/20 transition-colors hover:bg-[#d62828]"
                     >
                         Đăng nhập
                         <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />

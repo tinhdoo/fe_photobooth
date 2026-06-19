@@ -105,7 +105,7 @@ const CodeManager = () => {
 
             <div className="flex flex-col xl:flex-row gap-6">
                 {/* --- 1. GENERATION FORM --- */}
-                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit">
+                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit min-w-0 max-w-full overflow-hidden">
                     <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-5 flex items-center gap-2 pb-4 border-b border-gray-100">
                         <ArrowRight className="bg-[#e63946] text-white rounded-full p-1" size={24} />
                         Tạo mã mới

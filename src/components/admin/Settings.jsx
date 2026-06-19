@@ -837,7 +837,7 @@ const Settings = () => {
                                 </div>
 
 
-                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-4 sm:p-6 shadow-sm">
+                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
                                         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <h4 className="text-base font-bold text-[#354f52]">Hẹn giờ đổi giá</h4>

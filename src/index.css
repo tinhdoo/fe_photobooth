@@ -70,3 +70,26 @@ h3,
     filter: none !important;
   }
 }
+
+/* Fix iOS Safari datetime-local input container overflow and shadow DOM sizing */
+input[type="datetime-local"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+input[type="datetime-local"]::-webkit-datetime-edit {
+  display: inline-flex !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: flex !important;
+}
