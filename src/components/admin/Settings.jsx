@@ -539,6 +539,58 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                     className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
                                 />
                             </label>
+
+                            {/* Cân chỉnh ảnh in */}
+                            <div className="border-t border-gray-100 pt-4 mt-4 space-y-4">
+                                <span className="block text-sm font-bold text-[#1a1a2e]">Cân chỉnh lệch ảnh & Tỉ lệ in</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <label className="block">
+                                        <span className="mb-2 block text-xs font-bold text-gray-500">Tỉ lệ rộng (%)</span>
+                                        <input
+                                            type="number"
+                                            name="print_scale_x"
+                                            value={configs.print_scale_x ?? 100}
+                                            onChange={handleChange}
+                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
+                                            min="50" max="150"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="mb-2 block text-xs font-bold text-gray-500">Tỉ lệ cao (%)</span>
+                                        <input
+                                            type="number"
+                                            name="print_scale_y"
+                                            value={configs.print_scale_y ?? 100}
+                                            onChange={handleChange}
+                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
+                                            min="50" max="150"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="mb-2 block text-xs font-bold text-gray-500">Dịch ngang X (px)</span>
+                                        <input
+                                            type="number"
+                                            name="print_offset_x"
+                                            value={configs.print_offset_x ?? 0}
+                                            onChange={handleChange}
+                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="mb-2 block text-xs font-bold text-gray-500">Dịch dọc Y (px)</span>
+                                        <input
+                                            type="number"
+                                            name="print_offset_y"
+                                            value={configs.print_offset_y ?? 0}
+                                            onChange={handleChange}
+                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
+                                        />
+                                    </label>
+                                </div>
+                                <p className="text-[10px] text-gray-400 font-semibold leading-normal">
+                                    * Tăng X / Y để dịch chuyển ảnh in sang phải / xuống dưới.
+                                </p>
+                            </div>
                         </div>
                     </section>
 
