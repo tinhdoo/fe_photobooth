@@ -706,7 +706,7 @@ const Settings = () => {
             <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                 {activeTab === 'general' ? (
                     <div className="h-full flex flex-col">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <h2 className="text-xl font-bold text-[#1a1a2e] flex items-center gap-2">
                                 <SettingsIcon size={20} className="text-[#e63946]" />
                                 Cấu hình chung
@@ -720,7 +720,7 @@ const Settings = () => {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-8">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                             {message && (
                                 <div className={`p-4 mb-8 rounded-xl border ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} animate-fadeIn`}>
                                     <div className="flex items-center gap-2 font-bold">
@@ -760,7 +760,7 @@ const Settings = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}
-                                        <div className="bg-gray-50/80 p-6 rounded-2xl border border-gray-100 space-y-6">
+                                        <div className="bg-gray-50/80 p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6">
                                             <h4 className="text-base font-bold text-[#354f52] flex items-center gap-2 tracking-wide">
                                                 📸 Chụp tại quầy
                                             </h4>
@@ -808,7 +808,7 @@ const Settings = () => {
                                         </div>
 
                                         {/* Mobile Upload Flow */}
-                                        <div className="bg-[#f8fcf3] p-6 rounded-2xl border border-[#e6eedf] space-y-6">
+                                        <div className="bg-[#f8fcf3] p-4 sm:p-6 rounded-2xl border border-[#e6eedf] space-y-6">
                                             <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
                                                 📱 Tải trực tuyến
                                             </h4>
@@ -841,7 +841,7 @@ const Settings = () => {
                                 </div>
 
 
-                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-6 shadow-sm">
+                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-4 sm:p-6 shadow-sm">
                                         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <h4 className="text-base font-bold text-[#354f52]">Hẹn giờ đổi giá</h4>
@@ -884,23 +884,35 @@ const Settings = () => {
                                             {getPriceSchedule().length === 0 ? (
                                                 <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
                                             ) : getPriceSchedule().map((item) => (
-                                                <div key={item.id || item.run_at} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                                                    <div className="min-w-0 text-sm">
-                                                        <div className="font-black text-[#1a1a2e]">
-                                                            {isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}
-                                                            {item.applied ? <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Đã áp dụng</span> : <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Đang chờ</span>}
+                                                <div key={item.id || item.run_at} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-1.5 font-black text-xs sm:text-sm text-[#1a1a2e]">
+                                                            <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
+                                                            {item.applied ? (
+                                                                <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-bold whitespace-nowrap">Đã áp dụng</span>
+                                                            ) : (
+                                                                <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700 font-bold whitespace-nowrap">Đang chờ</span>
+                                                            )}
                                                         </div>
-                                                        <div className="mt-1 truncate font-semibold text-gray-500">
-                                                            Chụp {Number(item.price || 0).toLocaleString('vi-VN')}đ · In thêm {Number(item.print_price || 0).toLocaleString('vi-VN')}đ · Mobile {Number(item.mobile_price || 0).toLocaleString('vi-VN')}đ · Mobile in {Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}đ
+                                                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-semibold text-gray-500">
+                                                            <span className="whitespace-nowrap">Chụp: <strong className="text-gray-700">{Number(item.price || 0).toLocaleString('vi-VN')}đ</strong></span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="whitespace-nowrap">In: <strong className="text-gray-700">{Number(item.print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="whitespace-nowrap">Mobile: <strong className="text-gray-700">{Number(item.mobile_price || 0).toLocaleString('vi-VN')}đ</strong></span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="whitespace-nowrap">Mb in: <strong className="text-gray-700">{Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removePriceSchedule(item.id)}
-                                                        className="rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black text-red-600"
-                                                    >
-                                                        Xóa
-                                                    </button>
+                                                    <div className="flex justify-end w-full sm:w-auto border-t sm:border-0 pt-2 sm:pt-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removePriceSchedule(item.id)}
+                                                            className="rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 active:scale-95 transition-all w-full sm:w-auto text-center"
+                                                        >
+                                                            Xóa
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -909,7 +921,7 @@ const Settings = () => {
                                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider border-b pb-2">Thời gian & Trải nghiệm</h3>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-white p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
+                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
                                                     Thời gian 1 phiên chụp (giây)
@@ -936,7 +948,7 @@ const Settings = () => {
                                             </div>
                                         </div>
 
-                                        <div className="bg-white p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
+                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
                                                     Thời gian 1 phiên tải ảnh điện thoại (giây)
