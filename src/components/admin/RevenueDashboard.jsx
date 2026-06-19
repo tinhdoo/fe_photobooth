@@ -25,6 +25,7 @@ const RevenueDashboard = () => {
     const [resetLoading, setResetLoading] = useState(false);
     const [resetError, setResetError] = useState('');
     const [notification, setNotification] = useState(null);
+    const [errorMsg, setErrorMsg] = useState('');
 
     const PAYMENT_METHODS = [
         { value: '', label: 'Tất cả phương thức', icon: <DollarSign size={18} /> },
@@ -105,6 +106,30 @@ const RevenueDashboard = () => {
 
     const handleFilter = (e) => {
         e.preventDefault();
+        setErrorMsg('');
+
+        const { startDate, endDate, startTime, endTime } = dateRange;
+
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (start > end) {
+                setErrorMsg('Ngày bắt đầu không được sau ngày kết thúc!');
+                return;
+            }
+            if (startDate === endDate && startTime && endTime) {
+                if (startTime > endTime) {
+                    setErrorMsg('Giờ bắt đầu không được sau giờ kết thúc!');
+                    return;
+                }
+            }
+        } else if (startTime && endTime && !startDate && !endDate) {
+            if (startTime > endTime) {
+                setErrorMsg('Giờ bắt đầu không được sau giờ kết thúc!');
+                return;
+            }
+        }
+
         fetchRevenue();
     };
 
@@ -435,50 +460,69 @@ const RevenueDashboard = () => {
                             <Filter size={20} className="text-[#e63946]" />
                             Bộ lọc doanh thu
                         </h3>
-                        <form onSubmit={handleFilter} className="space-y-5 w-full max-w-full overflow-hidden">
-                            <div className="w-full max-w-full overflow-hidden">
-                                <label htmlFor="startDate" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Từ ngày</label>
-                                <input
-                                    type="date"
-                                    id="startDate"
-                                    name="startDate"
-                                    className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
-                                    value={dateRange.startDate}
-                                    onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-                                />
-                            </div>
-                            <div className="w-full max-w-full overflow-hidden">
-                                <label htmlFor="endDate" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Đến ngày</label>
-                                <input
-                                    type="date"
-                                    id="endDate"
-                                    name="endDate"
-                                    className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
-                                    value={dateRange.endDate}
-                                    onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-                                />
+                        <form onSubmit={handleFilter} className="space-y-3.5 w-full max-w-full overflow-hidden">
+                            {errorMsg && (
+                                <div className="p-3 mb-2 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-bold animate-fadeIn">
+                                    {errorMsg}
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
+                                <div className="min-w-0 w-full overflow-hidden">
+                                    <label htmlFor="startDate" className="block text-xs font-bold text-gray-400 uppercase mb-1.5 ml-1">Từ ngày</label>
+                                    <input
+                                        type="date"
+                                        id="startDate"
+                                        name="startDate"
+                                        className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                        value={dateRange.startDate}
+                                        onChange={(e) => {
+                                            setErrorMsg('');
+                                            setDateRange({ ...dateRange, startDate: e.target.value });
+                                        }}
+                                    />
+                                </div>
+                                <div className="min-w-0 w-full overflow-hidden">
+                                    <label htmlFor="endDate" className="block text-xs font-bold text-gray-400 uppercase mb-1.5 ml-1">Đến ngày</label>
+                                    <input
+                                        type="date"
+                                        id="endDate"
+                                        name="endDate"
+                                        className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                        value={dateRange.endDate}
+                                        onChange={(e) => {
+                                            setErrorMsg('');
+                                            setDateRange({ ...dateRange, endDate: e.target.value });
+                                        }}
+                                    />
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
                                 <div className="min-w-0 w-full overflow-hidden">
-                                    <label htmlFor="startTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Từ giờ</label>
+                                    <label htmlFor="startTime" className="block text-xs font-bold text-gray-400 uppercase mb-1.5 ml-1">Từ giờ</label>
                                     <input
                                         type="time"
                                         id="startTime"
                                         name="startTime"
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
+                                        className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
                                         value={dateRange.startTime}
-                                        onChange={(e) => setDateRange({ ...dateRange, startTime: e.target.value })}
+                                        onChange={(e) => {
+                                            setErrorMsg('');
+                                            setDateRange({ ...dateRange, startTime: e.target.value });
+                                        }}
                                     />
                                 </div>
                                 <div className="min-w-0 w-full overflow-hidden">
-                                    <label htmlFor="endTime" className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Đến giờ</label>
+                                    <label htmlFor="endTime" className="block text-xs font-bold text-gray-400 uppercase mb-1.5 ml-1">Đến giờ</label>
                                     <input
                                         type="time"
                                         id="endTime"
                                         name="endTime"
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-gray-700"
+                                        className="w-full max-w-full min-w-0 box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
                                         value={dateRange.endTime}
-                                        onChange={(e) => setDateRange({ ...dateRange, endTime: e.target.value })}
+                                        onChange={(e) => {
+                                            setErrorMsg('');
+                                            setDateRange({ ...dateRange, endTime: e.target.value });
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -488,18 +532,18 @@ const RevenueDashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
-                                        className={`w-full bg-gray-50/50 border ${showPaymentDropdown ? 'border-[#e63946] ring-4 ring-[#e63946]/10 bg-white' : 'border-gray-100/80 hover:bg-white hover:border-gray-200'} rounded-2xl py-4 pl-4 pr-4 outline-none transition-all flex items-center justify-between group`}
+                                        className={`w-full bg-gray-50/50 border ${showPaymentDropdown ? 'border-[#e63946] ring-4 ring-[#e63946]/10 bg-white' : 'border-gray-100/80 hover:bg-white hover:border-gray-200'} rounded-xl py-2.5 pl-3.5 pr-3.5 outline-none transition-all flex items-center justify-between group`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-gray-400 group-hover:text-gray-500'}`}>
                                                 {selectedMethod.icon}
                                             </div>
-                                            <span className={`font-bold transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-[#1a1a2e]'}`}>
+                                            <span className={`font-bold text-sm transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-[#1a1a2e]'}`}>
                                                 {selectedMethod.label}
                                             </span>
                                         </div>
                                         <ChevronDown
-                                            size={18}
+                                            size={16}
                                             className={`text-gray-400 transition-transform duration-200 ${showPaymentDropdown ? 'rotate-180 text-[#e63946]' : ''}`}
                                         />
                                     </button>
@@ -535,22 +579,23 @@ const RevenueDashboard = () => {
                                     )}
                                 </div>
                             </div>
-                            <div className="pt-2 space-y-3">
+                            <div className="pt-1.5 space-y-2">
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-[#e63946] text-white py-4 rounded-2xl font-bold hover:bg-[#c1121f] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 active:scale-[0.98] disabled:opacity-50"
+                                    className="w-full bg-[#e63946] text-white py-2.5 rounded-xl font-bold hover:bg-[#c1121f] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 active:scale-[0.98] disabled:opacity-50 text-sm"
                                 >
-                                    {loading ? 'Đang tải...' : <><Filter size={20} /> Áp dụng</>}
+                                    {loading ? 'Đang tải...' : <><Filter size={18} /> Áp dụng</>}
                                 </button>
                                 {(dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime || paymentMethod) && (
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            setErrorMsg('');
                                             setDateRange({ startDate: '', endDate: '', startTime: '', endTime: '' });
                                             setPaymentMethod('');
                                         }}
-                                        className="w-full py-3 text-gray-400 hover:text-red-500 font-bold text-sm transition-colors"
+                                        className="w-full py-2 text-gray-400 hover:text-red-500 font-bold text-xs transition-colors"
                                     >
                                         Đặt lại mặc định
                                     </button>
