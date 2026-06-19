@@ -5,6 +5,41 @@ import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react'; // Added import
 import { FirebaseService } from '../../services/FirebaseService';
 
+const mirrorImage = async (imageUrl) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                
+                // Flip horizontally
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(img, 0, 0);
+                
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const localUrl = URL.createObjectURL(blob);
+                        resolve(localUrl);
+                    } else {
+                        reject(new Error("Failed to create blob"));
+                    }
+                }, 'image/jpeg', 0.95);
+            } catch (err) {
+                reject(err);
+            }
+        };
+        img.onerror = (err) => {
+            reject(err);
+        };
+        img.src = imageUrl;
+    });
+};
+
 const Capture = () => {
     const { nextStep, sessionData, updateSessionData, timeLeft, isSessionActive, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
@@ -225,11 +260,27 @@ const Capture = () => {
                     console.log("📷 [Capture] Canon Photo received:", data.url);
                     const url = data.url;
 
-                    const newPhotos = [...photosTaken, url];
+                    let finalUrl = url;
+                    try {
+                        finalUrl = await mirrorImage(url);
+                        console.log("📷 [Capture] Mirrored Canon Photo:", finalUrl);
+                    } catch (mirrorError) {
+                        console.error("Failed to mirror Canon photo, using original:", mirrorError);
+                    }
+
+                    let newPhotos;
+                    if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
+                        newPhotos = [...photosTaken];
+                        newPhotos[sessionData.retakeIndex] = finalUrl;
+                        updateSessionData('retakeIndex', null);
+                    } else {
+                        newPhotos = [...photosTaken, finalUrl];
+                    }
+
                     setPhotosTaken(newPhotos);
                     updateSessionData('photos', newPhotos);
                     updateSessionData('capturedPhotos', newPhotos);
-                    setLatestPhoto(url);
+                    setLatestPhoto(finalUrl);
 
                     setTimeout(() => {
                         setFlash(false);
@@ -266,11 +317,27 @@ const Capture = () => {
                     console.log("🔥 [Capture] Photo detected:", data.url);
                     const url = data.url;
 
-                    const newPhotos = [...photosTaken, url];
+                    let finalUrl = url;
+                    try {
+                        finalUrl = await mirrorImage(url);
+                        console.log("🔥 [Capture] Mirrored Hot Folder Photo:", finalUrl);
+                    } catch (mirrorError) {
+                        console.error("Failed to mirror Hot Folder photo, using original:", mirrorError);
+                    }
+
+                    let newPhotos;
+                    if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
+                        newPhotos = [...photosTaken];
+                        newPhotos[sessionData.retakeIndex] = finalUrl;
+                        updateSessionData('retakeIndex', null);
+                    } else {
+                        newPhotos = [...photosTaken, finalUrl];
+                    }
+
                     setPhotosTaken(newPhotos);
                     updateSessionData('photos', newPhotos);
                     updateSessionData('capturedPhotos', newPhotos);
-                    setLatestPhoto(url);
+                    setLatestPhoto(finalUrl);
 
                     setTimeout(() => {
                         setFlash(false);
@@ -409,7 +476,8 @@ const Capture = () => {
                         <div className="w-full h-full bg-black relative">
                             <img
                                 src="http://localhost:5001/liveview"
-                                className="w-full h-full object-cover scale-[1.16]"
+                                className="w-full h-full object-cover"
+                                style={{ transform: 'scaleX(-1.16)' }}
                                 alt="LiveView"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
