@@ -5,8 +5,8 @@ import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
 import { useWorkflow } from '../../context/WorkflowContext';
 
-const Settings = () => {
-    const isLocalAdmin = isLocalHost();
+const Settings = ({ forceLocalAdmin = false }) => {
+    const isLocalAdmin = isLocalHost() || forceLocalAdmin;
     const { isEventMode, toggleEventMode } = useWorkflow();
     const [activeTab, setActiveTab] = useState('general');
     const [configs, setConfigs] = useState({

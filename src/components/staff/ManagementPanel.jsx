@@ -88,7 +88,7 @@ const ManagementPanel = ({ onClose }) => {
                                     Đang tải cài đặt máy đọc tiền...
                                 </div>
                             )}>
-                                <BillSettingsPanel />
+                                <BillSettingsPanel forceLocalAdmin={true} />
                             </Suspense>
                         </div>
                     ) : (
@@ -98,7 +98,7 @@ const ManagementPanel = ({ onClose }) => {
                                     Đang tải cài đặt...
                                 </div>
                             )}>
-                                <SettingsPanel />
+                                <SettingsPanel forceLocalAdmin={true} />
                             </Suspense>
                         </div>
                     )}

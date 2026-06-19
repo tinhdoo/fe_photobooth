@@ -7,7 +7,7 @@ import { isLocalHost } from '../../utils/runtime';
 
 const defaultHexCodes = ['40', '41', '42', '43', '44', '45', '46', '47'];
 
-const BillSettings = () => {
+const BillSettings = ({ forceLocalAdmin = false }) => {
     const [devices, setDevices] = useState([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState('');
     const [currentDeviceId, setCurrentDeviceId] = useState('');
@@ -21,7 +21,7 @@ const BillSettings = () => {
     const [message, setMessage] = useState(null);
 
     const selectedIsLocal = selectedDeviceId && selectedDeviceId === currentDeviceId;
-    const isLocalAdmin = isLocalHost();
+    const isLocalAdmin = isLocalHost() || forceLocalAdmin;
 
     useEffect(() => {
         if (!isLocalAdmin) return undefined;
