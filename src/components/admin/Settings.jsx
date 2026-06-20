@@ -114,6 +114,18 @@ const Settings = ({ forceLocalAdmin = false }) => {
         setConfigs((prev) => ({ ...prev, price_schedule: JSON.stringify(schedule) }));
     };
 
+    // Lưu lịch giá NGAY xuống backend (POST /api/config merge từng key) -> thêm/xóa có hiệu lực liền,
+    // không cần bấm "Lưu cấu hình"; reload cũng không bị lịch quay lại.
+    const persistPriceSchedule = async (schedule) => {
+        setPriceSchedule(schedule);
+        try {
+            await axios.post('/api/config', { price_schedule: JSON.stringify(schedule) });
+        } catch (error) {
+            console.error('Lưu lịch giá thất bại:', error);
+            setMessage({ type: 'error', text: 'Lưu lịch giá thất bại, thử lại.' });
+        }
+    };
+
     const addPriceSchedule = () => {
         if (!priceScheduleForm.run_at) {
             setMessage({ type: 'error', text: 'Chọn thời gian áp dụng giá.' });
@@ -131,7 +143,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
         };
 
         const nextSchedule = [...getPriceSchedule(), item].sort((a, b) => String(a.run_at).localeCompare(String(b.run_at)));
-        setPriceSchedule(nextSchedule);
+        persistPriceSchedule(nextSchedule);
         setPriceScheduleForm({
             run_at: '',
             price: '',
@@ -139,11 +151,14 @@ const Settings = ({ forceLocalAdmin = false }) => {
             mobile_price: '',
             mobile_print_price: '',
         });
-        setMessage({ type: 'success', text: 'Đã thêm lịch giá. Bấm Lưu cấu hình để áp dụng.' });
+        setMessage({ type: 'success', text: 'Đã thêm lịch giá.' });
     };
 
-    const removePriceSchedule = (id) => {
-        setPriceSchedule(getPriceSchedule().filter((item) => item.id !== id));
+    // Xóa theo VỊ TRÍ (chắc chắn dù id thiếu/trùng) + lưu ngay
+    const removePriceSchedule = (index) => {
+        const next = getPriceSchedule().filter((_, i) => i !== index);
+        persistPriceSchedule(next);
+        setMessage({ type: 'success', text: 'Đã xóa lịch.' });
     };
 
     const fetchHardwareStatus = async () => {
@@ -1005,8 +1020,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                         <div className="mt-5 space-y-2">
                                             {getPriceSchedule().length === 0 ? (
                                                 <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
-                                            ) : getPriceSchedule().map((item) => (
-                                                <div key={item.id || item.run_at} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
+                                            ) : getPriceSchedule().map((item, index) => (
+                                                <div key={item.id || index} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex flex-wrap items-center gap-1.5 font-black text-xs sm:text-sm text-[#1a1a2e]">
                                                             <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
@@ -1029,7 +1044,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     <div className="flex justify-end w-full sm:w-auto border-t sm:border-0 pt-2 sm:pt-0">
                                                         <button
                                                             type="button"
-                                                            onClick={() => removePriceSchedule(item.id)}
+                                                            onClick={() => removePriceSchedule(index)}
                                                             className="rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 active:scale-95 transition-all w-full sm:w-auto text-center"
                                                         >
                                                             Xóa
