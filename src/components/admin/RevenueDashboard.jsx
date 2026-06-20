@@ -673,10 +673,10 @@ const RevenueDashboard = () => {
                             </p>
                         </div>
                         {revenueByBooth.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 md:gap-4 md:p-6">
                                 {revenueByBooth.map((b) => (
-                                    <div key={b.device_id} className="rounded-2xl border border-gray-100 bg-[#FFFDF2] p-5">
-                                        <div className="mb-3 flex items-start justify-between gap-2">
+                                    <div key={b.device_id} className="rounded-2xl border border-gray-100 bg-[#FFFDF2] p-3.5">
+                                        <div className="mb-2 flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 {editingDevice === b.device_id ? (
                                                     <div className="flex items-center gap-1.5">
@@ -692,30 +692,30 @@ const RevenueDashboard = () => {
                                                     </div>
                                                 ) : (
                                                     <button onClick={() => startEditBooth(b.device_id)} title="Đổi tên booth" className="group flex items-center gap-1.5 text-left">
-                                                        <span className="truncate text-lg font-black text-[#1a1a2e]">{boothName(b.device_id)}</span>
+                                                        <span className="truncate text-base font-black text-[#1a1a2e]">{boothName(b.device_id)}</span>
                                                         <Pencil size={13} className="shrink-0 text-gray-300 group-hover:text-[#987351]" />
                                                     </button>
                                                 )}
                                                 <p className="font-mono text-xs text-gray-400">{b.count} giao dịch</p>
                                             </div>
-                                            <p className="shrink-0 text-2xl font-black text-[#e63946]">{formatCurrency(b.total)}</p>
+                                            <p className="shrink-0 text-lg font-black text-[#e63946]">{formatCurrency(b.total)}</p>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-2 text-center">
-                                            <div className="rounded-xl bg-white p-2">
-                                                <p className="text-[11px] font-bold uppercase text-gray-400">Tiền mặt</p>
-                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.cash)}</p>
+                                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                                            <div className="rounded-lg bg-white p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-gray-400">Tiền mặt</p>
+                                                <p className="mt-0.5 text-xs font-bold text-[#1a1a2e]">{formatCurrency(b.cash)}</p>
                                             </div>
-                                            <div className="rounded-xl bg-white p-2">
-                                                <p className="text-[11px] font-bold uppercase text-gray-400">QR</p>
-                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.qr)}</p>
+                                            <div className="rounded-lg bg-white p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-gray-400">QR</p>
+                                                <p className="mt-0.5 text-xs font-bold text-[#1a1a2e]">{formatCurrency(b.qr)}</p>
                                             </div>
-                                            <div className="rounded-xl bg-white p-2">
-                                                <p className="text-[11px] font-bold uppercase text-gray-400">Voucher</p>
-                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.code)}</p>
+                                            <div className="rounded-lg bg-white p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-gray-400">Voucher</p>
+                                                <p className="mt-0.5 text-xs font-bold text-[#1a1a2e]">{formatCurrency(b.code)}</p>
                                             </div>
                                         </div>
                                         {boothReport(b.device_id) && (
-                                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-xs font-bold text-gray-500">
+                                            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-2.5 text-[11px] font-bold text-gray-500">
                                                 <span>🧻 Giấy còn: <span className="text-[#1a1a2e]">{boothReport(b.device_id).paper_remaining != null ? `${boothReport(b.device_id).paper_remaining} tấm` : '--'}</span></span>
                                                 <span>💵 Tiền mặt {boothReport(b.device_id).business_date || 'hôm qua'}: <span className="text-[#1a1a2e]">{formatCurrency(boothReport(b.device_id).cash_total)}</span> ({boothReport(b.device_id).cash_count} lần)</span>
                                             </div>
