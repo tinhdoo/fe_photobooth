@@ -3,11 +3,7 @@ import { Upload, Image as ImageIcon, Loader2, Palette, CheckCircle2, AlertCircle
 import toast from 'react-hot-toast';
 import { useWorkflow } from '../../context/WorkflowContext';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
+import { API_URL, CLOUD_API_URL } from '../../config/api';
 const apiPath = (path) => `${CLOUD_API_URL || API_URL}${path}`;
 
 const pageBackgrounds = [

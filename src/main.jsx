@@ -5,8 +5,9 @@ import App from './App.jsx'
 import ErrorBoundary from './components/common/ErrorBoundary.jsx'
 import { Toaster } from 'react-hot-toast'
 import axios from 'axios'
+import { API_URL } from './config/api'
 
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
+axios.defaults.baseURL = API_URL
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

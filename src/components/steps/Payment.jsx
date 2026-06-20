@@ -8,12 +8,9 @@ import { getDeviceId } from '../../utils/deviceId';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
+import { API_URL, CLOUD_API_URL } from '../../config/api';
 // Máy đọc tiền là phần cứng LOCAL (serial trên booth) -> luôn gọi backend local.
-const LOCAL_API_URL = import.meta.env.VITE_API_URL || '';
+const LOCAL_API_URL = API_URL;
 
 const Payment = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();

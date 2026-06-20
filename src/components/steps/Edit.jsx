@@ -8,13 +8,8 @@ import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 import { getDeviceId } from '../../utils/deviceId';
 
-// Cấu hình URL API (Nên đưa vào biến môi trường)
-const API_URL = import.meta.env.VITE_API_URL || '';
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
-const FRAME_API_URL = CLOUD_API_URL || API_URL;
+// Cấu hình URL API — dùng chung từ config/api
+import { API_URL, CLOUD_API_URL, FRAME_API_URL } from '../../config/api';
 
 const FILTERS = [
     { id: 'normal', name: 'Gốc', filter: null },

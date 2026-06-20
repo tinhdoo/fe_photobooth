@@ -1,20 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 import { isSupabaseBrowserConfigured, supabase } from '../services/supabaseClient';
+import { API_URL, CLOUD_API_URL } from '../config/api';
 const WorkflowContext = createContext();
-const API_URL = import.meta.env.VITE_API_URL || '';
-
-const getDefaultCloudApiUrl = () => {
-    if (typeof window === 'undefined') return '';
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'https://tomatophotobooth.vercel.app';
-    }
-    return window.location.origin;
-};
-
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || getDefaultCloudApiUrl();
 const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;

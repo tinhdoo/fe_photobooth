@@ -3,10 +3,7 @@ import QRCodeStyling from 'qr-code-styling';
 import { QrCode } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';
 
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-        ? 'https://tomatophotobooth.vercel.app'
-        : '');
+import { CLOUD_API_URL } from '../../config/api';
 
 const Result = () => {
     const { resetSession, sessionData, configs } = useWorkflow();

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { AlertCircle, Download, Film, Image as ImageIcon } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
+import { API_URL, CLOUD_API_URL } from '../config/api';
 
 const pad2 = (value) => String(value).padStart(2, '0');
 
@@ -260,9 +261,7 @@ const ViewPage = () => {
             setLoading(true);
             setError('');
             try {
-                const cloudApiUrl = import.meta.env.VITE_CLOUD_API_URL
-                    || (window.location.hostname === 'localhost' ? 'https://tomatophotobooth.vercel.app' : '');
-                const res = await axios.get(`${cloudApiUrl}/api/sessions`, {
+                const res = await axios.get(`${CLOUD_API_URL}/api/sessions`, {
                     params: { id }
                 });
                 const data = res.data;
@@ -460,8 +459,7 @@ const ViewPage = () => {
 
             const formData = new FormData();
             formData.append('file', webmBlob, 'motion_frame.webm');
-            const apiUrl = import.meta.env.VITE_API_URL || '';
-            const res = await fetch(`${apiUrl}/api/convert-motion`, {
+            const res = await fetch(`${API_URL}/api/convert-motion`, {
                 method: 'POST',
                 body: formData
             });

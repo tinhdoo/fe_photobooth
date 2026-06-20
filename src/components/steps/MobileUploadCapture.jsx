@@ -7,8 +7,7 @@ import { getDeviceId } from '../../utils/deviceId';
 import { Smartphone, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || 'https://tomatophotobooth.vercel.app';
+import { CLOUD_API_URL } from '../../config/api';
 const isLocalHost = (hostname) => (
     hostname === 'localhost'
     || hostname === '127.0.0.1'

@@ -4,7 +4,7 @@ import { Upload, CheckCircle, AlertCircle, Loader, ImagePlus, RotateCcw } from '
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../context/WorkflowContext';
 
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || '';
+import { CLOUD_API_URL } from '../config/api';
 const CREAM = '#FFF8E7';
 const BEIGE = '#D5B895';
 const BEIGE_DARK = '#8E6B4D';

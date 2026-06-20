@@ -6,12 +6,7 @@ import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
 import ConfirmDialog from './ConfirmDialog';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
-    || (typeof window !== 'undefined'
-        ? (window.location.hostname === 'localhost' ? 'https://tomatophotobooth.vercel.app' : window.location.origin)
-        : '');
-const FRAME_API_URL = CLOUD_API_URL || API_URL;
+import { FRAME_API_URL } from '../../config/api';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
 
 const FrameManager = () => {
