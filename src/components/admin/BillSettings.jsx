@@ -372,7 +372,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             <button
                                 type="button"
                                 onClick={saveConfig}
-                                className="inline-flex items-center rounded-xl bg-[#DDBF9B] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#DDBF9B]/20"
+                                className="inline-flex items-center rounded-xl bg-[#987351] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#7B5E43] active:scale-95"
                             >
                                 <Save size={18} className="mr-2" />
                                 Lưu cấu hình
@@ -383,24 +383,38 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             Nhập giá trị tiền VND tương ứng với từng mã Hex đầu đọc gửi về. Đặt 0 để vô hiệu hóa mệnh giá đó.
                         </p>
 
-                        <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
-                            {defaultHexCodes.map((hex) => (
-                                <div key={hex} className="space-y-2">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">Mã 0x{hex}</label>
-                                    <div className="relative rounded-lg shadow-sm">
-                                        <input
-                                            type="number"
-                                            value={mapping[hex] || ''}
-                                            onChange={(event) => handleMappingChange(hex, event.target.value)}
-                                            className="block w-full rounded-xl border border-gray-200 py-3 pl-4 pr-12 font-mono text-lg font-medium focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
-                                            placeholder="0"
-                                        />
-                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                                            <span className="text-xs font-bold text-gray-400">VND</span>
+                        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                            {defaultHexCodes.map((hex) => {
+                                const active = Number(mapping[hex]) > 0;
+                                const isLast = lastDebug && String(lastDebug).toUpperCase() === hex.toUpperCase();
+                                return (
+                                    <div
+                                        key={hex}
+                                        className={`rounded-2xl border p-3 transition-colors ${isLast ? 'border-[#e63946] bg-[#FFF4F1] ring-2 ring-[#e63946]/40' : active ? 'border-[#DDBF9B] bg-[#FFFDF2]' : 'border-gray-100 bg-white'}`}
+                                    >
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <span className={`rounded-md px-2 py-0.5 font-mono text-xs font-bold ${isLast ? 'bg-[#e63946] text-white' : 'bg-[#F6F1E8] text-[#7B5E43]'}`}>
+                                                0x{hex.toUpperCase()}
+                                            </span>
+                                            <span className={`text-[11px] font-bold ${active ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {active ? '● Bật' : '○ Tắt'}
+                                            </span>
+                                        </div>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={mapping[hex] || ''}
+                                                onChange={(event) => handleMappingChange(hex, event.target.value)}
+                                                className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-3 pr-12 text-right font-mono text-lg font-semibold text-[#1a1a2e] focus:border-[#DDBF9B] focus:outline-none focus:ring-1 focus:ring-[#DDBF9B]"
+                                                placeholder="0"
+                                            />
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                                <span className="text-xs font-bold text-gray-400">VND</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
