@@ -26,11 +26,11 @@ const AdminLayout = () => {
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
 
     const menuItems = [
-        { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán' },
-        { to: '/admin', icon: <Layout size={22} />, label: 'Frame' },
-        { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu' },
-        { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện' },
-        { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt' },
+        { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán', short: 'Mã TT' },
+        { to: '/admin', icon: <Layout size={22} />, label: 'Frame', short: 'Frame' },
+        { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu', short: 'Doanh thu' },
+        { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện', short: 'Giao diện' },
+        { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt', short: 'Cài đặt' },
     ].filter((item) => (
         isLocalHost()
             ? ['/admin/settings', '/admin/bill-settings'].includes(item.to)
@@ -129,24 +129,22 @@ const AdminLayout = () => {
 
                 {/* Mobile Bottom Navigation */}
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.08)]">
-                    <nav className="flex items-center justify-around px-2 py-1">
+                    <nav className="flex items-stretch px-1 py-1">
                         {mobileNavItems.map((item) => {
                             const active = isActive(item.to);
                             return (
                                 <Link
                                     key={item.to}
                                     to={item.to}
-                                    className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[64px] transition-all duration-200 ${
-                                        active
-                                            ? 'text-[#e63946]'
-                                            : 'text-gray-400 active:text-[#e63946]'
+                                    className={`flex flex-1 flex-col items-center justify-start gap-0.5 px-0.5 py-2 rounded-xl transition-all duration-200 ${
+                                        active ? 'text-[#e63946]' : 'text-gray-400 active:text-[#e63946]'
                                     }`}
                                 >
                                     <div className={`transition-transform duration-200 ${active ? 'scale-110' : ''}`}>
                                         {item.icon}
                                     </div>
-                                    <span className={`text-[10px] font-bold leading-tight ${active ? 'text-[#e63946]' : 'text-gray-400'}`}>
-                                        {item.label}
+                                    <span className={`whitespace-nowrap text-[10px] font-bold leading-tight ${active ? 'text-[#e63946]' : 'text-gray-400'}`}>
+                                        {item.short || item.label}
                                     </span>
                                 </Link>
                             );
@@ -154,16 +152,14 @@ const AdminLayout = () => {
                         {/* Settings (always last in bottom nav) */}
                         <Link
                             to="/admin/settings"
-                            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[64px] transition-all duration-200 ${
-                                isActive('/admin/settings')
-                                    ? 'text-[#e63946]'
-                                    : 'text-gray-400 active:text-[#e63946]'
+                            className={`flex flex-1 flex-col items-center justify-start gap-0.5 px-0.5 py-2 rounded-xl transition-all duration-200 ${
+                                isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400 active:text-[#e63946]'
                             }`}
                         >
                             <div className={`transition-transform duration-200 ${isActive('/admin/settings') ? 'scale-110' : ''}`}>
                                 <Settings size={22} />
                             </div>
-                            <span className={`text-[10px] font-bold leading-tight ${isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400'}`}>
+                            <span className={`whitespace-nowrap text-[10px] font-bold leading-tight ${isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400'}`}>
                                 Cài đặt
                             </span>
                         </Link>
