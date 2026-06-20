@@ -82,12 +82,12 @@ const StaffPanel = ({ onClose, embedded = false }) => {
             onPointerUp={(event) => event.stopPropagation()}
         >
             <div className={embedded
-                ? "flex h-full w-full flex-col overflow-hidden bg-[#FFFDF2]"
+                ? "mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden bg-[#FFFDF2] animate-fadeIn"
                 : "flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-gray-100 bg-[#FFFDF2] shadow-2xl"}>
-                <div className={`flex items-center justify-between px-6 py-4 ${embedded ? '' : 'border-b border-gray-100 bg-white'}`}>
+                <div className={`flex items-center justify-between px-6 pt-6 pb-4 ${embedded ? '' : 'border-b border-gray-100 bg-white'}`}>
                     <div>
-                        <h2 className="text-2xl font-black text-[#1a1a2e]">Staff Panel</h2>
-                        <p className="text-sm font-semibold text-[#7B5E43]">Phiên hôm nay, in lại và in thêm</p>
+                        <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">In lại / In thêm</h1>
+                        <p className="mt-1 text-sm md:text-base text-[#e63946]">Phiên chụp hôm nay — in lại miễn phí hoặc in thêm bản.</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
