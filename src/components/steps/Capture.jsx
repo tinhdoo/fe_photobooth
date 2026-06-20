@@ -325,6 +325,34 @@ const Capture = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [countdown, configs.countdown, TOTAL_PHOTOS]);
 
+    // Ghi ảnh sau khi chụp xong: phân biệt rõ NGUỒN (capturedPhotos, lưới phải) và Ô (photos, lưới trái).
+    // Khi chụp lại, thay đúng ảnh trong nguồn, KHÔNG để ô trống (null) bên trái lọt sang nguồn.
+    const applyCapture = (newItem) => {
+        const ri = sessionData.retakeIndex;
+        if (ri !== undefined && ri !== null) {
+            const prevSources = (sessionData.capturedPhotos && sessionData.capturedPhotos.length)
+                ? sessionData.capturedPhotos
+                : photosTaken;
+            const oldItem = prevSources[ri];
+            const sources = [...prevSources];
+            sources[ri] = newItem;
+            // Ô nào đang dùng đúng ảnh cũ -> đổi sang ảnh mới; giữ nguyên ô khác (kể cả ô đã gỡ = null)
+            const slots = (sessionData.photos || []).map((p) => (p && p === oldItem ? newItem : p));
+            releaseReplacedPhoto(oldItem, [...sources, ...slots]);
+            updateSessionData('retakeIndex', null);
+            setPhotosTaken(sources);
+            updateSessionData('photos', slots);
+            updateSessionData('capturedPhotos', sources);
+            return sources.length;
+        }
+        // Chụp mới: nối thêm vào cả nguồn lẫn ô (đang đồng bộ ở luồng chụp lần đầu)
+        const appended = [...photosTaken, newItem];
+        setPhotosTaken(appended);
+        updateSessionData('photos', appended);
+        updateSessionData('capturedPhotos', appended);
+        return appended.length;
+    };
+
     const takePhoto = async () => {
         setIsShooting(true);
         setFlash(true);
@@ -364,25 +392,13 @@ const Capture = () => {
                     // Lưu dạng object {url, videoUrl} để motion chảy xuống bước Edit/upload
                     const canonPhoto = { id: crypto.randomUUID(), url: finalUrl, videoUrl };
 
-                    let newPhotos;
-                    if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
-                        newPhotos = [...photosTaken];
-                        newPhotos[sessionData.retakeIndex] = canonPhoto;
-                        releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], newPhotos);
-                        updateSessionData('retakeIndex', null);
-                    } else {
-                        newPhotos = [...photosTaken, canonPhoto];
-                    }
-
-                    setPhotosTaken(newPhotos);
-                    updateSessionData('photos', newPhotos);
-                    updateSessionData('capturedPhotos', newPhotos);
+                    const count = applyCapture(canonPhoto);
                     setLatestPhoto(finalUrl);
 
                     setTimeout(() => {
                         setFlash(false);
                         setIsShooting(false);
-                        if (newPhotos.length < TOTAL_PHOTOS) {
+                        if (count < TOTAL_PHOTOS) {
                             setTimeout(() => startCountdown(), 2000);
                         } else {
                             setTimeout(() => nextStep(), 1500);
@@ -422,25 +438,13 @@ const Capture = () => {
                         console.error("Failed to mirror Hot Folder photo, using original:", mirrorError);
                     }
 
-                    let newPhotos;
-                    if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
-                        newPhotos = [...photosTaken];
-                        newPhotos[sessionData.retakeIndex] = finalUrl;
-                        releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], newPhotos);
-                        updateSessionData('retakeIndex', null);
-                    } else {
-                        newPhotos = [...photosTaken, finalUrl];
-                    }
-
-                    setPhotosTaken(newPhotos);
-                    updateSessionData('photos', newPhotos);
-                    updateSessionData('capturedPhotos', newPhotos);
+                    const count = applyCapture(finalUrl);
                     setLatestPhoto(finalUrl);
 
                     setTimeout(() => {
                         setFlash(false);
                         setIsShooting(false);
-                        if (newPhotos.length < TOTAL_PHOTOS) {
+                        if (count < TOTAL_PHOTOS) {
                             setTimeout(() => startCountdown(), 2000);
                         } else {
                             setTimeout(() => nextStep(), 1500);
@@ -505,22 +509,8 @@ const Capture = () => {
                 videoUrl: videoUrl
             };
 
-            // Handle Retake Logic
-            let updatedPhotos;
-            if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
-                // Replace existing photo
-                updatedPhotos = [...photosTaken];
-                updatedPhotos[sessionData.retakeIndex] = newPhoto;
-                releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], updatedPhotos);
-                updateSessionData('retakeIndex', null); // Reset retake index
-            } else {
-                // Append new photo
-                updatedPhotos = [...photosTaken, newPhoto];
-            }
-
-            setPhotosTaken(updatedPhotos);
-            updateSessionData('photos', updatedPhotos);
-            updateSessionData('capturedPhotos', updatedPhotos); // Sync for Inventory consistency
+            // Ghi ảnh (chụp lại thì thay đúng nguồn, không để ô trống lọt sang nguồn)
+            const count = applyCapture(newPhoto);
 
             // Show Instant Preview
             setLatestPhoto(photoUrl);
@@ -528,14 +518,8 @@ const Capture = () => {
             setTimeout(() => {
                 setFlash(false);
                 setIsShooting(false);
-
-                // Determine next step
-                // If we just did a retake, we might want to go back to Review immediately?
-                // Or if we still have missing photos (rare case in retake flow unless we cleared multiple), we continue.
-                // Standard Retake Flow: Retake 1 -> Go back to Review.
-
-                // Check if we have full set
-                if (updatedPhotos.length < TOTAL_PHOTOS) {
+                // Chụp lại -> nguồn đã đầy -> quay lại Review; chụp mới chưa đủ -> chụp tiếp
+                if (count < TOTAL_PHOTOS) {
                     setTimeout(() => startCountdown(), 2000);
                 } else {
                     setTimeout(() => nextStep(), 1500);
