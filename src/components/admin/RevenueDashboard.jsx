@@ -26,6 +26,38 @@ const RevenueDashboard = () => {
     const [resetError, setResetError] = useState('');
     const [notification, setNotification] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [devices, setDevices] = useState([]);
+
+    // Lấy danh sách booth (để map device_id -> tên booth)
+    useEffect(() => {
+        axios.get(apiPath('/api/devices'))
+            .then((res) => setDevices(Array.isArray(res.data) ? res.data : []))
+            .catch(() => {});
+    }, []);
+
+    const boothName = (id) => {
+        if (!id) return 'Không rõ máy';
+        const d = devices.find((dv) => dv.device_id === id);
+        return d?.name || `Máy ${String(id).slice(-6).toUpperCase()}`;
+    };
+
+    // Gộp doanh thu theo từng booth + tách phương thức (tiền mặt / QR / voucher)
+    const revenueByBooth = (() => {
+        const map = new Map();
+        (stats.transactions || []).forEach((tx) => {
+            const id = tx.device_id || 'unknown';
+            if (!map.has(id)) map.set(id, { device_id: id, total: 0, count: 0, cash: 0, qr: 0, code: 0 });
+            const b = map.get(id);
+            const amount = Number(tx.value ?? tx.amount ?? 0) || 0;
+            const m = String(tx.payment_method || '').toLowerCase();
+            b.total += amount;
+            b.count += 1;
+            if (m.includes('qr') || m.includes('sepay')) b.qr += amount;
+            else if (m.includes('code')) b.code += amount;
+            else b.cash += amount;
+        });
+        return Array.from(map.values()).sort((a, b) => b.total - a.total);
+    })();
 
     const PAYMENT_METHODS = [
         { value: '', label: 'Tất cả phương thức', icon: <DollarSign size={18} /> },
@@ -605,6 +637,49 @@ const RevenueDashboard = () => {
                     </div>
                 </div>
 
+                {/* Doanh thu theo booth */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 bg-gray-50/30">
+                            <h3 className="text-xl font-black text-[#1a1a2e]">Doanh thu theo booth</h3>
+                            <p className="text-gray-400 text-sm font-medium mt-1">
+                                {revenueByBooth.length} booth · tách theo tiền mặt / QR / voucher
+                            </p>
+                        </div>
+                        {revenueByBooth.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+                                {revenueByBooth.map((b) => (
+                                    <div key={b.device_id} className="rounded-2xl border border-gray-100 bg-[#FFFDF2] p-5">
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-lg font-black text-[#1a1a2e]">{boothName(b.device_id)}</p>
+                                                <p className="font-mono text-xs text-gray-400">{b.count} giao dịch</p>
+                                            </div>
+                                            <p className="text-2xl font-black text-[#e63946]">{formatCurrency(b.total)}</p>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div className="rounded-xl bg-white p-2">
+                                                <p className="text-[11px] font-bold uppercase text-gray-400">Tiền mặt</p>
+                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.cash)}</p>
+                                            </div>
+                                            <div className="rounded-xl bg-white p-2">
+                                                <p className="text-[11px] font-bold uppercase text-gray-400">QR</p>
+                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.qr)}</p>
+                                            </div>
+                                            <div className="rounded-xl bg-white p-2">
+                                                <p className="text-[11px] font-bold uppercase text-gray-400">Voucher</p>
+                                                <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.code)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center text-sm text-gray-400">Chưa có doanh thu theo booth.</div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Transactions Section */}
                 <div className="lg:col-span-2">
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -642,8 +717,8 @@ const RevenueDashboard = () => {
                                                     <span className="font-mono text-xs font-bold text-[#e63946] block mt-0.5">{getMethodDetail(tx)}</span>
                                                 )}
                                                 {tx.device_id && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-xs font-bold font-mono bg-gray-100 text-gray-500">
-                                                        Máy {tx.device_id.slice(-6).toUpperCase()}
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-xs font-bold bg-gray-100 text-gray-500">
+                                                        {boothName(tx.device_id)}
                                                     </span>
                                                 )}
                                                 <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
@@ -695,8 +770,8 @@ const RevenueDashboard = () => {
                                                 </td>
                                                 <td className="px-4 py-6">
                                                     {tx.device_id ? (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs font-bold font-mono">
-                                                            {tx.device_id.slice(-6).toUpperCase()}
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs font-bold">
+                                                            {boothName(tx.device_id)}
                                                         </span>
                                                     ) : (
                                                         <span className="text-gray-400 text-xs">-</span>
