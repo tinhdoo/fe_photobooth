@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2 } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2, Pencil, X } from 'lucide-react';
 import { io } from "socket.io-client";
 
 import { CLOUD_API_URL } from '../../config/api';
@@ -27,13 +27,37 @@ const RevenueDashboard = () => {
     const [notification, setNotification] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [devices, setDevices] = useState([]);
+    const [editingDevice, setEditingDevice] = useState(null);
+    const [editNameValue, setEditNameValue] = useState('');
 
     // Lấy danh sách booth (để map device_id -> tên booth)
-    useEffect(() => {
+    const fetchDevices = () => {
         axios.get(apiPath('/api/devices'))
             .then((res) => setDevices(Array.isArray(res.data) ? res.data : []))
             .catch(() => {});
-    }, []);
+    };
+    useEffect(() => { fetchDevices(); }, []);
+
+    const startEditBooth = (deviceId) => {
+        setEditNameValue(boothName(deviceId));
+        setEditingDevice(deviceId);
+    };
+    const saveBoothName = async (deviceId) => {
+        const name = editNameValue.trim();
+        if (!name) { setEditingDevice(null); return; }
+        const row = devices.find((dv) => dv.device_id === deviceId);
+        try {
+            if (row?.id) {
+                await axios.put(apiPath('/api/devices'), { id: row.id, name });
+            } else {
+                await axios.post(apiPath('/api/devices'), { action: 'heartbeat', device_id: deviceId, name });
+            }
+            fetchDevices();
+        } catch (e) {
+            console.error('Đổi tên booth thất bại:', e);
+        }
+        setEditingDevice(null);
+    };
 
     const boothName = (id) => {
         if (!id) return 'Không rõ máy';
@@ -652,12 +676,29 @@ const RevenueDashboard = () => {
                             <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
                                 {revenueByBooth.map((b) => (
                                     <div key={b.device_id} className="rounded-2xl border border-gray-100 bg-[#FFFDF2] p-5">
-                                        <div className="mb-3 flex items-center justify-between">
-                                            <div>
-                                                <p className="text-lg font-black text-[#1a1a2e]">{boothName(b.device_id)}</p>
+                                        <div className="mb-3 flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                {editingDevice === b.device_id ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <input
+                                                            value={editNameValue}
+                                                            onChange={(e) => setEditNameValue(e.target.value)}
+                                                            onKeyDown={(e) => e.key === 'Enter' && saveBoothName(b.device_id)}
+                                                            autoFocus
+                                                            className="w-36 rounded-lg border border-gray-200 px-2 py-1 text-sm font-bold focus:border-[#DDBF9B] focus:outline-none"
+                                                        />
+                                                        <button onClick={() => saveBoothName(b.device_id)} className="rounded-md bg-[#987351] p-1.5 text-white hover:bg-[#7B5E43]"><Check size={14} /></button>
+                                                        <button onClick={() => setEditingDevice(null)} className="rounded-md border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50"><X size={14} /></button>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={() => startEditBooth(b.device_id)} title="Đổi tên booth" className="group flex items-center gap-1.5 text-left">
+                                                        <span className="truncate text-lg font-black text-[#1a1a2e]">{boothName(b.device_id)}</span>
+                                                        <Pencil size={13} className="shrink-0 text-gray-300 group-hover:text-[#987351]" />
+                                                    </button>
+                                                )}
                                                 <p className="font-mono text-xs text-gray-400">{b.count} giao dịch</p>
                                             </div>
-                                            <p className="text-2xl font-black text-[#e63946]">{formatCurrency(b.total)}</p>
+                                            <p className="shrink-0 text-2xl font-black text-[#e63946]">{formatCurrency(b.total)}</p>
                                         </div>
                                         <div className="grid grid-cols-3 gap-2 text-center">
                                             <div className="rounded-xl bg-white p-2">
