@@ -397,8 +397,11 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 <span className="text-right font-bold text-[#1a1a2e]">{printer.paper || '4x6'}</span>
                             </div>
                             <div className="flex justify-between gap-4">
-                                <span className="font-bold text-gray-500">Remaining</span>
-                                <span className="text-right font-bold text-[#1a1a2e]">{printer.remaining ?? printer.remaining_label ?? '--'}</span>
+                                <span className="font-bold text-gray-500">Số giấy còn lại</span>
+                                <span className="text-right font-bold text-[#1a1a2e]">
+                                    {printer.remaining_label
+                                        || (printer.remaining != null ? `${printer.remaining} tấm` : '--')}
+                                </span>
                             </div>
                             <div className="flex justify-between gap-4">
                                 <span className="font-bold text-gray-500">Driver</span>
