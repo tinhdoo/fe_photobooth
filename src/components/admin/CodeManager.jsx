@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
+import { RefreshCw, Clock, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -124,6 +124,19 @@ const CodeManager = () => {
                                     step="1000"
                                 />
                             </div>
+                            {/* Chọn nhanh mệnh giá (tiện trên mobile) */}
+                            <div className="mt-2.5 flex flex-wrap gap-2">
+                                {[50000, 60000, 70000, 100000, 200000].map((v) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, value: v })}
+                                        className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${formData.value === v ? 'bg-[#e63946] text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
+                                    >
+                                        {v / 1000}k
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div>
@@ -143,15 +156,24 @@ const CodeManager = () => {
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Số lượng tạo</label>
-                            <div className="relative">
-                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <div className="flex items-stretch gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, quantity: Math.max(1, (formData.quantity || 1) - 1) })}
+                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-2xl font-bold text-gray-600 active:bg-gray-200"
+                                >−</button>
                                 <input
                                     type="number"
-                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
+                                    className="w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50 py-3 text-center text-lg font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#e63946] transition-all"
                                     value={formData.quantity}
-                                    onChange={e => setFormData({ ...formData, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                                    onChange={e => setFormData({ ...formData, quantity: Math.max(1, Math.min(100, parseInt(e.target.value) || 1)) })}
                                     min="1" max="100"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, quantity: Math.min(100, (formData.quantity || 1) + 1) })}
+                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-2xl font-bold text-gray-600 active:bg-gray-200"
+                                >+</button>
                             </div>
                         </div>
 
