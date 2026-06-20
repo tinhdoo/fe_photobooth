@@ -502,6 +502,7 @@ const ViewPage = () => {
                 <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-md">
                     <img
                         src={logoUrl}
+                        onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
                         className="mx-auto mb-5 h-20 w-20 rounded-full object-contain"
                     />
@@ -540,6 +541,7 @@ const ViewPage = () => {
                 <div>
                     <img
                         src={logoUrl}
+                        onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
                         className="mx-auto mb-3 h-16 w-16 rounded-full object-contain sm:h-20 sm:w-20"
                     />

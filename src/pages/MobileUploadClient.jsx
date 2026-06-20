@@ -239,6 +239,7 @@ const MobileUploadClient = () => {
                     <div className="border-b border-[#E7D3B7] p-6 text-center" style={{ backgroundColor: '#F7E8CF' }}>
                         <img
                             src={logoUrl}
+                            onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                             alt="Tomato Photobooth"
                             className="mx-auto mb-3 h-16 w-16 object-contain"
                         />

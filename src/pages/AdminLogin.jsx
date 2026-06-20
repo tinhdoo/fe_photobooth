@@ -41,6 +41,7 @@ const AdminLogin = () => {
                 <div className="mb-10 text-center">
                     <img
                         src={logoUrl}
+                        onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
                         className="mx-auto mb-4 h-20 w-20 rounded-full object-contain"
                     />

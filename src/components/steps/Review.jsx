@@ -244,7 +244,7 @@ const Review = () => {
                             exit={{ opacity: 0, scale: 0.94, y: 16 }}
                             className="relative z-10 w-full max-w-sm rounded-3xl border-4 border-[#D8E0D5] bg-white p-8 text-center shadow-2xl"
                         >
-                            <img src={logoUrl} alt="Tomato Photobooth" className="mx-auto mb-4 h-16 w-16 rounded-full object-contain" />
+                            <img src={logoUrl} onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }} alt="Tomato Photobooth" className="mx-auto mb-4 h-16 w-16 rounded-full object-contain" />
                             <h3 className="mb-3 text-2xl font-extrabold text-[#4A5D4E]">Thông báo</h3>
                             <p className="mb-8 text-lg font-semibold leading-relaxed text-[#7A5A3B]">
                                 Bạn còn ô trống chưa chọn ảnh. Vui lòng chọn đầy đủ ảnh trước khi tiếp tục.
