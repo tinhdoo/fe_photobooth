@@ -130,6 +130,27 @@ const MobileUploadClient = () => {
         return () => objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }, [files, sessionId]);
 
+    // Kiosk khóa cuộn toàn cục (body overflow:hidden) -> trang mobile này cần bật lại
+    // để cuộn được, nếu không nút "Tải lên" bị thanh trình duyệt che. Khôi phục khi rời trang.
+    React.useEffect(() => {
+        const html = document.documentElement;
+        const body = document.body;
+        const prev = {
+            ho: html.style.overflow, bo: body.style.overflow,
+            hh: html.style.height, bh: body.style.height,
+        };
+        html.style.overflow = 'auto';
+        body.style.overflow = 'auto';
+        html.style.height = 'auto';
+        body.style.height = 'auto';
+        return () => {
+            html.style.overflow = prev.ho;
+            body.style.overflow = prev.bo;
+            html.style.height = prev.hh;
+            body.style.height = prev.bh;
+        };
+    }, []);
+
     const handleFileChange = (e) => {
         if (!e.target.files || e.target.files.length === 0) return;
 
@@ -204,7 +225,7 @@ const MobileUploadClient = () => {
 
     return (
         <div
-            className="overflow-y-auto px-4 pt-6 font-sans"
+            className="px-4 pt-6 font-sans"
             style={{
                 backgroundColor: CREAM,
                 minHeight: '100dvh',
