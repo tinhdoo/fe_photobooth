@@ -8,6 +8,33 @@ export default async function handler(req, res) {
 
         if (req.method === 'POST') {
             const action = String(req.body?.action || req.query?.action || '').trim();
+
+            // Booth gửi báo cáo cuối ngày (giấy còn + tiền mặt) lúc khởi động.
+            // Lưu vào app_configs key='booth_reports' (JSON) -> không cần đổi schema.
+            if (action === 'report') {
+                const deviceId = String(req.body?.device_id || req.body?.deviceId || '').trim();
+                if (!deviceId) return json(res, 400, { error: 'Missing device_id' });
+
+                const { data: cfgRow } = await supabase
+                    .from('app_configs').select('config').eq('key', 'booth_reports').maybeSingle();
+                const reports = (cfgRow?.config && typeof cfgRow.config === 'object' && !Array.isArray(cfgRow.config))
+                    ? cfgRow.config : {};
+
+                reports[deviceId] = {
+                    paper_remaining: (req.body?.paper_remaining ?? null),
+                    cash_total: Number(req.body?.cash_total || 0),
+                    cash_count: Number(req.body?.cash_count || 0),
+                    business_date: req.body?.business_date || null,
+                    reported_at: new Date().toISOString(),
+                };
+
+                await supabase.from('app_configs').upsert(
+                    { key: 'booth_reports', config: reports, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                );
+                return json(res, 200, { success: true });
+            }
+
             if (action !== 'heartbeat') {
                 return json(res, 400, { error: 'Invalid action' });
             }
@@ -87,7 +114,14 @@ export default async function handler(req, res) {
 
         if (error) throw error;
 
-        return json(res, 200, Array.isArray(data) ? data : []);
+        // Đính kèm báo cáo giấy + tiền mặt (nếu có) cho từng booth
+        const { data: cfgRow } = await supabase
+            .from('app_configs').select('config').eq('key', 'booth_reports').maybeSingle();
+        const reports = (cfgRow?.config && typeof cfgRow.config === 'object' && !Array.isArray(cfgRow.config))
+            ? cfgRow.config : {};
+        const list = (Array.isArray(data) ? data : []).map((d) => ({ ...d, report: reports[d.device_id] || null }));
+
+        return json(res, 200, list);
     } catch (error) {
         console.error('Devices API failed:', error);
         return json(res, 500, { error: error.message || 'Devices API failed' });

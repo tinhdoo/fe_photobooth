@@ -41,6 +41,8 @@ const RevenueDashboard = () => {
         return d?.name || `Máy ${String(id).slice(-6).toUpperCase()}`;
     };
 
+    const boothReport = (id) => devices.find((dv) => dv.device_id === id)?.report || null;
+
     // Gộp doanh thu theo từng booth + tách phương thức (tiền mặt / QR / voucher)
     const revenueByBooth = (() => {
         const map = new Map();
@@ -671,6 +673,12 @@ const RevenueDashboard = () => {
                                                 <p className="mt-0.5 text-sm font-bold text-[#1a1a2e]">{formatCurrency(b.code)}</p>
                                             </div>
                                         </div>
+                                        {boothReport(b.device_id) && (
+                                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-xs font-bold text-gray-500">
+                                                <span>🧻 Giấy còn: <span className="text-[#1a1a2e]">{boothReport(b.device_id).paper_remaining != null ? `${boothReport(b.device_id).paper_remaining} tấm` : '--'}</span></span>
+                                                <span>💵 Tiền mặt {boothReport(b.device_id).business_date || 'hôm qua'}: <span className="text-[#1a1a2e]">{formatCurrency(boothReport(b.device_id).cash_total)}</span> ({boothReport(b.device_id).cash_count} lần)</span>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
