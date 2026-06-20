@@ -256,31 +256,34 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
 
             <div className="flex flex-col items-start gap-6 xl:flex-row">
                 <div className="w-full space-y-6 xl:w-1/3">
-                    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                        <div className="mb-4 flex items-center gap-3">
-                            <Monitor className="text-[#e63946]" />
-                            <h3 className="text-xl font-bold text-[#1a1a2e]">Thiết bị</h3>
-                        </div>
-
-                        <label className="mb-2 block text-sm font-medium text-gray-700">Chọn thiết bị cấu hình</label>
-                        <select
-                            value={selectedDeviceId}
-                            onChange={(event) => setSelectedDeviceId(event.target.value)}
-                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
-                        >
-                            {devices.map((device) => (
-                                <option key={device.device_id} value={device.device_id}>
-                                    {device.name} {device.device_id === currentDeviceId ? '(Máy này)' : ''}
-                                </option>
-                            ))}
-                        </select>
-
-                        {!selectedIsLocal && selectedDeviceId && (
-                            <div className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600">
-                                Bạn đang cấu hình thiết bị khác. Trạng thái live chỉ chính xác khi máy đó đang mở.
+                    {/* Panel local: máy tự cấu hình chính nó -> không cần chọn thiết bị */}
+                    {!forceLocalAdmin && (
+                        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <div className="mb-4 flex items-center gap-3">
+                                <Monitor className="text-[#e63946]" />
+                                <h3 className="text-xl font-bold text-[#1a1a2e]">Thiết bị</h3>
                             </div>
-                        )}
-                    </div>
+
+                            <label className="mb-2 block text-sm font-medium text-gray-700">Chọn thiết bị cấu hình</label>
+                            <select
+                                value={selectedDeviceId}
+                                onChange={(event) => setSelectedDeviceId(event.target.value)}
+                                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
+                            >
+                                {devices.map((device) => (
+                                    <option key={device.device_id} value={device.device_id}>
+                                        {device.name} {device.device_id === currentDeviceId ? '(Máy này)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {!selectedIsLocal && selectedDeviceId && (
+                                <div className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600">
+                                    Bạn đang cấu hình thiết bị khác. Trạng thái live chỉ chính xác khi máy đó đang mở.
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between">
@@ -366,6 +369,66 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                 </div>
 
                 <div className="w-full space-y-6 xl:w-2/3">
+                    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
+                                    <Clock size={20} className="text-[#e63946]" />
+                                    Lịch sử tiền mặt hôm nay
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Tự động reset hiển thị khi sang ngày mới{cashHistory.date ? ` (${cashHistory.date})` : ''}.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => fetchCashHistory()}
+                                className="inline-flex items-center justify-center rounded-xl border border-[#d8c0a0] px-4 py-2 text-sm font-bold text-[#7B5E43]"
+                            >
+                                <RefreshCw size={16} className="mr-2" />
+                                Làm mới
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tổng tiền</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{formatVnd(cashHistory.total)}</p>
+                            </div>
+                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Số lần nhận</p>
+                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{cashHistory.count}</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 max-h-72 overflow-y-auto rounded-2xl border border-gray-100">
+                            {cashHistory.entries.length > 0 ? (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wider text-gray-400">
+                                        <tr>
+                                            <th className="px-4 py-3">Thời gian</th>
+                                            <th className="px-4 py-3">Mệnh giá</th>
+                                            <th className="px-4 py-3">Hex</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {cashHistory.entries.map((entry) => (
+                                            <tr key={entry.id}>
+                                                <td className="px-4 py-3 font-medium text-gray-600">{formatTime(entry.created_at)}</td>
+                                                <td className="px-4 py-3 font-bold text-[#1a1a2e]">{formatVnd(entry.amount)}</td>
+                                                <td className="px-4 py-3 font-mono text-gray-500">{entry.hex_code ? `0x${entry.hex_code}` : '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="p-8 text-center text-sm text-gray-400">
+                                    Chưa có lần nhận tiền mặt nào trong ngày.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
                         <div className="mb-6 flex items-center justify-between">
                             <h3 className="text-xl font-bold text-[#1a1a2e]">Cấu hình mệnh giá</h3>
@@ -436,66 +499,6 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             <Banknote size={14} />
                             Đút thử tiền vào máy để xem mã Hex xuất hiện tại đây.
                         </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <h3 className="flex items-center gap-2 text-xl font-bold text-[#1a1a2e]">
-                                    <Clock size={20} className="text-[#e63946]" />
-                                    Lịch sử tiền mặt hôm nay
-                                </h3>
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Tự động reset hiển thị khi sang ngày mới{cashHistory.date ? ` (${cashHistory.date})` : ''}.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => fetchCashHistory()}
-                                className="inline-flex items-center justify-center rounded-xl border border-[#d8c0a0] px-4 py-2 text-sm font-bold text-[#7B5E43]"
-                            >
-                                <RefreshCw size={16} className="mr-2" />
-                                Làm mới
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
-                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tổng tiền</p>
-                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{formatVnd(cashHistory.total)}</p>
-                            </div>
-                            <div className="rounded-2xl bg-[#F6F1E8] p-5">
-                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Số lần nhận</p>
-                                <p className="mt-2 text-3xl font-extrabold text-[#e63946]">{cashHistory.count}</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 max-h-72 overflow-y-auto rounded-2xl border border-gray-100">
-                            {cashHistory.entries.length > 0 ? (
-                                <table className="w-full text-left text-sm">
-                                    <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wider text-gray-400">
-                                        <tr>
-                                            <th className="px-4 py-3">Thời gian</th>
-                                            <th className="px-4 py-3">Mệnh giá</th>
-                                            <th className="px-4 py-3">Hex</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {cashHistory.entries.map((entry) => (
-                                            <tr key={entry.id}>
-                                                <td className="px-4 py-3 font-medium text-gray-600">{formatTime(entry.created_at)}</td>
-                                                <td className="px-4 py-3 font-bold text-[#1a1a2e]">{formatVnd(entry.amount)}</td>
-                                                <td className="px-4 py-3 font-mono text-gray-500">{entry.hex_code ? `0x${entry.hex_code}` : '--'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="p-8 text-center text-sm text-gray-400">
-                                    Chưa có lần nhận tiền mặt nào trong ngày.
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
             </div>
