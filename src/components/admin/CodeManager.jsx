@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { RefreshCw, Clock, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -98,44 +98,31 @@ const CodeManager = () => {
 
     return (
         <div className="animate-fadeIn">
-            <div className="mb-6 lg:mb-8">
+            <div className="mb-4 lg:mb-8">
                 <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Mã thanh toán</h1>
                 <p className="text-sm md:text-base text-gray-500 mt-1">Tạo và quản lý các mã kích hoạt.</p>
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6">
                 {/* --- 1. GENERATION FORM --- */}
-                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit min-w-0 max-w-full overflow-hidden">
-                    <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-5 flex items-center gap-2 pb-4 border-b border-gray-100">
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit min-w-0 max-w-full overflow-hidden">
+                    <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-4 flex items-center gap-2 pb-3 border-b border-gray-100">
                         <ArrowRight className="bg-[#e63946] text-white rounded-full p-1" size={24} />
                         Tạo mã mới
                     </h3>
 
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Mệnh giá (VND)</label>
                             <div className="relative">
                                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="number"
-                                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
+                                    className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
                                     value={formData.value}
                                     onChange={e => setFormData({ ...formData, value: parseInt(e.target.value) || 0 })}
                                     step="1000"
                                 />
-                            </div>
-                            {/* Chọn nhanh mệnh giá (tiện trên mobile) */}
-                            <div className="mt-2.5 flex flex-wrap gap-2">
-                                {[50000, 60000, 70000, 100000, 200000].map((v) => (
-                                    <button
-                                        key={v}
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, value: v })}
-                                        className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${formData.value === v ? 'bg-[#e63946] text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
-                                    >
-                                        {v / 1000}k
-                                    </button>
-                                ))}
                             </div>
                         </div>
 
@@ -145,42 +132,33 @@ const CodeManager = () => {
                                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="datetime-local"
-                                    className="w-full max-w-full min-w-0 box-border pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-xs md:text-sm text-[#1a1a2e]"
+                                    className="w-full max-w-full min-w-0 box-border pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-xs md:text-sm text-[#1a1a2e]"
                                     value={formData.expiresAt}
                                     onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
                                     min={getMinDateTime()}
                                 />
                             </div>
-                            <p className="text-xs text-gray-400 mt-1.5 ml-1">Để trống nếu mã có hiệu lực vĩnh viễn</p>
+                            <p className="text-xs text-gray-400 mt-1 ml-1">Để trống nếu mã có hiệu lực vĩnh viễn</p>
                         </div>
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Số lượng tạo</label>
-                            <div className="flex items-stretch gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, quantity: Math.max(1, (formData.quantity || 1) - 1) })}
-                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-2xl font-bold text-gray-600 active:bg-gray-200"
-                                >−</button>
+                            <div className="relative">
+                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="number"
-                                    className="w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50 py-3 text-center text-lg font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#e63946] transition-all"
+                                    className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
                                     value={formData.quantity}
                                     onChange={e => setFormData({ ...formData, quantity: Math.max(1, Math.min(100, parseInt(e.target.value) || 1)) })}
                                     min="1" max="100"
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, quantity: Math.min(100, (formData.quantity || 1) + 1) })}
-                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-2xl font-bold text-gray-600 active:bg-gray-200"
-                                >+</button>
                             </div>
                         </div>
 
                         <button
                             onClick={handleGenerate}
                             disabled={loading}
-                            className="w-full py-3.5 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] mt-2 text-base"
+                            className="w-full py-3 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] mt-1 text-base"
                         >
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
