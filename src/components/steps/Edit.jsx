@@ -147,6 +147,8 @@ const Edit = () => {
     const [frames, setFrames] = useState([]);
     const [selectedFrame, setSelectedFrame] = useState({ id: 'none', name: 'None', color: '#ffffff', image: null });
     const selectedFrameRef = useRef(selectedFrame);
+    // Cache config (boxes) theo frameId để đổi frame không phải fetch lại mỗi lần -> hết delay
+    const frameConfigCacheRef = useRef(new Map());
     const [frameConfig, setFrameConfig] = useState({ boxes: [] });
     const [isUploading, setIsUploading] = useState(false);
     const [isFiltering, setIsFiltering] = useState(false);
@@ -201,6 +203,16 @@ const Edit = () => {
                 const res = await axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: layoutId } });
                 const allFrames = res.data || [];
                 setFrames(allFrames);
+
+                // Prefetch config + preload ảnh cho TẤT CẢ frame (chạy nền) -> đổi frame về sau là tức thì
+                allFrames.forEach((f) => {
+                    if (f.url) { const im = new Image(); im.src = f.url; } // warm cache ảnh frame
+                    if (f.url && f.layout && f.name && !frameConfigCacheRef.current.has(f.id)) {
+                        axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: f.layout, name: f.name, resource: 'config' } })
+                            .then((cfgRes) => { if (cfgRes.data) frameConfigCacheRef.current.set(f.id, cfgRes.data); })
+                            .catch(() => {});
+                    }
+                });
 
                 if (allFrames.length > 0) {
                     handleSelectFrame(allFrames[0]);
@@ -352,27 +364,34 @@ const Edit = () => {
         setSelectedFrame(frame);
         selectedFrameRef.current = frame;
 
-        // Reset config trước khi fetch mới để tránh layout cũ hiện đè lên
+        // Frame màu trơn / none -> không có config layout
+        if (!(frame.url && frame.layout && frame.name)) {
+            setFrameConfig({ boxes: [] });
+            return;
+        }
+
+        const cache = frameConfigCacheRef.current;
+
+        // Đã có config trong cache -> áp ngay, KHÔNG clear (tránh nhấp nháy) và KHÔNG fetch
+        if (cache.has(frame.id)) {
+            setFrameConfig(cache.get(frame.id) || { boxes: [] });
+            return;
+        }
+
+        // Lần đầu của frame này: clear tạm rồi fetch + cache lại
         setFrameConfig({ boxes: [] });
-        // NOTE: We do NOT reset photoPositions here, user might want to keep centering
-        // But if aspect ratio changes drastically, center is safer. 
-        // Let's keep positions. 0.5 is always safe.
+        try {
+            const res = await axios.get(`${FRAME_API_URL}/api/frames`, {
+                params: { layout: frame.layout, name: frame.name, resource: 'config' }
+            });
+            if (res.data) cache.set(frame.id, res.data);
 
-        if (frame.url && frame.layout && frame.name) {
-            try {
-                const res = await axios.get(`${FRAME_API_URL}/api/frames`, {
-                    params: { layout: frame.layout, name: frame.name, resource: 'config' }
-                });
-
-                // Chỉ update nếu frame đang chọn vẫn là frame này (tránh race condition)
-                if (selectedFrameRef.current.id === frame.id) {
-                    if (res.data) {
-                        setFrameConfig(res.data);
-                    }
-                }
-            } catch (error) {
-                console.error("Error fetching config:", error);
+            // Chỉ update nếu frame đang chọn vẫn là frame này (tránh race condition)
+            if (selectedFrameRef.current.id === frame.id && res.data) {
+                setFrameConfig(res.data);
             }
+        } catch (error) {
+            console.error("Error fetching config:", error);
         }
     };
 
