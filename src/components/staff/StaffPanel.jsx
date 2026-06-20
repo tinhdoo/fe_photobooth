@@ -87,7 +87,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                 <div className={`flex items-center justify-between px-6 py-4 ${embedded ? '' : 'border-b border-gray-100 bg-white'}`}>
                     <div>
                         <h2 className="text-2xl font-black text-[#1a1a2e]">Staff Panel</h2>
-                        <p className="text-sm font-semibold text-[#7B5E43]">Phiên gần đây, in lại và in thêm</p>
+                        <p className="text-sm font-semibold text-[#7B5E43]">Phiên hôm nay, in lại và in thêm</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -200,7 +200,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
 
                             {sessions.length === 0 && (
                                 <div className="rounded-3xl bg-white p-10 text-center font-bold text-[#7B5E43]">
-                                    Chưa có phiên chụp gần đây.
+                                    Chưa có phiên chụp nào hôm nay.
                                 </div>
                             )}
                         </div>
