@@ -5,6 +5,20 @@ import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react'; // Added import
 import { FirebaseService } from '../../services/FirebaseService';
 
+// Giải phóng blob URL (ảnh + video) của tấm cũ khi chụp lại thay thế, để tránh rò rỉ
+// bộ nhớ trong phiên. Chỉ revoke khi URL không còn được dùng ở mảng ảnh mới.
+const releaseReplacedPhoto = (oldPhoto, newPhotos) => {
+    if (!oldPhoto) return;
+    const urlOf = (p) => (p && typeof p === 'object' ? p.url : p);
+    const vidOf = (p) => (p && typeof p === 'object' ? p.videoUrl : null);
+    const stillUsed = (u) => newPhotos.some((p) => urlOf(p) === u || vidOf(p) === u);
+    [urlOf(oldPhoto), vidOf(oldPhoto)].forEach((u) => {
+        if (typeof u === 'string' && u.startsWith('blob:') && !stillUsed(u)) {
+            try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+        }
+    });
+};
+
 const mirrorImage = async (imageUrl) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -354,6 +368,7 @@ const Capture = () => {
                     if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
                         newPhotos = [...photosTaken];
                         newPhotos[sessionData.retakeIndex] = canonPhoto;
+                        releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], newPhotos);
                         updateSessionData('retakeIndex', null);
                     } else {
                         newPhotos = [...photosTaken, canonPhoto];
@@ -411,6 +426,7 @@ const Capture = () => {
                     if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
                         newPhotos = [...photosTaken];
                         newPhotos[sessionData.retakeIndex] = finalUrl;
+                        releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], newPhotos);
                         updateSessionData('retakeIndex', null);
                     } else {
                         newPhotos = [...photosTaken, finalUrl];
@@ -495,6 +511,7 @@ const Capture = () => {
                 // Replace existing photo
                 updatedPhotos = [...photosTaken];
                 updatedPhotos[sessionData.retakeIndex] = newPhoto;
+                releaseReplacedPhoto(photosTaken[sessionData.retakeIndex], updatedPhotos);
                 updateSessionData('retakeIndex', null); // Reset retake index
             } else {
                 // Append new photo
