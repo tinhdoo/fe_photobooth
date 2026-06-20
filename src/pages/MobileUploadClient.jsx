@@ -204,14 +204,16 @@ const MobileUploadClient = () => {
 
     return (
         <div
-            className="min-h-[100dvh] overflow-y-auto px-4 pt-6 font-sans"
+            className="overflow-y-auto px-4 pt-6 font-sans"
             style={{
                 backgroundColor: CREAM,
-                // Chừa khoảng dưới theo safe-area để nút "Tải lên" không bị thanh trình duyệt che
-                paddingBottom: 'calc(env(safe-area-inset-bottom) + 2.5rem)',
+                minHeight: '100dvh',
+                // Đệm dưới rộng + safe-area: đảm bảo trang luôn cuộn được để thanh Safari
+                // thu lại và nút "Tải lên" không bị che. KHÔNG ép căn giữa để cuộn ổn định trên iOS.
+                paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)',
             }}
         >
-            <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-md flex-col justify-center">
+            <div className="mx-auto w-full max-w-md">
                 <div className="w-full overflow-hidden rounded-3xl border border-[#E7D3B7] bg-white shadow-[0_18px_50px_rgba(142,107,77,0.18)]">
                     <div className="border-b border-[#E7D3B7] p-6 text-center" style={{ backgroundColor: '#F7E8CF' }}>
                         <img
