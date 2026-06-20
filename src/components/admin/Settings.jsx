@@ -36,13 +36,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
         print_offset_x: '0',
         print_offset_y: '0'
     });
-    const [priceScheduleForm, setPriceScheduleForm] = useState({
-        run_at: '',
-        price: '',
-        print_price: '',
-        mobile_price: '',
-        mobile_print_price: '',
-    });
     const [, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
@@ -99,51 +92,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
             // Auto hide message
             setTimeout(() => setMessage(null), 3000);
         }
-    };
-
-    const getPriceSchedule = () => {
-        try {
-            const parsed = JSON.parse(configs.price_schedule || '[]');
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    };
-
-    const setPriceSchedule = (schedule) => {
-        setConfigs((prev) => ({ ...prev, price_schedule: JSON.stringify(schedule) }));
-    };
-
-    const addPriceSchedule = () => {
-        if (!priceScheduleForm.run_at) {
-            setMessage({ type: 'error', text: 'Chọn thời gian áp dụng giá.' });
-            return;
-        }
-
-        const item = {
-            id: `${Date.now()}`,
-            run_at: priceScheduleForm.run_at,
-            price: priceScheduleForm.price || configs.price,
-            print_price: priceScheduleForm.print_price || configs.print_price,
-            mobile_price: priceScheduleForm.mobile_price || configs.mobile_price,
-            mobile_print_price: priceScheduleForm.mobile_print_price || configs.mobile_print_price,
-            applied: false,
-        };
-
-        const nextSchedule = [...getPriceSchedule(), item].sort((a, b) => String(a.run_at).localeCompare(String(b.run_at)));
-        setPriceSchedule(nextSchedule);
-        setPriceScheduleForm({
-            run_at: '',
-            price: '',
-            print_price: '',
-            mobile_price: '',
-            mobile_print_price: '',
-        });
-        setMessage({ type: 'success', text: 'Đã thêm lịch giá. Bấm Lưu cấu hình để áp dụng.' });
-    };
-
-    const removePriceSchedule = (id) => {
-        setPriceSchedule(getPriceSchedule().filter((item) => item.id !== id));
     };
 
     const fetchHardwareStatus = async () => {
@@ -963,82 +911,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 </div>
 
 
-                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
-                                        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <h4 className="text-base font-bold text-[#354f52]">Hẹn giờ đổi giá</h4>
-                                                <p className="text-xs font-semibold text-gray-500">Lưu trên cloud và tự động đồng bộ xuống máy local.</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={addPriceSchedule}
-                                                className="rounded-full bg-[#e63946] px-5 py-2 text-sm font-black text-white"
-                                            >
-                                                Thêm lịch
-                                            </button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                                            <input
-                                                type="datetime-local"
-                                                value={priceScheduleForm.run_at}
-                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, run_at: event.target.value }))}
-                                                className="w-full max-w-full min-w-0 box-border rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-xs md:text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
-                                            />
-                                            {[
-                                                ['price', 'Giá chụp'],
-                                                ['print_price', 'In thêm'],
-                                                ['mobile_price', 'Mobile'],
-                                                ['mobile_print_price', 'Mobile in thêm'],
-                                            ].map(([key, label]) => (
-                                                <input
-                                                    key={key}
-                                                    type="number"
-                                                    placeholder={label}
-                                                    value={priceScheduleForm[key]}
-                                                    onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                                                    className="w-full max-w-full min-w-0 box-border rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-xs md:text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
-                                                />
-                                            ))}
-                                        </div>
-
-                                        <div className="mt-5 space-y-2">
-                                            {getPriceSchedule().length === 0 ? (
-                                                <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
-                                            ) : getPriceSchedule().map((item) => (
-                                                <div key={item.id || item.run_at} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-1.5 font-black text-xs sm:text-sm text-[#1a1a2e]">
-                                                            <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
-                                                            {item.applied ? (
-                                                                <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-bold whitespace-nowrap">Đã áp dụng</span>
-                                                            ) : (
-                                                                <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700 font-bold whitespace-nowrap">Đang chờ</span>
-                                                            )}
-                                                        </div>
-                                                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-semibold text-gray-500">
-                                                            <span className="whitespace-nowrap">Chụp: <strong className="text-gray-700">{Number(item.price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">In: <strong className="text-gray-700">{Number(item.print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">Mobile: <strong className="text-gray-700">{Number(item.mobile_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">Mb in: <strong className="text-gray-700">{Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-end w-full sm:w-auto border-t sm:border-0 pt-2 sm:pt-0">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removePriceSchedule(item.id)}
-                                                            className="rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 active:scale-95 transition-all w-full sm:w-auto text-center"
-                                                        >
-                                                            Xóa
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>                                {/* SECTION 2: THỜI GIAN CHỤP */}
+                                {/* SECTION 2: THỜI GIAN CHỤP */}
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider border-b pb-2">Thời gian & Trải nghiệm</h3>
 
