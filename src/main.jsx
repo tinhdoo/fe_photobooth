@@ -9,6 +9,21 @@ import { API_URL } from './config/api'
 
 axios.defaults.baseURL = API_URL
 
+// Đồng bộ device_id của BOOTH từ backend (ổn định, lưu file device_id.txt) thay cho
+// id ngẫu nhiên trong localStorage -> tránh sinh "booth ảo" khi đổi trình duyệt/xóa cache.
+// Chỉ chạy trên kiosk local; KHÔNG chạy trên trang khách (cloud).
+if (typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+  axios.get('/api/config/system')
+    .then((res) => {
+      const backendId = res?.data?.device_id
+      if (backendId && backendId !== localStorage.getItem('device_id')) {
+        localStorage.setItem('device_id', backendId)
+        localStorage.setItem('DEVICE_ID', backendId)
+      }
+    })
+    .catch(() => {})
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
