@@ -82,17 +82,17 @@ const StaffPanel = ({ onClose, embedded = false }) => {
             onPointerUp={(event) => event.stopPropagation()}
         >
             <div className={embedded
-                ? "flex h-full w-full flex-col overflow-hidden bg-[#FFF8E7]"
-                : "flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#E7D3B7] bg-[#FFF8E7] shadow-2xl"}>
-                <div className={`flex items-center justify-between px-6 py-4 ${embedded ? '' : 'border-b border-[#E7D3B7] bg-white'}`}>
+                ? "flex h-full w-full flex-col overflow-hidden bg-[#FFFDF2]"
+                : "flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-gray-100 bg-[#FFFDF2] shadow-2xl"}>
+                <div className={`flex items-center justify-between px-6 py-4 ${embedded ? '' : 'border-b border-gray-100 bg-white'}`}>
                     <div>
-                        <h2 className="text-2xl font-black text-[#3F3127]">Staff Panel</h2>
+                        <h2 className="text-2xl font-black text-[#1a1a2e]">Staff Panel</h2>
                         <p className="text-sm font-semibold text-[#7B5E43]">Phiên gần đây, in lại và in thêm</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={fetchSessions}
-                            className="inline-flex items-center gap-2 rounded-full border border-[#D5B895] bg-white px-4 py-2 font-bold text-[#7B5E43]"
+                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 font-bold text-[#7B5E43] hover:bg-gray-50"
                         >
                             <RefreshCcw size={18} />
                             Tải lại
@@ -100,7 +100,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                         {onClose && (
                             <button
                                 onClick={onClose}
-                                className="rounded-full bg-[#8E6B4D] p-3 text-white"
+                                className="rounded-full bg-[#987351] p-3 text-white transition-colors hover:bg-[#7B5E43]"
                                 aria-label="Đóng"
                             >
                                 <X size={20} />
@@ -128,18 +128,18 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                 const isPrinting = printingId?.startsWith(session.uuid);
                                 const previewUrl = session.previewUrl || session.finalImageUrl;
                                 return (
-                                    <div key={session.uuid} className="grid grid-cols-[96px_1fr_auto] items-center gap-4 rounded-3xl border border-[#E7D3B7] bg-white p-4 shadow-sm">
+                                    <div key={session.uuid} className="grid grid-cols-[96px_1fr_auto] items-center gap-4 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
                                         <button
                                             type="button"
                                             disabled={!previewUrl}
                                             onClick={() => previewUrl && setPreviewSession(session)}
-                                            className="h-24 overflow-hidden rounded-2xl border border-[#EFE2CF] bg-[#FFF8E7] disabled:cursor-default"
+                                            className="h-24 overflow-hidden rounded-2xl border border-gray-100 bg-[#FFFDF2] disabled:cursor-default"
                                             title={previewUrl ? 'Xem ảnh preview' : 'Chưa có ảnh preview'}
                                         >
                                             {previewUrl ? (
                                                 <img src={previewUrl} alt={session.sessionId} className="h-full w-full object-cover" />
                                             ) : (
-                                                <div className="flex h-full items-center justify-center text-[#D5B895]">
+                                                <div className="flex h-full items-center justify-center text-gray-300">
                                                     <AlertCircle />
                                                 </div>
                                             )}
@@ -147,7 +147,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
 
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="text-xl font-black text-[#2F3E46]">{session.sessionId}</h3>
+                                                <h3 className="text-xl font-black text-[#1a1a2e]">{session.sessionId}</h3>
                                                 <span className={`rounded-full px-3 py-1 text-xs font-black ${isFailed ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
                                                     {statusLabel[session.printStatus] || session.printStatus}
                                                 </span>
@@ -168,7 +168,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setPreviewSession(session)}
-                                                    className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full border border-[#D5B895] bg-white px-4 py-2 font-black text-[#7B5E43]"
+                                                    className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 font-black text-[#7B5E43] hover:bg-gray-50"
                                                 >
                                                     <Eye size={18} />
                                                     Xem ảnh
@@ -177,7 +177,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                             <button
                                                 disabled={!session.canReprint || isPrinting}
                                                 onClick={() => reprint(session, 'retry', session.copies || 1)}
-                                                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full bg-[#52796F] px-4 py-2 font-black text-white disabled:opacity-40"
+                                                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 font-black text-[#7B5E43] hover:bg-gray-50 disabled:opacity-40"
                                             >
                                                 <Printer size={18} />
                                                 In lại do lỗi
@@ -188,7 +188,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                                     setExtraPrintSession(session);
                                                     setExtraCopies('1');
                                                 }}
-                                                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full bg-[#D5B895] px-4 py-2 font-black text-white disabled:opacity-40"
+                                                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-[#DDBF9B] px-4 py-2 font-black text-white hover:bg-[#cda87f] disabled:opacity-40"
                                             >
                                                 <Printer size={18} />
                                                 In thêm bản
@@ -219,14 +219,14 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                     >
                         <div className="mb-3 flex items-center justify-between gap-4">
                             <div>
-                                <h3 className="text-xl font-black text-[#2F3E46]">{previewSession.sessionId}</h3>
+                                <h3 className="text-xl font-black text-[#1a1a2e]">{previewSession.sessionId}</h3>
                                 <p className="text-sm font-bold text-[#7B5E43]">
                                     {formatTime(previewSession.createdAt)} · {previewSession.layout || '--'}
                                 </p>
                             </div>
                             <button
                                 onClick={() => setPreviewSession(null)}
-                                className="rounded-full bg-[#8E6B4D] p-3 text-white"
+                                className="rounded-full bg-[#987351] p-3 text-white transition-colors hover:bg-[#7B5E43]"
                                 aria-label="Đóng preview"
                             >
                                 <X size={20} />
@@ -250,26 +250,26 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                         className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <h3 className="text-2xl font-black text-[#2F3E46]">In thêm bản</h3>
+                        <h3 className="text-2xl font-black text-[#1a1a2e]">In thêm bản</h3>
                         <p className="mt-1 text-sm font-bold text-[#7B5E43]">
                             {extraPrintSession.sessionId} · {extraPrintSession.layout || '--'}
                         </p>
                         <label className="mt-5 block">
-                            <span className="mb-2 block text-sm font-black text-[#3F3127]">Số bản in thêm</span>
+                            <span className="mb-2 block text-sm font-black text-[#1a1a2e]">Số bản in thêm</span>
                             <input
                                 type="number"
                                 min="1"
                                 max="20"
                                 value={extraCopies}
                                 onChange={(event) => setExtraCopies(event.target.value)}
-                                className="h-14 w-full rounded-2xl border border-[#E7D3B7] bg-[#FFF8E7] px-4 text-center text-2xl font-black text-[#3F3127]"
+                                className="h-14 w-full rounded-lg border border-gray-200 bg-white px-4 text-center text-2xl font-black text-[#1a1a2e] focus:border-[#DDBF9B] focus:outline-none"
                                 autoFocus
                             />
                         </label>
                         <div className="mt-6 grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setExtraPrintSession(null)}
-                                className="rounded-2xl border border-[#D5B895] bg-white py-3 font-black text-[#7B5E43]"
+                                className="rounded-lg border border-gray-200 bg-white py-3 font-black text-[#7B5E43] hover:bg-gray-50"
                             >
                                 Hủy
                             </button>
@@ -280,7 +280,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                     setExtraPrintSession(null);
                                     reprint(session, 'extra', copies);
                                 }}
-                                className="rounded-2xl bg-[#8E6B4D] py-3 font-black text-white"
+                                className="rounded-lg bg-[#DDBF9B] py-3 font-black text-white hover:bg-[#cda87f]"
                             >
                                 In thêm
                             </button>

@@ -12,6 +12,8 @@ const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL
     || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'https://tomatophotobooth.vercel.app'
         : '');
+// Máy đọc tiền là phần cứng LOCAL (serial trên booth) -> luôn gọi backend local.
+const LOCAL_API_URL = import.meta.env.VITE_API_URL || '';
 
 const Payment = () => {
     const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
@@ -145,6 +147,17 @@ const Payment = () => {
             handlePaymentSuccess('cash');
         }
     }, [cashInserted, handlePaymentSuccess, method, remainingAmount]);
+
+    // Chỉ bật máy đọc tiền (LED + cho nhét tiền) khi khách chọn tiền mặt và còn phải trả.
+    // Rời khỏi chế độ tiền mặt / rời bước thanh toán -> tắt nhận tiền.
+    useEffect(() => {
+        if (method === 'cash' && remainingAmount > 0) {
+            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: true }).catch(() => {});
+            return () => {
+                axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: false }).catch(() => {});
+            };
+        }
+    }, [method, remainingAmount]);
 
     useEffect(() => {
         if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;

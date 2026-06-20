@@ -6,6 +6,7 @@ import { drawImageCover } from '../../utils/canvasUtils';
 import { Monitor, Edit2, ArrowLeft, AlertCircle } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
+import { getDeviceId } from '../../utils/deviceId';
 
 // Cấu hình URL API (Nên đưa vào biến môi trường)
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -479,17 +480,16 @@ const Edit = () => {
         ctx.imageSmoothingQuality = 'high';
 
         if (printMode === 'double_strip') {
-            const stripSafeMargin = 60;
-            const stripWidth = 600 - (stripSafeMargin * 2);
-            const stripHeight = 1800 - (stripSafeMargin * 2);
-            ctx.drawImage(sourceCanvas, stripSafeMargin, stripSafeMargin, stripWidth, stripHeight);
-            ctx.drawImage(sourceCanvas, 600 + stripSafeMargin, stripSafeMargin, stripWidth, stripHeight);
+            // Strip gốc là 600x1800 (tỉ lệ 1:3), đúng bằng mỗi nửa của giấy 4x6 (600x1800).
+            // Vẽ tràn lề để GIỮ NGUYÊN tỉ lệ 1:3 và bỏ viền trắng thừa.
+            ctx.drawImage(sourceCanvas, 0, 0, 600, 1800);
+            ctx.drawImage(sourceCanvas, 600, 0, 600, 1800);
             return { canvas, cutMode: '2x6' };
         }
 
         if (printMode === 'single_strip') {
-            const stripSafeMargin = 60;
-            ctx.drawImage(sourceCanvas, 300 + stripSafeMargin, stripSafeMargin, 600 - (stripSafeMargin * 2), 1800 - (stripSafeMargin * 2));
+            // Căn giữa 1 strip 600x1800 trên giấy 1200x1800, giữ nguyên tỉ lệ 1:3.
+            ctx.drawImage(sourceCanvas, 300, 0, 600, 1800);
             return { canvas, cutMode: 'none' };
         }
 
@@ -857,7 +857,9 @@ const Edit = () => {
                         }
                     });
 
-                    const sessionBaseUrl = API_URL;
+                    // Session phải được tạo ở cùng nơi mà QR album và trang doanh thu đọc
+                    // (CLOUD_API_URL). Nếu chỉ lưu local thì quét QR / xem doanh thu sẽ không thấy.
+                    const sessionBaseUrl = CLOUD_API_URL || API_URL;
                     const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
                     const printerCopies = printMode === 'double_strip'
                         ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))

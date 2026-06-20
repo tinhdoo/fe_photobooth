@@ -266,7 +266,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                         <select
                             value={selectedDeviceId}
                             onChange={(event) => setSelectedDeviceId(event.target.value)}
-                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
+                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
                         >
                             {devices.map((device) => (
                                 <option key={device.device_id} value={device.device_id}>
@@ -296,7 +296,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                                     onChange={handleConfigChange}
                                     className="peer sr-only"
                                 />
-                                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-[#d8b98e] peer-checked:after:translate-x-full peer-checked:after:border-white" />
+                                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-[#DDBF9B] peer-checked:after:translate-x-full peer-checked:after:border-white" />
                             </label>
                         </div>
 
@@ -308,7 +308,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                                         name="port"
                                         value={config.port}
                                         onChange={handleConfigChange}
-                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
+                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
                                     >
                                         {ports.map((port) => (
                                             <option key={port.device} value={port.device}>
@@ -326,7 +326,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                                         value={config.port}
                                         onChange={handleConfigChange}
                                         placeholder="COM3"
-                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
+                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
                                     />
                                 )}
                                 <button
@@ -344,7 +344,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                                     name="baudrate"
                                     value={config.baudrate}
                                     onChange={handleConfigChange}
-                                    className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#d8b98e] focus:ring-[#d8b98e]"
+                                    className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
                                 >
                                     <option value="9600">9600</option>
                                     <option value="19200">19200</option>
@@ -372,7 +372,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             <button
                                 type="button"
                                 onClick={saveConfig}
-                                className="inline-flex items-center rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#d8b98e]/20"
+                                className="inline-flex items-center rounded-xl bg-[#DDBF9B] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#DDBF9B]/20"
                             >
                                 <Save size={18} className="mr-2" />
                                 Lưu cấu hình
@@ -392,7 +392,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                                             type="number"
                                             value={mapping[hex] || ''}
                                             onChange={(event) => handleMappingChange(hex, event.target.value)}
-                                            className="block w-full rounded-xl border border-gray-200 py-3 pl-4 pr-12 font-mono text-lg font-medium focus:border-[#d8b98e] focus:ring-[#d8b98e]"
+                                            className="block w-full rounded-xl border border-gray-200 py-3 pl-4 pr-12 font-mono text-lg font-medium focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
                                             placeholder="0"
                                         />
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">

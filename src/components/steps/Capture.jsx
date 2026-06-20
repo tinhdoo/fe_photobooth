@@ -63,13 +63,69 @@ const Capture = () => {
     const videoChunksRef = useRef([]);
     const mediaRecorderRef = useRef(null);
     const shutterAudioRef = useRef(null);
+    // Canon motion: vẽ frame liveview (MJPEG) lên canvas ẩn rồi quay bằng captureStream
+    const liveViewImgRef = useRef(null);
+    const canonDrawTimerRef = useRef(null);
+    const canonStreamRef = useRef(null);
 
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
         shutterAudioRef.current.preload = 'auto';
     }, []);
 
+    const pickVideoMime = () => {
+        const mimeTypes = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
+        for (const type of mimeTypes) {
+            if (MediaRecorder.isTypeSupported(type)) return { mimeType: type };
+        }
+        return {};
+    };
+
+    // Quay motion cho Canon: liên tục vẽ frame liveview (MJPEG <img>) lên canvas ẩn,
+    // rồi dùng canvas.captureStream() làm nguồn cho MediaRecorder (giống luồng webcam).
+    const startCanonRecording = () => {
+        try {
+            const img = liveViewImgRef.current;
+            if (!img) return;
+            videoChunksRef.current = [];
+
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || 960;
+            canvas.height = img.naturalHeight || 640;
+            const ctx = canvas.getContext('2d');
+
+            const drawFrame = () => {
+                try {
+                    // Lật ngang để khớp với ảnh chụp Canon (đã mirror)
+                    ctx.save();
+                    ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                } catch (e) { /* frame chưa sẵn sàng */ }
+            };
+            drawFrame();
+            canonDrawTimerRef.current = setInterval(drawFrame, 1000 / 24);
+
+            const captureStream = canvas.captureStream(24);
+            canonStreamRef.current = captureStream;
+
+            const recorder = new MediaRecorder(captureStream, {
+                ...pickVideoMime(),
+                videoBitsPerSecond: 2500000,
+            });
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) videoChunksRef.current.push(event.data);
+            };
+            recorder.start();
+            mediaRecorderRef.current = recorder;
+            console.log("🎥 [Motion] Canon recording started");
+        } catch (e) {
+            console.error("Failed to start Canon recording", e);
+        }
+    };
+
     const startRecording = () => {
+        if (cameraMode === 'canon') { startCanonRecording(); return; }
         if (cameraMode !== 'webcam' || !stream) return;
         try {
             console.log("🎥 [Motion] Starting recording...");
@@ -108,16 +164,31 @@ const Capture = () => {
         }
     };
 
+    const stopCanonDraw = () => {
+        if (canonDrawTimerRef.current) {
+            clearInterval(canonDrawTimerRef.current);
+            canonDrawTimerRef.current = null;
+        }
+        if (canonStreamRef.current) {
+            canonStreamRef.current.getTracks().forEach(t => t.stop());
+            canonStreamRef.current = null;
+        }
+    };
+
     const stopRecording = () => {
         return new Promise((resolve) => {
             const recorder = mediaRecorderRef.current;
             if (!recorder || recorder.state === 'inactive') {
+                stopCanonDraw();
                 resolve(null);
                 return;
             }
 
             recorder.onstop = () => {
                 const blob = new Blob(videoChunksRef.current, { type: 'video/webm' }); // Force webm container
+                stopCanonDraw();
+                // Blob rỗng (vd canvas bị CORS chặn) -> không tạo motion hỏng
+                if (!blob.size) { resolve(null); return; }
                 const url = URL.createObjectURL(blob);
                 resolve(url);
             };
@@ -252,6 +323,14 @@ const Capture = () => {
         if (cameraMode === 'canon') {
             try {
                 console.log("📷 [Capture] Requesting Canon capture...");
+                // Dừng quay motion TRƯỚC khi /capture (lệnh này tạm dừng liveview để chụp).
+                let videoUrl = null;
+                try {
+                    videoUrl = await stopRecording();
+                    console.log("🎥 [Motion] Canon motion captured:", videoUrl);
+                } catch (motionErr) {
+                    console.warn("Canon motion capture error:", motionErr);
+                }
                 const timeout = parseInt(configs.canon_capture_timeout, 10) || 30;
                 const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`);
                 const data = await res.json();
@@ -268,13 +347,16 @@ const Capture = () => {
                         console.error("Failed to mirror Canon photo, using original:", mirrorError);
                     }
 
+                    // Lưu dạng object {url, videoUrl} để motion chảy xuống bước Edit/upload
+                    const canonPhoto = { id: crypto.randomUUID(), url: finalUrl, videoUrl };
+
                     let newPhotos;
                     if (sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null) {
                         newPhotos = [...photosTaken];
-                        newPhotos[sessionData.retakeIndex] = finalUrl;
+                        newPhotos[sessionData.retakeIndex] = canonPhoto;
                         updateSessionData('retakeIndex', null);
                     } else {
-                        newPhotos = [...photosTaken, finalUrl];
+                        newPhotos = [...photosTaken, canonPhoto];
                     }
 
                     setPhotosTaken(newPhotos);
@@ -477,12 +559,22 @@ const Capture = () => {
                             <img
                                 src="http://localhost:5001/liveview"
                                 className="w-full h-full object-cover"
-                                style={{ transform: 'scaleX(-1.16)' }}
+                                style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
                                     setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
                                 }}
+                            />
+                            {/* Img ẩn (crossOrigin) chỉ để quay motion — tách khỏi preview để
+                                nếu CORS lỗi thì chỉ mất motion, không vỡ ảnh xem trực tiếp. */}
+                            <img
+                                ref={liveViewImgRef}
+                                crossOrigin="anonymous"
+                                src="http://localhost:5001/liveview"
+                                alt=""
+                                aria-hidden="true"
+                                style={{ display: 'none' }}
                             />
                         </div>
                     ) : (

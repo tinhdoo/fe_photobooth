@@ -23,20 +23,20 @@ const ManagementPanel = ({ onClose }) => {
             onPointerDown={(event) => event.stopPropagation()}
             onPointerUp={(event) => event.stopPropagation()}
         >
-            <div className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl border border-[#E7D3B7] bg-[#FFF8E7] shadow-2xl">
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E7D3B7] bg-white px-6 py-4">
+            <div className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl border border-gray-100 bg-[#FFFDF2] shadow-2xl">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-white px-6 py-4">
                     <div>
-                        <h2 className="text-2xl font-black text-[#3F3127]">Quản lý máy</h2>
+                        <h2 className="text-2xl font-black text-[#1a1a2e]">Quản lý máy</h2>
                         <p className="text-sm font-semibold text-[#7B5E43]">In lại, in thêm và cấu hình local</p>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <button
                             onClick={toggleEventMode}
-                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black transition-colors ${
-                                isEventMode 
-                                    ? 'bg-purple-500 text-white hover:bg-purple-600 shadow-sm' 
-                                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
+                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black transition-colors shadow-sm ${
+                                isEventMode
+                                    ? 'bg-[#e63946] text-white hover:bg-[#c1121f]'
+                                    : 'bg-[#987351] text-white hover:bg-[#7B5E43]'
                             }`}
                         >
                             {isEventMode ? (
@@ -46,7 +46,7 @@ const ManagementPanel = ({ onClose }) => {
                             )}
                         </button>
 
-                        <div className="flex rounded-full border border-[#E7D3B7] bg-[#FFF8E7] p-1">
+                        <div className="flex rounded-full border border-gray-200 bg-white p-1">
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;
                                 const active = activeTab === tab.id;
@@ -57,8 +57,8 @@ const ManagementPanel = ({ onClose }) => {
                                         type="button"
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition-colors ${active
-                                            ? 'bg-[#8E6B4D] text-white shadow-sm'
-                                            : 'text-[#7B5E43]'}`}
+                                            ? 'bg-[#987351] text-white shadow-sm'
+                                            : 'text-[#7B5E43] hover:bg-[#FFFDF2]'}`}
                                     >
                                         <Icon size={18} />
                                         {tab.label}
@@ -70,7 +70,7 @@ const ManagementPanel = ({ onClose }) => {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="rounded-full bg-[#8E6B4D] p-3 text-white"
+                            className="rounded-full bg-[#987351] p-3 text-white transition-colors hover:bg-[#7B5E43]"
                             aria-label="Đóng"
                         >
                             <X size={20} />
@@ -84,7 +84,7 @@ const ManagementPanel = ({ onClose }) => {
                     ) : activeTab === 'bill' ? (
                         <div className="p-6">
                             <Suspense fallback={(
-                                <div className="rounded-3xl bg-white p-10 text-center font-black text-[#7B5E43]">
+                                <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center font-black text-[#7B5E43] shadow-sm">
                                     Đang tải cài đặt máy đọc tiền...
                                 </div>
                             )}>
@@ -94,7 +94,7 @@ const ManagementPanel = ({ onClose }) => {
                     ) : (
                         <div className="p-6">
                             <Suspense fallback={(
-                                <div className="rounded-3xl bg-white p-10 text-center font-black text-[#7B5E43]">
+                                <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center font-black text-[#7B5E43] shadow-sm">
                                     Đang tải cài đặt...
                                 </div>
                             )}>

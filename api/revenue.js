@@ -231,21 +231,30 @@ async function writeRevenueResetAt(supabase) {
 
 function mergeTransactions(payments, dbSessions, storageSessions) {
     const bySession = new Map();
+    const bySepayCode = new Map(); // gộp session<->payment theo mã QR khi id lệch nhau
     const merged = [];
 
     [...storageSessions, ...dbSessions].forEach((tx) => {
         if (!tx?.id) return;
-        bySession.set(String(tx.id), tx);
+        const key = String(tx.id);
+        bySession.set(key, tx);
+        if (tx.sepay_order_code) bySepayCode.set(String(tx.sepay_order_code), key);
     });
 
     payments.forEach((payment) => {
-        const sessionKey = payment.id ? String(payment.id) : '';
+        // Khớp trực tiếp theo id; nếu trượt thì khớp theo mã SePay (uuid session được tạo
+        // muộn hơn session_id của order nên id thường lệch cho cùng một giao dịch).
+        let sessionKey = payment.id && bySession.has(String(payment.id)) ? String(payment.id) : '';
+        if (!sessionKey && payment.sepay_order_code && bySepayCode.has(String(payment.sepay_order_code))) {
+            sessionKey = bySepayCode.get(String(payment.sepay_order_code));
+        }
         const sessionTx = sessionKey ? bySession.get(sessionKey) : null;
         if (sessionTx) {
             const sepayCode = sessionTx.sepay_order_code || payment.sepay_order_code;
             bySession.set(sessionKey, {
                 ...sessionTx,
                 sepay_order_code: sepayCode,
+                status: payment.status || sessionTx.status, // phản ánh đã thanh toán
                 detail_label: detailLabel(sessionTx.payment_method, sessionTx.payment_code, sepayCode),
             });
             return;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, CheckCircle2, Database, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Zap, DollarSign } from 'lucide-react';
+import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Zap, DollarSign } from 'lucide-react';
 import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
 import { useWorkflow } from '../../context/WorkflowContext';
@@ -313,7 +313,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                             step={control.step}
                             value={configs[control.name]}
                             onChange={handleChange}
-                            className="h-2 w-full accent-[#d8b98e]"
+                            className="h-2 w-full accent-[#DDBF9B]"
                         />
                     </label>
                 ))}
@@ -327,7 +327,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
         const bill = hardware?.bill || {};
         const billOk = !bill.enabled || bill.status === 'connected';
         const checks = { ...(hardware?.checks || {}), camera: cameraTestOk || Boolean(hardware?.checks?.camera), bill: billOk };
-        const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.supabase && checks.bill);
+        // Supabase là dịch vụ cloud (không phải phần cứng local) -> không tính vào hardwareOk
+        const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.bill);
 
         return (
             <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">
@@ -360,7 +361,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                             {healthItem('Printer', checks.printer, Printer)}
                             {healthItem('Camera', checks.camera, Camera)}
                             {healthItem('Internet', checks.internet, Wifi)}
-                            {healthItem('Supabase', checks.supabase, Database)}
                             {bill.enabled && healthItem('Đầu đọc tiền', checks.bill, Banknote)}
                         </div>
                     </div>
@@ -417,7 +417,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 type="button"
                                 onClick={runTestPrint}
                                 disabled={testLoading === 'printer'}
-                                className="rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+                                className="rounded-xl bg-[#DDBF9B] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
                             >
                                 {testLoading === 'printer' ? 'Đang in thử...' : 'In thử'}
                             </button>
@@ -460,7 +460,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 type="button"
                                 onClick={runCameraTest}
                                 disabled={testLoading === 'camera'}
-                                className="rounded-xl bg-[#d8b98e] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+                                className="rounded-xl bg-[#DDBF9B] px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
                             >
                                 {testLoading === 'camera' ? 'Đang chụp thử...' : 'Chụp thử'}
                             </button>
