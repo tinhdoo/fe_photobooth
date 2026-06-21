@@ -591,10 +591,21 @@ const Edit = () => {
         setIsUploading(true);
 
         try {
-            // 1. Generate Session ID (UUID) frontend-side for QR Code
-            const sessionId = (window.crypto && typeof window.crypto.randomUUID === 'function')
-                ? window.crypto.randomUUID()
-                : `session-${Math.random().toString(36).substring(2, 11)}`;
+            // 1. Generate Session ID (UUID v4) frontend-side for QR Code.
+            // Không dùng Math.random (dễ TRÙNG -> UUID đụng nhau -> IntegrityError 500 khi
+            // tạo Session sau khi đã thu tiền). Fallback dùng crypto.getRandomValues.
+            const genUuid = () => {
+                if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                    return window.crypto.randomUUID();
+                }
+                const b = new Uint8Array(16);
+                window.crypto.getRandomValues(b);
+                b[6] = (b[6] & 0x0f) | 0x40; // version 4
+                b[8] = (b[8] & 0x3f) | 0x80; // variant
+                const h = Array.from(b, (x) => x.toString(16).padStart(2, '0'));
+                return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+            };
+            const sessionId = genUuid();
             const albumBaseUrl = CLOUD_API_URL || window.location.origin;
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
@@ -904,7 +915,10 @@ const Edit = () => {
                     });
 
                     updateSessionData('finalImage', compositeUrl);
-                    updateSessionData('sessionId', sessionRes.data.uuid || sessionId);
+                    // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
+                    // KHÔNG ghi đè bằng uuid cloud trả về: nếu cloud tạo uuid khác thì QR đã in
+                    // và PrintJob local sẽ lệch với Session cloud. Backend đã honor session_id gửi lên.
+                    updateSessionData('sessionId', sessionId);
 
                     try {
                         const printResult = await sendToPrinter(printBlob, printerCopies, {
