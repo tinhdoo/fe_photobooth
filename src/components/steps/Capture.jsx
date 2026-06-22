@@ -251,9 +251,17 @@ const Capture = () => {
         setCameraError(null);
         setStream(null);
 
-        if (cameraMode !== 'webcam') {
-            setCameraReady(true); // Always ready in hotfolder/canon mode
+        if (cameraMode === 'hotfolder') {
+            setCameraReady(true); // hotfolder: không có live view -> sẵn sàng ngay
             return;
+        }
+
+        if (cameraMode === 'canon') {
+            // Canon: CHỜ live view ra hình rồi mới cho chụp (onLoad của <img> liveview sẽ set
+            // cameraReady) -> tránh ĐEN MÀN HÌNH + video motion rỗng ở ảnh đầu. Fallback 8s để
+            // không kẹt nếu live view lỗi/không onLoad.
+            const fb = setTimeout(() => setCameraReady(true), 8000);
+            return () => clearTimeout(fb);
         }
 
         const initCamera = async () => {
@@ -570,6 +578,7 @@ const Capture = () => {
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
+                                onLoad={() => setCameraReady(true)}
                                 onError={(e) => {
                                     e.target.style.display = 'none';
                                     setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
