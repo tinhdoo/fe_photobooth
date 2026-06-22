@@ -464,7 +464,7 @@ const Payment = () => {
                 type="button"
                 onClick={applyCode}
                 disabled={loading || code.length !== 6}
-                className="mt-4 rounded-full bg-[#D5B895] px-8 py-3 font-bold text-white shadow-lg disabled:opacity-50"
+                className="mt-4 rounded-full bg-[#987351] px-10 py-3 text-lg font-black text-white shadow-lg transition-colors hover:bg-[#7B5E43] active:scale-95 disabled:bg-[#C9B49A] disabled:opacity-70"
             >
                 Áp dụng mã
             </button>
