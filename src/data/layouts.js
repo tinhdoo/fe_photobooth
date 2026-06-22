@@ -75,7 +75,7 @@ export const LAYOUTS = [
     photoCount: 2,
     cols: 1,
     rows: 2,
-    icon: '4.png',
+    icon: '6.png',
     isMobileOnly: true,
   },
   {
@@ -87,7 +87,7 @@ export const LAYOUTS = [
     photoCount: 2,
     cols: 2,
     rows: 1,
-    icon: '3.png',
+    icon: '7.png',
     isMobileOnly: true,
   },
   {
@@ -99,7 +99,7 @@ export const LAYOUTS = [
     photoCount: 1,
     cols: 1,
     rows: 1,
-    icon: '4.png',
+    icon: '8.png',
     isMobileOnly: true,
   },
   {

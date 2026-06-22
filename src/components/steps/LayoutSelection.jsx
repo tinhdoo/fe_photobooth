@@ -133,17 +133,12 @@ const LayoutSelection = () => {
                             className="cursor-pointer flex flex-col items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
                         >
                             <div className="w-full aspect-[4/5] flex items-center justify-center mb-4">
-                                {isUploadFlow ? (
-                                    <div className="flex flex-col items-center justify-center h-full w-full opacity-90" style={{ mixBlendMode: 'multiply' }}>
-                                        {renderMobilePreview(layout)}
-                                    </div>
-                                ) : (
-                                    <img
-                                        src={layoutIconUrls[layout.icon]}
-                                        alt={layout.name}
-                                        className="w-full h-full object-contain mix-blend-multiply opacity-90"
-                                    />
-                                )}
+                                {/* Cả luồng booth lẫn upload đều dùng icon ảnh (mobile có 6/7/8.png). */}
+                                <img
+                                    src={layoutIconUrls[layout.icon]}
+                                    alt={layout.name}
+                                    className="w-full h-full object-contain mix-blend-multiply opacity-90"
+                                />
                             </div>
 
                             <div className="text-center font-serif flex flex-col gap-2">
