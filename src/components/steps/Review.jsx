@@ -54,6 +54,19 @@ const Review = () => {
     const setActiveSlot = (value) => updateSessionData('activeSlot', value);
     const previewGrid = getReviewGrid(currentLayout);
 
+    // Prefetch chunk bước Edit (chọn frame/filter) khi vào Review, nhưng CHỈ lúc CPU rảnh
+    // (requestIdleCallback) để không tranh tài nguyên/giật khi máy đang bận. Vẫn kịp warm
+    // trước khi khách bấm sang bước chọn frame -> chuyển bước mượt.
+    useEffect(() => {
+        const warm = () => { import('./Edit').catch(() => {}); };
+        if (typeof window !== 'undefined' && window.requestIdleCallback) {
+            const id = window.requestIdleCallback(warm, { timeout: 2500 });
+            return () => window.cancelIdleCallback && window.cancelIdleCallback(id);
+        }
+        const t = setTimeout(warm, 800); // fallback (Safari cũ không có requestIdleCallback)
+        return () => clearTimeout(t);
+    }, []);
+
     useEffect(() => {
         if (isSessionActive && timeLeft === 0) {
             nextStep();
