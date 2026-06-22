@@ -14,7 +14,7 @@ const CodeManager = () => {
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
-        value: 60000,
+        value: 70000,
         expiresAt: '',
         quantity: 1
     });
