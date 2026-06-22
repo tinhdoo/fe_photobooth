@@ -239,10 +239,14 @@ const Payment = () => {
             });
 
         checkStatus();
+        // Poll Supabase đều đặn 2.5s LÀM LƯỚI AN TOÀN, kể cả khi realtime đã subscribe.
+        // Mạng booth hay chặn WebSocket (socket.io đã phải ép 'polling') -> realtime nhiều khi
+        // không subscribe được; nếu chỉ dựa realtime + fallback 10s thì xác nhận SePay chờ rất
+        // lâu. 2.5s đủ nhanh để chốt tiền, không phụ thuộc realtime.
         const interval = setInterval(() => {
-            if (realtimeReady || document.visibilityState !== 'visible') return;
+            if (document.visibilityState !== 'visible') return;
             checkStatus();
-        }, 10000);
+        }, 2500);
         return () => {
             stopped = true;
             clearInterval(interval);
