@@ -59,6 +59,20 @@ const RevenueDashboard = () => {
         setEditingDevice(null);
     };
 
+    // Ẩn 1 booth khỏi bảng doanh thu (cần mật khẩu 8686). Không xóa dữ liệu — chỉ lọc khỏi
+    // thống kê; có thể khôi phục bằng cách bỏ device_id khỏi hidden_booths trên cloud.
+    const hideBooth = async (deviceId) => {
+        const pwd = window.prompt(`Ẩn booth "${boothName(deviceId)}" khỏi bảng doanh thu?\n(Dữ liệu vẫn giữ trên cloud, có thể khôi phục.)\nNhập mật khẩu để xác nhận:`);
+        if (pwd === null) return;
+        try {
+            await axios.post(apiPath('/api/revenue'), { code: pwd, action: 'hide_booth', device_id: deviceId });
+            fetchRevenue();
+            fetchDevices();
+        } catch (e) {
+            alert(e?.response?.status === 403 ? 'Sai mật khẩu.' : (e?.response?.data?.error || 'Ẩn booth thất bại.'));
+        }
+    };
+
     const boothName = (id) => {
         if (!id) return 'Không rõ máy';
         const d = devices.find((dv) => dv.device_id === id);
@@ -698,7 +712,16 @@ const RevenueDashboard = () => {
                                                 )}
                                                 <p className="font-mono text-xs text-gray-400">{b.count} giao dịch</p>
                                             </div>
-                                            <p className="shrink-0 text-lg font-black text-[#e63946]">{formatCurrency(b.total)}</p>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <p className="text-lg font-black text-[#e63946]">{formatCurrency(b.total)}</p>
+                                                <button
+                                                    onClick={() => hideBooth(b.device_id)}
+                                                    title="Ẩn booth khỏi bảng (cần mật khẩu)"
+                                                    className="rounded-md border border-red-100 bg-red-50 p-1.5 text-red-500 transition-colors hover:bg-red-500 hover:text-white"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-3 gap-1.5 text-center">
                                             <div className="rounded-lg bg-white p-1.5">

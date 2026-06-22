@@ -229,6 +229,47 @@ async function writeRevenueResetAt(supabase) {
     return resetAt;
 }
 
+async function readHiddenBooths(supabase) {
+    const { data, error } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (error && isMissingTable(error)) return [];
+    if (error) throw error;
+
+    const list = data?.config?.hidden_booths;
+    return Array.isArray(list) ? list.map(String) : [];
+}
+
+async function hideBooth(supabase, deviceId) {
+    const { data, error } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', 'app')
+        .maybeSingle();
+
+    if (error && !isMissingTable(error)) throw error;
+
+    const currentConfig = data?.config && typeof data.config === 'object' && !Array.isArray(data.config)
+        ? data.config
+        : {};
+    const existing = Array.isArray(currentConfig.hidden_booths) ? currentConfig.hidden_booths.map(String) : [];
+    if (!existing.includes(String(deviceId))) existing.push(String(deviceId));
+
+    const { error: writeError } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: 'app',
+            config: { ...currentConfig, hidden_booths: existing },
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+
+    if (writeError && !isMissingTable(writeError)) throw writeError;
+    return existing;
+}
+
 function mergeTransactions(payments, dbSessions, storageSessions) {
     const bySession = new Map();
     const bySepayCode = new Map(); // gộp session<->payment theo mã QR khi id lệch nhau
@@ -277,6 +318,14 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             if (req.body?.code !== '8686') return json(res, 403, { error: 'Invalid reset code' });
 
+            const action = String(req.body?.action || '').trim();
+            if (action === 'hide_booth') {
+                const deviceId = String(req.body?.device_id || req.body?.deviceId || '').trim();
+                if (!deviceId) return json(res, 400, { error: 'Missing device_id' });
+                const hidden = await hideBooth(supabase, deviceId);
+                return json(res, 200, { success: true, hidden_booths: hidden });
+            }
+
             const resetAt = await writeRevenueResetAt(supabase);
             return json(res, 200, { success: true, reset_at: resetAt });
         }
@@ -287,15 +336,18 @@ export default async function handler(req, res) {
         const endDate = req.query?.endDate || '';
         const paymentMethod = req.query?.paymentMethod || '';
 
-        const [payments, dbSessions, storageSessions, revenueResetAt] = await Promise.all([
+        const [payments, dbSessions, storageSessions, revenueResetAt, hiddenBooths] = await Promise.all([
             listPaymentTransactions(supabase),
             listDbSessions(supabase),
             listStorageSessions(supabase),
             readRevenueResetAt(supabase),
+            readHiddenBooths(supabase),
         ]);
 
+        const hiddenSet = new Set(hiddenBooths.map(String));
         const transactions = mergeTransactions(payments, dbSessions, storageSessions)
             .filter((tx) => !revenueResetAt || new Date(txDate(tx)).getTime() >= new Date(revenueResetAt).getTime())
+            .filter((tx) => !hiddenSet.has(String(tx.device_id || '')))
             .filter((tx) => inRange(tx, startDate, endDate))
             .filter((tx) => matchesMethod(tx, paymentMethod));
 
