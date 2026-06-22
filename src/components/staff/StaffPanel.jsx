@@ -12,7 +12,7 @@ const statusLabel = {
 const paymentLabel = {
     cash: 'Tiền mặt',
     qr: 'QR',
-    sepay: 'Sepay',
+    sepay: 'Tomato',
     code: 'Mã thanh toán',
 };
 

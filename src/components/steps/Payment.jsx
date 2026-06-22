@@ -174,7 +174,7 @@ const Payment = () => {
                 if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);
             } catch (error) {
                 if (!cancelled && qrRequestRef.current === requestId) {
-                    setQrError(error.response?.data?.error || 'Không thể tạo mã QR Sepay trên Vercel.');
+                    setQrError(error.response?.data?.error || 'Không thể tạo mã QR Tomato trên Vercel.');
                 }
             } finally {
                 if (!cancelled && qrRequestRef.current === requestId) setLoading(false);
@@ -370,14 +370,14 @@ const Payment = () => {
 
             {qrError ? (
                 <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-red-700">
-                    <p className="font-bold">Chưa tạo được QR Sepay</p>
+                    <p className="font-bold">Chưa tạo được QR Tomato</p>
                     <p className="mt-2 text-sm">{qrError}</p>
                 </div>
             ) : qrOrder ? (
                 <>
                     <img
                         src={qrOrder.qr_url}
-                        alt="QR thanh toán Sepay"
+                        alt="QR thanh toán Tomato"
                         className="h-64 w-64 rounded-2xl border-2 border-[#F6E6C9] bg-white p-3 shadow-inner"
                     />
                     <div className="w-full max-w-md rounded-2xl bg-[#F6E6C9]/35 p-4 text-left" style={{ color: secondaryTextColor }}>
@@ -394,7 +394,7 @@ const Payment = () => {
                             <strong>{qrOrder.content}</strong>
                         </div>
                     </div>
-                    <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Đang chờ Sepay xác nhận tự động...</p>
+                    <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Đang chờ Tomato xác nhận tự động...</p>
                 </>
             ) : (
                 <div className="flex h-64 w-64 items-center justify-center rounded-2xl border-2 border-[#F6E6C9] bg-white">
