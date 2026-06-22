@@ -1,7 +1,8 @@
 import { Suspense, lazy, useState } from 'react';
-import { Printer, Settings, X, Banknote, Zap, DollarSign } from 'lucide-react';
+import { Printer, Settings, X, Banknote, Zap, DollarSign, LogOut } from 'lucide-react';
 import StaffPanel from './StaffPanel';
 import { useWorkflow } from '../../context/WorkflowContext';
+import { API_URL } from '../../config/api';
 
 const SettingsPanel = lazy(() => import('../admin/Settings'));
 const BillSettingsPanel = lazy(() => import('../admin/BillSettings'));
@@ -14,7 +15,19 @@ const tabs = [
 
 const ManagementPanel = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('prints');
+    const [confirmExit, setConfirmExit] = useState(false);
     const { isEventMode, toggleEventMode } = useWorkflow();
+
+    // Thoát kiosk: đóng trình duyệt kiosk (backend chạy taskkill chrome/edge) để staff về màn hình
+    // Windows. Xác nhận 2 bước (bấm lần 1 -> "Xác nhận thoát?", lần 2 mới thoát).
+    const handleExitKiosk = () => {
+        if (!confirmExit) {
+            setConfirmExit(true);
+            setTimeout(() => setConfirmExit(false), 4000);
+            return;
+        }
+        fetch(`${API_URL}/api/kiosk/exit`, { method: 'POST' }).catch(() => {});
+    };
 
     return (
         <div
@@ -66,6 +79,15 @@ const ManagementPanel = ({ onClose }) => {
                                 );
                             })}
                         </div>
+
+                        <button
+                            type="button"
+                            onClick={handleExitKiosk}
+                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black text-white shadow-sm transition-colors ${confirmExit ? 'bg-[#c1121f] animate-pulse' : 'bg-[#e63946] hover:bg-[#c1121f]'}`}
+                        >
+                            <LogOut size={18} />
+                            {confirmExit ? 'Xác nhận thoát?' : 'Thoát kiosk'}
+                        </button>
 
                         <button
                             type="button"

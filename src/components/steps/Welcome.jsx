@@ -35,7 +35,7 @@ const Welcome = () => {
             setPinInput('');
             setPinError('');
             setShowPinCard(true);
-        }, 3000); // Giảm xuống 3 giây cho dễ thao tác
+        }, 5000); // Ấn giữ 5 giây để mở khóa kiosk (vào staff panel)
     };
 
     const handleRelease = () => {
