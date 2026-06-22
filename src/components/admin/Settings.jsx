@@ -42,6 +42,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
         print_price: '',
         mobile_price: '',
         mobile_print_price: '',
+        repeat: false, // true = lặp lại mỗi ngày vào đúng giờ, tới khi xóa
     });
     const [, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -139,6 +140,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
             print_price: priceScheduleForm.print_price || configs.print_price,
             mobile_price: priceScheduleForm.mobile_price || configs.mobile_price,
             mobile_print_price: priceScheduleForm.mobile_print_price || configs.mobile_print_price,
+            // daily = lặp mỗi ngày vào đúng giờ của run_at (bỏ qua phần ngày); once = chạy 1 lần.
+            repeat: priceScheduleForm.repeat ? 'daily' : 'once',
             applied: false,
         };
 
@@ -150,6 +153,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
             print_price: '',
             mobile_price: '',
             mobile_print_price: '',
+            repeat: false,
         });
         setMessage({ type: 'success', text: 'Đã thêm lịch giá.' });
     };
@@ -1017,6 +1021,16 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                             ))}
                                         </div>
 
+                                        <label className="mt-3 flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1a1a2e] cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!priceScheduleForm.repeat}
+                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, repeat: event.target.checked }))}
+                                                className="h-4 w-4 accent-[#e63946]"
+                                            />
+                                            🔁 Lặp lại mỗi ngày (vào đúng giờ đã chọn, tới khi xóa)
+                                        </label>
+
                                         <div className="mt-5 space-y-2">
                                             {getPriceSchedule().length === 0 ? (
                                                 <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
@@ -1024,11 +1038,20 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                 <div key={item.id || index} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex flex-wrap items-center gap-1.5 font-black text-xs sm:text-sm text-[#1a1a2e]">
-                                                            <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
-                                                            {item.applied ? (
-                                                                <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-bold whitespace-nowrap">Đã áp dụng</span>
+                                                            {item.repeat === 'daily' ? (
+                                                                <>
+                                                                    <span>🔁 Hằng ngày lúc {isNaN(new Date(item.run_at)) ? (item.run_at || '--') : new Date(item.run_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                    <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] text-blue-700 font-bold whitespace-nowrap">Lặp lại mỗi ngày</span>
+                                                                </>
                                                             ) : (
-                                                                <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700 font-bold whitespace-nowrap">Đang chờ</span>
+                                                                <>
+                                                                    <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
+                                                                    {item.applied ? (
+                                                                        <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-bold whitespace-nowrap">Đã áp dụng</span>
+                                                                    ) : (
+                                                                        <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700 font-bold whitespace-nowrap">Đang chờ</span>
+                                                                    )}
+                                                                </>
                                                             )}
                                                         </div>
                                                         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-semibold text-gray-500">
