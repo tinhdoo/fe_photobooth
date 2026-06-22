@@ -27,7 +27,7 @@ const DEFAULT_CONFIGS = {
     canon_capture_timeout: 30,
     camera_mode: 'webcam',
     hot_folder: 'C:/Photobooth_Input',
-    staff_pin: '1310',
+    staff_pin: '8888',
     print_brightness: 0,
     print_contrast: 0,
     print_saturation: 0,

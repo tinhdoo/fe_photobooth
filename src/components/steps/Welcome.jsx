@@ -14,7 +14,7 @@ const Welcome = () => {
     const [pinError, setPinError] = useState('');
     const longPressTimer = useRef(null);
     const longPressTriggered = useRef(false);
-    const staffPin = String(configs?.staff_pin || '1310');
+    const staffPin = String(configs?.staff_pin || '8888');
 
     const clearLongPress = () => {
         if (longPressTimer.current) {
@@ -35,7 +35,7 @@ const Welcome = () => {
             setPinInput('');
             setPinError('');
             setShowPinCard(true);
-        }, 5000); // Ấn giữ 5 giây để mở khóa kiosk (vào staff panel)
+        }, 3000); // Ấn giữ 3 giây để mở khóa kiosk (vào staff panel)
     };
 
     const handleRelease = () => {
