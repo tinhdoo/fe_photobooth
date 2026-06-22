@@ -22,6 +22,10 @@ const RevenueDashboard = () => {
 
     const [showResetModal, setShowResetModal] = useState(false);
     const [resetCode, setResetCode] = useState('');
+    const [hideTarget, setHideTarget] = useState(null);     // device_id đang chờ ẩn
+    const [hidePassword, setHidePassword] = useState('');
+    const [hideError, setHideError] = useState('');
+    const [hideLoading, setHideLoading] = useState(false);
     const [resetLoading, setResetLoading] = useState(false);
     const [resetError, setResetError] = useState('');
     const [notification, setNotification] = useState(null);
@@ -61,15 +65,26 @@ const RevenueDashboard = () => {
 
     // Ẩn 1 booth khỏi bảng doanh thu (cần mật khẩu 8686). Không xóa dữ liệu — chỉ lọc khỏi
     // thống kê; có thể khôi phục bằng cách bỏ device_id khỏi hidden_booths trên cloud.
-    const hideBooth = async (deviceId) => {
-        const pwd = window.prompt(`Ẩn booth "${boothName(deviceId)}" khỏi bảng doanh thu?\n(Dữ liệu vẫn giữ trên cloud, có thể khôi phục.)\nNhập mật khẩu để xác nhận:`);
-        if (pwd === null) return;
+    const hideBooth = (deviceId) => {
+        setHideTarget(deviceId);
+        setHidePassword('');
+        setHideError('');
+    };
+
+    const confirmHideBooth = async () => {
+        if (!hideTarget) return;
+        if (hidePassword !== '8686') { setHideError('Sai mật khẩu.'); return; }
+        setHideLoading(true);
         try {
-            await axios.post(apiPath('/api/revenue'), { code: pwd, action: 'hide_booth', device_id: deviceId });
+            await axios.post(apiPath('/api/revenue'), { code: hidePassword, action: 'hide_booth', device_id: hideTarget });
+            setHideTarget(null);
+            setHidePassword('');
             fetchRevenue();
             fetchDevices();
         } catch (e) {
-            alert(e?.response?.status === 403 ? 'Sai mật khẩu.' : (e?.response?.data?.error || 'Ẩn booth thất bại.'));
+            setHideError(e?.response?.status === 403 ? 'Sai mật khẩu.' : (e?.response?.data?.error || 'Ẩn booth thất bại.'));
+        } finally {
+            setHideLoading(false);
         }
     };
 
@@ -929,6 +944,54 @@ const RevenueDashboard = () => {
                                 className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600"
                             >
                                 {resetLoading ? 'Đang reset...' : 'Reset'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {hideTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl p-7 w-[380px] shadow-2xl animate-fadeIn">
+                        <h3 className="text-xl font-black text-[#1a1a2e] mb-2">
+                            Ẩn booth khỏi bảng doanh thu
+                        </h3>
+
+                        <p className="text-gray-500 text-sm mb-5">
+                            Ẩn booth <span className="font-bold text-[#1a1a2e]">"{boothName(hideTarget)}"</span> khỏi bảng doanh thu.
+                            <br />
+                            <span className="text-gray-400">Dữ liệu vẫn được giữ trên cloud, có thể khôi phục.</span>
+                            <br />
+                            Nhập mật khẩu để xác nhận.
+                        </p>
+
+                        <input
+                            type="password"
+                            placeholder="Nhập mật khẩu"
+                            value={hidePassword}
+                            autoFocus
+                            onChange={(e) => setHidePassword(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && confirmHideBooth()}
+                            className="w-full border border-gray-200 rounded-xl p-3 mb-3 outline-none focus:ring-2 focus:ring-red-200"
+                        />
+
+                        {hideError && (
+                            <p className="text-red-500 text-sm mb-3">{hideError}</p>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setHideTarget(null); setHidePassword(''); setHideError(''); }}
+                                className="flex-1 py-3 rounded-xl bg-gray-100 font-semibold"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={confirmHideBooth}
+                                disabled={hideLoading}
+                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 disabled:opacity-50"
+                            >
+                                {hideLoading ? 'Đang ẩn...' : 'Ẩn booth'}
                             </button>
                         </div>
                     </div>
