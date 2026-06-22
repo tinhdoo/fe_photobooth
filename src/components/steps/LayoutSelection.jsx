@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { LAYOUTS } from '../../data/layouts';
@@ -33,6 +33,22 @@ const LayoutSelection = () => {
     const itemsPerPage = 4;
     const totalPages = Math.ceil(availableLayouts.length / itemsPerPage);
     const currentLayouts = availableLayouts.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+
+    // Vuốt cảm ứng kéo sang 2 bên để chuyển trang (vẫn giữ 2 mũi tên). dragged: đánh dấu đã vuốt
+    // để không kích nhầm chọn frame khi thả tay.
+    const SWIPE_THRESHOLD = 50;
+    const touchRef = useRef({ x: 0, dragged: false });
+    const onSwipeStart = (e) => { touchRef.current = { x: e.touches[0].clientX, dragged: false }; };
+    const onSwipeMove = (e) => {
+        if (Math.abs(e.touches[0].clientX - touchRef.current.x) > 10) touchRef.current.dragged = true;
+    };
+    const onSwipeEnd = (e) => {
+        const dx = e.changedTouches[0].clientX - touchRef.current.x;
+        if (Math.abs(dx) > SWIPE_THRESHOLD) {
+            if (dx < 0) setCurrentPage((curr) => Math.min(curr + 1, totalPages - 1)); // vuốt sang trái -> trang sau
+            else setCurrentPage((curr) => Math.max(curr - 1, 0));                       // vuốt sang phải -> trang trước
+        }
+    };
 
     const renderMobilePreview = (layout) => {
         const frameClass = "bg-[#EAD3B2] shadow-sm border border-[#D5B895] rounded-sm";
@@ -89,7 +105,13 @@ const LayoutSelection = () => {
                 Chọn bố cục
             </motion.h2>
 
-            <div className="relative w-full max-w-7xl px-4 md:px-16 flex items-center justify-center">
+            <div
+                className="relative w-full max-w-7xl px-4 md:px-16 flex items-center justify-center"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={onSwipeStart}
+                onTouchMove={onSwipeMove}
+                onTouchEnd={onSwipeEnd}
+            >
                 {currentPage > 0 && (
                     <button
                         onClick={() => setCurrentPage(curr => curr - 1)}
@@ -107,7 +129,7 @@ const LayoutSelection = () => {
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.1 }}
-                            onClick={() => handleSelect(layout)}
+                            onClick={() => { if (touchRef.current.dragged) return; handleSelect(layout); }}
                             className="cursor-pointer flex flex-col items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
                         >
                             <div className="w-full aspect-[4/5] flex items-center justify-center mb-4">
