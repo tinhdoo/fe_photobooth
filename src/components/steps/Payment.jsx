@@ -500,6 +500,17 @@ const Payment = () => {
             className="relative flex min-h-full w-full flex-col items-center justify-center bg-[#FFF8E7] bg-cover bg-center p-8 font-serif"
             style={{ backgroundImage: configs?.['bg_payment'] ? `url('${configs['bg_payment']}')` : 'none' }}
         >
+            {/* Pre-warm live view Canon (EVF) ngay từ bước thanh toán: mở sẵn luồng MJPEG để khi
+                vào bước chụp live view đã ra hình -> video motion ảnh ĐẦU không bị trống. Ẩn nhưng
+                vẫn stream. Chỉ áp dụng canon mode. */}
+            {configs?.camera_mode === 'canon' && (
+                <img
+                    src="http://localhost:5001/liveview"
+                    alt=""
+                    aria-hidden="true"
+                    style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }}
+                />
+            )}
             <button
                 type="button"
                 onClick={goBack}

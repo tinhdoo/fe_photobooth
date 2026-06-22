@@ -79,6 +79,8 @@ const Capture = () => {
     const shutterAudioRef = useRef(null);
     // Canon motion: vẽ frame liveview (MJPEG) lên canvas ẩn rồi quay bằng captureStream
     const liveViewImgRef = useRef(null);
+    // Cờ: đã vẽ được ít nhất 1 frame live view THẬT vào canvas chưa (để bỏ video rỗng ảnh đầu).
+    const canonHasFramesRef = useRef(false);
     const canonDrawTimerRef = useRef(null);
     const canonStreamRef = useRef(null);
 
@@ -102,6 +104,7 @@ const Capture = () => {
             const img = liveViewImgRef.current;
             if (!img) return;
             videoChunksRef.current = [];
+            canonHasFramesRef.current = false;
 
             const canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth || 960;
@@ -109,12 +112,16 @@ const Capture = () => {
             const ctx = canvas.getContext('2d');
 
             const drawFrame = () => {
+                // Chỉ vẽ khi live view THỰC SỰ có hình; chưa ra hình thì bỏ qua (tránh quay frame
+                // trống -> video motion ảnh đầu bị rỗng/đè lên ảnh).
+                if (!img.complete || !img.naturalWidth) return;
                 try {
                     // Lật ngang để khớp với ảnh chụp Canon (đã mirror)
                     ctx.save();
                     ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     ctx.restore();
+                    canonHasFramesRef.current = true;
                 } catch (e) { /* frame chưa sẵn sàng */ }
             };
             drawFrame();
@@ -201,8 +208,9 @@ const Capture = () => {
             recorder.onstop = () => {
                 const blob = new Blob(videoChunksRef.current, { type: 'video/webm' }); // Force webm container
                 stopCanonDraw();
-                // Blob rỗng (vd canvas bị CORS chặn) -> không tạo motion hỏng
-                if (!blob.size) { resolve(null); return; }
+                // Bỏ video nếu blob rỗng, HOẶC (canon) chưa từng vẽ được frame thật (live view
+                // chưa ra hình - thường là ảnh đầu) -> album fallback sang ảnh tĩnh, không ô trống.
+                if (!blob.size || (cameraMode === 'canon' && !canonHasFramesRef.current)) { resolve(null); return; }
                 const url = URL.createObjectURL(blob);
                 resolve(url);
             };
