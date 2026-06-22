@@ -184,6 +184,22 @@ const Edit = () => {
     const nextPage = () => setCurrentPage((prev) => (prev + 1) % totalPages);
     const prevPage = () => setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages);
 
+    // Vuốt cảm ứng kéo trái/phải để đổi trang frame (vẫn giữ mũi tên ‹ ›). dragged: chặn chọn
+    // nhầm frame khi thả tay sau khi vuốt.
+    const frameSwipeRef = useRef({ x: 0, dragged: false });
+    const onFrameSwipeStart = (e) => { frameSwipeRef.current = { x: e.touches[0].clientX, dragged: false }; };
+    const onFrameSwipeMove = (e) => {
+        if (Math.abs(e.touches[0].clientX - frameSwipeRef.current.x) > 10) frameSwipeRef.current.dragged = true;
+    };
+    const onFrameSwipeEnd = (e) => {
+        if (totalPages <= 1) return;
+        const dx = e.changedTouches[0].clientX - frameSwipeRef.current.x;
+        if (Math.abs(dx) > 50) {
+            if (dx < 0) nextPage();   // vuốt sang trái -> trang sau
+            else prevPage();          // vuốt sang phải -> trang trước
+        }
+    };
+
     // Overlays
     const [qrSettings, setQrSettings] = useState({ show: false, x: 50, y: 50, size: 15 });
     const [dateSettings, setDateSettings] = useState({ show: false, x: 90, y: 90, fontSize: 14, color: '#000000' });
@@ -811,7 +827,7 @@ const Edit = () => {
             const printCanvas = printOutput.canvas;
             const cutMode = printOutput.cutMode;
             const compositeCanvas = cleanCanvas;
-            applyPrintColorSettings(printCanvas);
+            // Bỏ xử lý màu khi in -> file gửi máy in GIỮ NGUYÊN MÀU GỐC (chỉ áp filter người chọn).
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
             // 8. Upload & Create Session
@@ -1213,11 +1229,17 @@ const Edit = () => {
                     </div>
 
                     {/* Frame Selector */}
-                    <div className="flex items-center justify-center w-full gap-4">
+                    <div
+                        className="flex items-center justify-center w-full gap-4"
+                        style={{ touchAction: 'pan-y' }}
+                        onTouchStart={onFrameSwipeStart}
+                        onTouchMove={onFrameSwipeMove}
+                        onTouchEnd={onFrameSwipeEnd}
+                    >
                         <button onClick={prevPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#7B5E43] text-4xl font-bold p-2">‹</button>
                         <div className="grid grid-cols-5 grid-rows-2 gap-4 min-h-[208px]">
                             {displayedFrames.map((frame) => (
-                                <motion.div key={frame.id} onClick={() => handleSelectFrame(frame)}
+                                <motion.div key={frame.id} onClick={() => { if (frameSwipeRef.current.dragged) return; handleSelectFrame(frame); }}
                                     className={`w-24 h-24 rounded-full border-[4px] cursor-pointer overflow-hidden ${selectedFrame.id === frame.id ? 'border-[#7B5E43]' : 'border-gray-300'}`}
                                     style={{ backgroundColor: frame.color || '#fff' }}
                                 >
