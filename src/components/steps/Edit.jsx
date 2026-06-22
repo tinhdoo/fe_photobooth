@@ -407,22 +407,31 @@ const Edit = () => {
     };
 
     const handleDrag = (e, type) => {
-        // e.preventDefault(); // Có thể gây lỗi trên một số thiết bị touch, cân nhắc bỏ nếu không cần thiết
         const container = captureRef.current;
         if (!container) return;
-
-        const rect = container.getBoundingClientRect();
 
         // Support both mouse and touch
         const getClientPos = (evt) => {
             if (evt.touches && evt.touches.length > 0) return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+            if (evt.changedTouches && evt.changedTouches.length > 0) return { x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY };
             return { x: evt.clientX, y: evt.clientY };
         };
 
+        // Lệch giữa ngón tay và TÂM của QR/ngày lúc bắt đầu kéo -> giữ điểm cầm cố định dưới ngón
+        // tay (không nhảy tâm về ngón tay khi chạm).
+        const startPos = getClientPos(e);
+        const startRect = container.getBoundingClientRect();
+        const cur = type === 'qr' ? qrSettings : dateSettings;
+        const offX = startPos.x - (startRect.left + (cur.x / 100) * startRect.width);
+        const offY = startPos.y - (startRect.top + (cur.y / 100) * startRect.height);
+
         const moveHandler = (moveEvent) => {
+            // Chặn cuộn trang/cử chỉ mặc định khi đang kéo -> hết giật, vị trí không lệch.
+            if (moveEvent.cancelable) moveEvent.preventDefault();
             const pos = getClientPos(moveEvent);
-            let newX = ((pos.x - rect.left) / rect.width) * 100;
-            let newY = ((pos.y - rect.top) / rect.height) * 100;
+            const rect = container.getBoundingClientRect(); // đọc lại mỗi lần -> đúng kể cả khi layout đổi
+            let newX = ((pos.x - offX - rect.left) / rect.width) * 100;
+            let newY = ((pos.y - offY - rect.top) / rect.height) * 100;
 
             // Clamp 0-100
             newX = Math.max(0, Math.min(100, newX));
@@ -1111,7 +1120,8 @@ const Edit = () => {
                                 style={{
                                     left: `${qrSettings.x}%`, top: `${qrSettings.y}%`,
                                     width: `${qrSettings.size}%`, aspectRatio: '1/1',
-                                    transform: 'translate(-50%, -50%)'
+                                    transform: 'translate(-50%, -50%)',
+                                    touchAction: 'none'
                                 }}
                                 onMouseDown={(e) => handleDrag(e, 'qr')}
                                 onTouchStart={(e) => handleDrag(e, 'qr')}
@@ -1125,6 +1135,7 @@ const Edit = () => {
                                 style={{
                                     left: `${dateSettings.x}%`, top: `${dateSettings.y}%`,
                                     transform: 'translate(-50%, -50%)',
+                                    touchAction: 'none',
                                     fontSize: `${dateSettings.fontSize / 10}cqh`, // Fallback could be needed
                                     fontWeight: 'bold', fontFamily: 'Arial', color: dateSettings.color
                                 }}
