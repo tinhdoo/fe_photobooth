@@ -136,9 +136,15 @@ const App = () => {
                         <Route
                             path="/"
                             element={
-                                <MainLayout>
-                                    <StepContent />
-                                </MainLayout>
+                                // Cloud (Vercel) chỉ dùng để QUẢN LÝ -> không chạy luồng chụp booth ở đây,
+                                // chuyển thẳng vào /admin. Luồng chụp chỉ chạy trên máy booth (localhost).
+                                isLocalHost() ? (
+                                    <MainLayout>
+                                        <StepContent />
+                                    </MainLayout>
+                                ) : (
+                                    <Navigate to="/admin" replace />
+                                )
                             }
                         />
 
