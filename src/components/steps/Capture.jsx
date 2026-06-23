@@ -5,6 +5,10 @@ import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react'; // Added import
 import { FirebaseService } from '../../services/FirebaseService';
 
+// Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
+// lại overlay "Đang khởi động camera" mỗi lần chụp lại (Capture remount nhưng live view vẫn chạy).
+let _cameraReadyOnce = false;
+
 // Giải phóng blob URL (ảnh + video) của tấm cũ khi chụp lại thay thế, để tránh rò rỉ
 // bộ nhớ trong phiên. Chỉ revoke khi URL không còn được dùng ở mảng ảnh mới.
 const releaseReplacedPhoto = (oldPhoto, newPhotos) => {
@@ -280,10 +284,15 @@ const Capture = () => {
         }
 
         if (cameraMode === 'canon') {
-            // Canon: CHỜ live view ra hình rồi mới cho chụp (onLoad của <img> liveview sẽ set
-            // cameraReady) -> tránh ĐEN MÀN HÌNH + video motion rỗng ở ảnh đầu. Fallback 3s để
-            // KHÔNG kẹt/đợi lâu nếu live view chậm lên (vẫn chụp được dù live view chưa hiện).
-            const fb = setTimeout(() => setCameraReady(true), 3000);
+            // Đã sẵn sàng ít nhất 1 lần trong phiên (live view server chạy liên tục) -> KHÔNG
+            // hiện lại overlay "Đang khởi động camera" mỗi lần chụp lại; coi như sẵn sàng ngay.
+            if (_cameraReadyOnce) {
+                setCameraReady(true);
+                return;
+            }
+            // Lần đầu: CHỜ live view ra hình (onLoad set cameraReady) -> tránh đen + motion rỗng
+            // ở ảnh đầu. Fallback 3s để không kẹt nếu live view chậm lên.
+            const fb = setTimeout(() => { _cameraReadyOnce = true; setCameraReady(true); }, 3000);
             return () => clearTimeout(fb);
         }
 
@@ -611,7 +620,7 @@ const Capture = () => {
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
-                                onLoad={() => setCameraReady(true)}
+                                onLoad={() => { _cameraReadyOnce = true; setCameraReady(true); }}
                                 onError={(e) => {
                                     e.target.style.display = 'none';
                                     setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
