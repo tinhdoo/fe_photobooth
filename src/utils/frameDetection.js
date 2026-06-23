@@ -47,12 +47,26 @@ const overlaps = (a, b) => {
     return minArea > 0 && overlapArea / minArea > 0.35;
 };
 
-const connectedComponents = (width, height, isTarget) => {
+// Tách 1 vùng (connected component) thành box ứng viên. Mặc định CHẤP NHẬN mọi hình
+// dạng (tròn, trái tim, ô nghiêng...) miễn đủ lớn để chứa ảnh; chặn ô rỗng/trang trí
+// quá nhỏ bằng diện tích thật + chiều tối thiểu mỗi cạnh. Tinh chỉnh qua `options`.
+const connectedComponents = (width, height, isTarget, options = {}) => {
+    const {
+        minFillRatio = 0.5,   // hạ thấp so với trước (0.72) để nhận hình không-chữ-nhật
+        minAreaFrac = 0.015,  // diện tích pixel thật tối thiểu (so với cả ảnh) -> loại ô nhỏ
+        maxAreaFrac = 0.6,
+        minDimFrac = 0.07,    // mỗi cạnh bbox phải đủ rộng -> loại hình mảnh/nhỏ
+        minAspect = 0.3,
+        maxAspect = 3.4,
+    } = options;
+
     const visited = new Uint8Array(width * height);
     const boxes = [];
     const getIndex = (x, y) => y * width + x;
-    const minArea = width * height * 0.012;
-    const maxArea = width * height * 0.55;
+    const minArea = width * height * minAreaFrac;
+    const maxArea = width * height * maxAreaFrac;
+    const minBoxW = width * minDimFrac;
+    const minBoxH = height * minDimFrac;
 
     for (let y = 0; y < height; y += 1) {
         for (let x = 0; x < width; x += 1) {
@@ -101,9 +115,11 @@ const connectedComponents = (width, height, isTarget) => {
             if (
                 pixelCount >= minArea
                 && pixelCount <= maxArea
-                && fillRatio > 0.72
-                && aspect > 0.35
-                && aspect < 3.2
+                && boxW >= minBoxW
+                && boxH >= minBoxH
+                && fillRatio > minFillRatio
+                && aspect > minAspect
+                && aspect < maxAspect
             ) {
                 boxes.push({ minX, maxX, minY, maxY, pixelCount, area });
             }
@@ -123,10 +139,13 @@ const downsampleImage = (img, maxSide = 900) => {
     return { canvas, ctx };
 };
 
+// Lỗ trong suốt là chủ ý của người thiết kế -> cho nhận hình dạng tự do (fill thấp),
+// chỉ cần đủ lớn để chứa ảnh.
 const detectTransparentSlots = (data, width, height) => connectedComponents(
     width,
     height,
-    (x, y) => data[(y * width + x) * 4 + 3] < 80
+    (x, y) => data[(y * width + x) * 4 + 3] < 80,
+    { minFillRatio: 0.42, minAreaFrac: 0.015, minDimFrac: 0.07 }
 ).map((bounds) => toPercentBox(bounds, width, height, 0.2));
 
 const detectLightRectSlots = (data, width, height) => {
@@ -148,7 +167,7 @@ const detectLightRectSlots = (data, width, height) => {
         const saturation = max - min;
 
         return brightness > 182 && saturation < 42;
-    });
+    }, { minFillRatio: 0.55, minAreaFrac: 0.015, minDimFrac: 0.08 });
 
     return components
         .map((bounds) => toPercentBox(bounds, width, height, 0.1))
@@ -169,7 +188,9 @@ const limitToExpectedCount = (boxes, expectedCount) => {
 
 /**
  * Detects photo slots in a frame image. Supports both transparent PNG holes
- * and light/low-saturation placeholder rectangles.
+ * and light/low-saturation placeholders. Accepts non-rectangular shapes
+ * (circle, heart, tilted/polaroid) as long as the region is large enough to
+ * hold a photo; small empty holes / decorations are filtered out by size.
  */
 export const detectFrameSlots = (imageUrl, expectedCount = null) => {
     return new Promise((resolve, reject) => {
@@ -185,7 +206,16 @@ export const detectFrameSlots = (imageUrl, expectedCount = null) => {
 
             const transparentBoxes = detectTransparentSlots(data, width, height);
             const lightBoxes = detectLightRectSlots(data, width, height);
-            const boxes = lightBoxes.length >= transparentBoxes.length ? lightBoxes : transparentBoxes;
+
+            // GỘP cả 2 cách (trước đây chỉ chọn 1 -> mất ô chỉ cách kia dò được, vd trái
+            // tim sáng nhưng các ô strip là lỗ trong suốt). Lấy cách nhiều box hơn làm gốc,
+            // rồi thêm box của cách còn lại nếu KHÔNG chồng lấn ô đã có.
+            const primary = lightBoxes.length >= transparentBoxes.length ? lightBoxes : transparentBoxes;
+            const secondary = primary === lightBoxes ? transparentBoxes : lightBoxes;
+            const boxes = [...primary];
+            for (const box of secondary) {
+                if (!boxes.some((existing) => overlaps(box, existing))) boxes.push(box);
+            }
 
             resolve(limitToExpectedCount(sortBoxes(boxes), expectedCount));
         };

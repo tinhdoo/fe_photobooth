@@ -11,6 +11,7 @@ const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
 
 const FrameManager = () => {
     const [frames, setFrames] = useState([]);
+    const [framesLoading, setFramesLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [selectedLayout, setSelectedLayout] = useState(LAYOUTS[0].id);
     const [editingFrame, setEditingFrame] = useState(null);
@@ -54,7 +55,8 @@ const FrameManager = () => {
         fetchTopFrames();
     }, []);
 
-    const fetchFrames = async () => {
+    const fetchFrames = async ({ showLoading = true } = {}) => {
+        if (showLoading) setFramesLoading(true);
         try {
             const res = await axios.get(frameApiPath('/api/frames'), {
                 params: { layout: selectedLayout }
@@ -62,6 +64,8 @@ const FrameManager = () => {
             setFrames(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Error fetching frames:", error);
+        } finally {
+            if (showLoading) setFramesLoading(false);
         }
     };
 
@@ -91,7 +95,7 @@ const FrameManager = () => {
             });
 
             await Promise.all(uploadPromises);
-            fetchFrames();
+            fetchFrames({ showLoading: false });
 
             if (duplicates.length > 0) {
                 setNotification({
@@ -129,7 +133,7 @@ const FrameManager = () => {
             await axios.delete(frameApiPath('/api/frames'), {
                 params: { layout: frame.layout, name: frame.name }
             });
-            fetchFrames();
+            fetchFrames({ showLoading: false });
             // Remove from selection if exists
             if (selectedFrames.has(frame.id)) {
                 toggleSelectFrame(frame.id);
@@ -250,7 +254,7 @@ const FrameManager = () => {
             });
 
             await Promise.all(promises);
-            fetchFrames();
+            fetchFrames({ showLoading: false });
 
             setNotification({
                 show: true,
@@ -371,7 +375,7 @@ const FrameManager = () => {
                 <h2 className="font-bold text-lg text-[#1a1a2e] flex items-center">
                     {LAYOUTS.find(l => l.id === selectedLayout)?.name}
                     <span className="ml-2 text-gray-400 font-semibold text-xs sm:text-sm">
-                        • {frames.length} khung
+                        • {framesLoading ? '…' : `${frames.length} khung`}
                     </span>
                 </h2>
 
@@ -512,7 +516,12 @@ const FrameManager = () => {
 
                 {/* Frames Grid */}
                 {
-                    frames.length > 0 ? (
+                    framesLoading ? (
+                        <div className="bg-white rounded-3xl border border-gray-100 p-16 text-center animate-fadeIn">
+                            <Loader2 size={48} className="text-[#e63946] animate-spin mx-auto mb-4" />
+                            <p className="text-gray-400 font-medium">Đang tải khung hình...</p>
+                        </div>
+                    ) : frames.length > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4 mb-20 animate-fadeIn">
                             {frames.map((frame) => {
                                 const isSelected = selectedFrames.has(frame.id);
@@ -554,7 +563,7 @@ const FrameManager = () => {
                                                         headers: { 'Content-Type': 'multipart/form-data' }
                                                     });
                                                     setNotification({ show: true, message: "Tải lên biểu tượng thành công!", type: 'success' });
-                                                    fetchFrames(); // Refresh to see new icon
+                                                    fetchFrames({ showLoading: false }); // Refresh to see new icon
                                                 } catch (err) {
                                                     console.error("Icon upload failed", err);
                                                     setNotification({ show: true, message: "Tải lên biểu tượng thất bại.", type: 'error' });
