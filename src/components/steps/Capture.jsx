@@ -438,6 +438,9 @@ const Capture = () => {
                         setFlash(false);
                         setIsShooting(false);
                         if (count < TOTAL_PHOTOS) {
+                            // /capture vừa TẮT live view (EDSDK) -> đổi token để <img> mở kết nối
+                            // /liveview MỚI -> live view sáng lại cho lượt chụp tiếp (hết đen).
+                            setLiveViewToken(Date.now());
                             setTimeout(() => startCountdown(), 2000);
                         } else {
                             setTimeout(() => nextStep(), 1500);
