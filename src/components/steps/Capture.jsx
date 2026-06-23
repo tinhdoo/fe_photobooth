@@ -281,9 +281,9 @@ const Capture = () => {
 
         if (cameraMode === 'canon') {
             // Canon: CHỜ live view ra hình rồi mới cho chụp (onLoad của <img> liveview sẽ set
-            // cameraReady) -> tránh ĐEN MÀN HÌNH + video motion rỗng ở ảnh đầu. Fallback 8s để
-            // không kẹt nếu live view lỗi/không onLoad.
-            const fb = setTimeout(() => setCameraReady(true), 8000);
+            // cameraReady) -> tránh ĐEN MÀN HÌNH + video motion rỗng ở ảnh đầu. Fallback 3s để
+            // KHÔNG kẹt/đợi lâu nếu live view chậm lên (vẫn chụp được dù live view chưa hiện).
+            const fb = setTimeout(() => setCameraReady(true), 3000);
             return () => clearTimeout(fb);
         }
 
@@ -441,8 +441,11 @@ const Capture = () => {
                         setFlash(false);
                         setIsShooting(false);
                         if (count < TOTAL_PHOTOS) {
-                            // /capture vừa TẮT live view (EDSDK) -> đổi token để <img> mở kết nối
-                            // /liveview MỚI -> live view sáng lại cho lượt chụp tiếp (hết đen).
+                            // /capture vừa TẮT live view (EDSDK). ĐÓNG kết nối live view cũ trước
+                            // (src='') để CanonMiddleware giải phóng slot -> tránh tích tụ kết nối
+                            // gây delay tăng dần; rồi đổi token để mở kết nối /liveview MỚI -> sáng lại.
+                            try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = ''; } catch (e) { /* ignore */ }
+                            try { if (liveViewImgRef.current) liveViewImgRef.current.src = ''; } catch (e) { /* ignore */ }
                             setLiveViewToken(Date.now());
                             setTimeout(() => startCountdown(), 2000);
                         } else {
