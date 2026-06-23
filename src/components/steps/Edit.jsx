@@ -1093,7 +1093,7 @@ const Edit = () => {
                             width: (layout.type === 'strip' || !layout.type?.includes('horizontal')) ? 'auto' : '100%',
                             maxHeight: '100%', maxWidth: '100%',
                             backgroundColor: (selectedFrame.url || selectedFrame.image) ? 'transparent' : (selectedFrame.color || '#ffffff'),
-                            aspectRatio: layout.type === 'strip' ? '1/3' : (layout.type?.includes('horizontal') ? '3/2' : '2/3'),
+                            aspectRatio: layout.type === 'strip' ? '1/3' : (layout.type === 'strip_horizontal' ? '3/1' : (layout.type?.includes('horizontal') ? '3/2' : '2/3')),
                         }}
                     >
                         {/* 1. Photos Layer */}
