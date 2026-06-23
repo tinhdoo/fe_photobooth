@@ -67,6 +67,19 @@ export const LAYOUTS = [
     icon: 'layout_6.png',
   },
   {
+    // 1 strip NGANG 3 ảnh, in 2 BẢN GIỐNG HỆT chồng trên 1 tờ 4x6 nằm ngang, cắt ngang
+    // bằng dao 2-inch -> ra 2 strip ngang y hệt nhau (như double_strip dọc nhưng nằm ngang).
+    id: 'strip_h_2x3',
+    name: 'Layout 7',
+    description: '70.000 VND',
+    type: 'strip_horizontal',
+    printMode: 'double_strip_horizontal',
+    photoCount: 3,
+    cols: 3,
+    rows: 1,
+    icon: '9.png',
+  },
+  {
     id: 'mobile_double_horizontal',
     name: 'Layout 1',
     description: '70.000 VNĐ',

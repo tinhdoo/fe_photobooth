@@ -373,7 +373,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                             className="relative shadow-2xl transition-all duration-300 bg-white"
                             style={{
                                 aspectRatio: layoutDef.type === 'strip' ? '1/3' :
-                                    layoutDef.type === 'strip_horizontal' ? '3/2' :
+                                    layoutDef.type === 'strip_horizontal' ? '3/1' :
                                         layoutDef.type === 'grid_horizontal' ? '3/2' : '2/3',
                                 height: layoutDef.type.includes('horizontal') ? 'auto' : '90%',
                                 width: layoutDef.type.includes('horizontal') ? '90%' : 'auto',

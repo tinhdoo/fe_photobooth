@@ -532,6 +532,32 @@ const Edit = () => {
             return { canvas, cutMode: 'none' };
         }
 
+        if (printMode === 'double_strip_horizontal') {
+            // Strip ngang gốc 1800x600 (6"x2", 3 ô). In 2 BẢN GIỐNG HỆT chồng dọc trên giấy 4x6
+            // NẰM NGANG (1800x1200). Backend xoay 90° cho khớp giấy -> đường chia ngang giữa 2
+            // strip thành đường dọc chính giữa tờ, đúng vị trí dao 2-inch cắt -> ra 2 strip y hệt.
+            canvas.width = 1800;
+            canvas.height = 1200;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(sourceCanvas, 0, 0, 1800, 600);
+            ctx.drawImage(sourceCanvas, 0, 600, 1800, 600);
+            return { canvas, cutMode: '2x6' };
+        }
+
+        // grid_4x6: khớp hướng giấy theo hướng ảnh ghép. Layout ngang (vd Layout 5)
+        // phải in landscape lấp đầy 4x6, không letterbox vào khung dọc -> hết viền trắng to.
+        // (Backend tự xoay 90° cho khớp hướng giấy của máy in.)
+        if (sourceCanvas.width > sourceCanvas.height) {
+            canvas.width = 1800;
+            canvas.height = 1200;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+        }
         drawImageContain(ctx, sourceCanvas, 0, 0, canvas.width, canvas.height);
         return { canvas, cutMode: 'none' };
     };
@@ -638,10 +664,18 @@ const Edit = () => {
             const baseCanvas = document.createElement('canvas');
             const TARGET_HEIGHT = 1800;
             const isStrip = layout.type === 'strip';
+            const isStripHorizontal = layout.type === 'strip_horizontal';
             const isHorizontal = layout.type && layout.type.includes('horizontal');
-            const ratio = isStrip ? 1 / 3 : (isHorizontal ? 3 / 2 : 2 / 3);
-            baseCanvas.height = TARGET_HEIGHT;
-            baseCanvas.width = TARGET_HEIGHT * ratio;
+            if (isStripHorizontal) {
+                // 1 strip NGANG = 6"x2" -> 1800x600 (3 ô hàng ngang). Sẽ in 2 bản chồng nhau
+                // ở buildPrintCanvas -> cắt ngang ra 2 strip GIỐNG HỆT.
+                baseCanvas.width = 1800;
+                baseCanvas.height = 600;
+            } else {
+                const ratio = isStrip ? 1 / 3 : (isHorizontal ? 3 / 2 : 2 / 3);
+                baseCanvas.height = TARGET_HEIGHT;
+                baseCanvas.width = TARGET_HEIGHT * ratio;
+            }
 
             const baseCtx = baseCanvas.getContext('2d');
 
@@ -911,7 +945,7 @@ const Edit = () => {
                     // (CLOUD_API_URL). Nếu chỉ lưu local thì quét QR / xem doanh thu sẽ không thấy.
                     const sessionBaseUrl = CLOUD_API_URL || API_URL;
                     const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
-                    const printerCopies = printMode === 'double_strip'
+                    const printerCopies = (printMode === 'double_strip' || printMode === 'double_strip_horizontal')
                         ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
                         : selectedPrintQuantity;
 

@@ -19,6 +19,21 @@ const getReviewGrid = (layout) => {
         };
     }
 
+    if (layout.type === 'strip_horizontal') {
+        // 1 strip ngang (vd 3 ô hàng ngang) - sẽ in 2 bản giống nhau. Preview khung ngang.
+        const cols = layout.cols || 3;
+        const rows = layout.rows || 1;
+        return {
+            className: 'grid',
+            style: {
+                aspectRatio: `${cols} / ${rows}`,
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+                gap: '10px'
+            }
+        };
+    }
+
     const cols = layout.photoCount > 4 && layout.photoCount % 2 === 0 ? 2 : (layout.cols || 2);
     const rows = layout.photoCount > 4 && layout.photoCount % 2 === 0 ? Math.ceil(layout.photoCount / 2) : (layout.rows || 2);
 

@@ -14,7 +14,7 @@ const PrintQuantity = () => {
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 
-    const isStripLayout = layout.type === 'strip' || layout.id?.includes('cut');
+    const isStripLayout = layout.type === 'strip' || layout.type === 'strip_horizontal' || layout.id?.includes('cut');
     const quantities = isStripLayout ? [2, 4, 6, 8, 10] : [1, 2, 3, 4, 5];
     const options = quantities.map((qty, index) => ({ qty, price: basePrice + increment * index }));
     const [selectedOption, setSelectedOption] = useState(options[0]);
