@@ -60,7 +60,7 @@ const Capture = () => {
     const [countdown, setCountdown] = useState(null);
     // Initialize with existing photos if any (for retake feature)
     const [photosTaken, setPhotosTaken] = useState(sessionData.photos || []);
-    const [, setIsShooting] = useState(false);
+    const [isShooting, setIsShooting] = useState(false);
     const [flash, setFlash] = useState(false);
     const [latestPhoto, setLatestPhoto] = useState(null);
     const isRetakeMode = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
@@ -394,7 +394,10 @@ const Capture = () => {
 
     const takePhoto = async () => {
         setIsShooting(true);
+        // Flash chỉ CHỚP nhanh (~200ms) thay vì trắng suốt thời gian chờ Canon /capture.
+        // Trong lúc chờ sẽ hiện spinner + vẫn thấy live view (xem overlay isShooting).
         setFlash(true);
+        setTimeout(() => setFlash(false), 200);
 
         const audio = shutterAudioRef.current;
         if (audio) audio.currentTime = 0;
@@ -687,7 +690,15 @@ const Capture = () => {
 
 
 
-                    {/* Flash Overlay */}
+                    {/* Đang xử lý chụp: spinner trên nền mờ NHẸ -> KHÔNG che trắng, vẫn thấy live view.
+                        Chỉ hiện trong lúc chờ máy chụp (isShooting) và chưa có ảnh xem nhanh. */}
+                    {isShooting && !latestPhoto && (
+                        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/25">
+                            <div className="h-20 w-20 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+                        </div>
+                    )}
+
+                    {/* Flash Overlay (chỉ chớp nhanh) */}
                     <AnimatePresence>
                         {flash && <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-white z-50" />}
                     </AnimatePresence>
