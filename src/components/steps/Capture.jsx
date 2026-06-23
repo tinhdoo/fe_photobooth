@@ -88,10 +88,28 @@ const Capture = () => {
     const canonHasFramesRef = useRef(false);
     const canonDrawTimerRef = useRef(null);
     const canonStreamRef = useRef(null);
+    // Ref ảnh live view HIỂN THỊ -> để NGẮT kết nối MJPEG khi rời bước chụp.
+    const liveViewVisibleRef = useRef(null);
 
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
         shutterAudioRef.current.preload = 'auto';
+    }, []);
+
+    // Dọn khi UNMOUNT (rời bước chụp do retake/next): dừng timer+recorder và NGẮT 2 kết nối
+    // MJPEG live view (set src=''). <img> MJPEG là kết nối sống dai; không ngắt -> tích tụ tới
+    // giới hạn ~6 kết nối/host của trình duyệt -> đơ/màn trắng sau nhiều lần retake.
+    useEffect(() => {
+        return () => {
+            try { stopCanonDraw(); } catch (e) { /* ignore */ }
+            try {
+                const r = mediaRecorderRef.current;
+                if (r && r.state !== 'inactive') r.stop();
+            } catch (e) { /* ignore */ }
+            try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = ''; } catch (e) { /* ignore */ }
+            try { if (liveViewImgRef.current) liveViewImgRef.current.src = ''; } catch (e) { /* ignore */ }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const pickVideoMime = () => {
@@ -579,6 +597,7 @@ const Capture = () => {
                     ) : cameraMode === 'canon' ? (
                         <div className="w-full h-full bg-black relative">
                             <img
+                                ref={liveViewVisibleRef}
                                 src={liveViewUrl}
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
