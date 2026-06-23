@@ -49,7 +49,7 @@ const getReviewGrid = (layout) => {
 };
 
 const Review = () => {
-    const { nextStep, goToStep, sessionData, updateSessionData, timeLeft, isSessionActive, configs } = useWorkflow();
+    const { nextStep, goToStep, sessionData, updateSessionData, timeLeft, isSessionActive, timedOut, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
@@ -83,10 +83,11 @@ const Review = () => {
     }, []);
 
     useEffect(() => {
-        if (isSessionActive && timeLeft === 0) {
-            nextStep();
+        if (timedOut) {
+            nextStep(); // hết giờ -> tự sang Edit (rồi Edit tự in)
         }
-    }, [timeLeft, isSessionActive, nextStep]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [timedOut]);
 
     const handleRetakeAll = () => {
         updateSessionData('photos', []);

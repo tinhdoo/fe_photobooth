@@ -59,7 +59,7 @@ const mirrorImage = async (imageUrl) => {
 };
 
 const Capture = () => {
-    const { nextStep, sessionData, updateSessionData, timeLeft, isSessionActive, configs } = useWorkflow();
+    const { nextStep, sessionData, updateSessionData, timeLeft, isSessionActive, timedOut, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const [countdown, setCountdown] = useState(null);
     // Initialize with existing photos if any (for retake feature)
@@ -252,9 +252,10 @@ const Capture = () => {
 
     // Initialize webcam
 
-    // Auto-complete if timeout during capture
+    // Auto-complete if timeout during capture. Dùng cờ timedOut (bền vững) thay vì
+    // isSessionActive (tắt ngay khi hết giờ -> đứt chuỗi auto sang Review/Edit).
     useEffect(() => {
-        if (isSessionActive && timeLeft === 0) {
+        if (timedOut) {
             console.log("Session Timeout in Capture Step - Force Proceed...");
             // Stop any ongoing countdown/capture
             setIsShooting(false);
@@ -270,7 +271,8 @@ const Capture = () => {
             // Just go next.
             nextStep();
         }
-    }, [timeLeft, isSessionActive, nextStep]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [timedOut]);
 
     useEffect(() => {
         let currentStream = null;

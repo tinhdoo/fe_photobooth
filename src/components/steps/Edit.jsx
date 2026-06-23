@@ -107,7 +107,7 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 });
 
 const Edit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, configs } = useWorkflow();
+    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const captureRef = useRef(null);
     // --- STATE ---
@@ -350,7 +350,7 @@ const Edit = () => {
     // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
     const isPrintingRef = useRef(false);
     useEffect(() => {
-        if (isSessionActive && timeLeft === 0 && !isPrintingRef.current) {
+        if (timedOut && !isPrintingRef.current) {
             console.log("Timeout: Auto-printing...");
             isPrintingRef.current = true;
             const autoFinish = async () => {
@@ -365,7 +365,7 @@ const Edit = () => {
             autoFinish();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timeLeft, isSessionActive, frames]);
+    }, [timedOut, frames]);
 
 
     // --- HANDLERS ---

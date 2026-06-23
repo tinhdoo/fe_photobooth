@@ -366,6 +366,9 @@ export const WorkflowProvider = ({ children }) => {
         : configs.session_timeout;
     const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
     const [isSessionActive, setIsSessionActive] = useState(false);
+    // Cờ BỀN VỮNG: phiên đã hết giờ. Giữ true tới hết flow để CHUỖI auto-chuyển-bước + auto-in
+    // không bị đứt (isSessionActive tắt ngay khi hết giờ, không dùng để gate các bước được).
+    const [timedOut, setTimedOut] = useState(false);
 
     // Start timer when payment is completed — read configs fresh at this moment
     useEffect(() => {
@@ -374,6 +377,7 @@ export const WorkflowProvider = ({ children }) => {
                 ? configs.mobile_session_timeout
                 : configs.session_timeout;
             setIsSessionActive(true);
+            setTimedOut(false);
             setTimeLeft(freshDuration);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -392,7 +396,8 @@ export const WorkflowProvider = ({ children }) => {
 
     useEffect(() => {
         if (timeLeft === 0 && isSessionActive) {
-            setIsSessionActive(false);
+            setIsSessionActive(false); // dừng đếm giờ
+            setTimedOut(true);         // ...nhưng đánh dấu đã hết giờ để các bước tự hoàn tất + in
         }
     }, [timeLeft, isSessionActive]);
 
@@ -427,6 +432,7 @@ export const WorkflowProvider = ({ children }) => {
                 toggleEventMode,
                 timeLeft, // Expose timer
                 isSessionActive,
+                timedOut,
                 SESSION_DURATION,
                 configs, // Expose generic configs
                 applyConfigs,
