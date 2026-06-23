@@ -157,7 +157,7 @@ const Review = () => {
 
                     <div className="flex w-full justify-center rounded-[2rem] bg-white/75 p-5 shadow-[0_18px_55px_-35px_rgba(47,62,70,0.45)]">
                         <div
-                            className={`w-full max-w-[310px] bg-white p-4 shadow-[0_24px_65px_-30px_rgba(47,62,70,0.45)] ${previewGrid.className}`}
+                            className={`w-full ${currentLayout.type?.includes('horizontal') ? 'max-w-[560px]' : 'max-w-[310px]'} bg-white p-4 shadow-[0_24px_65px_-30px_rgba(47,62,70,0.45)] ${previewGrid.className}`}
                             style={{
                                 maxHeight: '62vh',
                                 ...previewGrid.style
