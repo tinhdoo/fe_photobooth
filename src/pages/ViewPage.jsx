@@ -39,6 +39,12 @@ const isStripLayout = (session) => {
     return layoutId === 'strip_3' || layoutId === 'strip_4' || layoutId.includes('strip');
 };
 
+// Strip NGANG (Layout 7): 2 strip xếp CHỒNG DỌC (không phải cạnh nhau như strip dọc).
+const isStripHorizontalLayout = (session) => {
+    const layoutId = session?.layout_id || session?.meta_data?.layout_id || '';
+    return layoutId.includes('strip_h') || layoutId.includes('strip_horizontal');
+};
+
 const isQuarterTurn = (rotation = 0) => {
     const normalized = Math.abs(Number(rotation) || 0) % 180;
     return normalized === 90;
@@ -296,6 +302,7 @@ const ViewPage = () => {
     const photos = useMemo(() => session?.photos || [], [session]);
     const hasVideos = photos.some((photo) => getVideoUrl(photo));
     const strip = isStripLayout(session);
+    const stripHorizontal = isStripHorizontalLayout(session);
     const frameUrl = session?.meta_data?.frame_url || '';
     const frameConfig = session?.meta_data?.frame_config || null;
     const photoPositions = session?.meta_data?.photo_positions || [];
@@ -394,19 +401,22 @@ const ViewPage = () => {
             const repeatCount = strip ? 2 : 1;
             const frameWidth = frameImage.naturalWidth || frameImage.width;
             const frameHeight = frameImage.naturalHeight || frameImage.height;
-            const scale = Math.min(1, 1080 / Math.max(frameWidth * repeatCount, frameHeight));
+            // Strip ngang -> nhân đôi theo CHIỀU CAO (chồng dọc); strip dọc -> theo chiều rộng.
+            const scale = stripHorizontal
+                ? Math.min(1, 1080 / Math.max(frameWidth, frameHeight * repeatCount))
+                : Math.min(1, 1080 / Math.max(frameWidth * repeatCount, frameHeight));
             const stripWidth = Math.max(2, Math.round(frameWidth * scale / 2) * 2);
             const stripHeight = Math.max(2, Math.round(frameHeight * scale / 2) * 2);
 
             const canvas = document.createElement('canvas');
-            canvas.width = stripWidth * repeatCount;
-            canvas.height = stripHeight;
+            canvas.width = stripHorizontal ? stripWidth : stripWidth * repeatCount;
+            canvas.height = stripHorizontal ? stripHeight * repeatCount : stripHeight;
             const ctx = canvas.getContext('2d', { alpha: false });
             const boxes = Array.isArray(frameConfig?.boxes) ? frameConfig.boxes : [];
 
-            const drawOneStrip = (offsetX) => {
+            const drawOneStrip = (offsetX, offsetY) => {
                 ctx.fillStyle = '#ffffff';
-                ctx.fillRect(offsetX, 0, stripWidth, stripHeight);
+                ctx.fillRect(offsetX, offsetY, stripWidth, stripHeight);
 
                 let implicitPhotoIndex = 0;
                 boxes.forEach((box) => {
@@ -421,7 +431,7 @@ const ViewPage = () => {
                     if (!mediaItem?.media) return;
 
                     const boxX = offsetX + (Number(box.x) || 0) / 100 * stripWidth;
-                    const boxY = (Number(box.y) || 0) / 100 * stripHeight;
+                    const boxY = offsetY + (Number(box.y) || 0) / 100 * stripHeight;
                     const boxWidth = (Number(box.width) || 0) / 100 * stripWidth;
                     const boxHeight = (Number(box.height) || 0) / 100 * stripHeight;
                     if (boxWidth <= 0 || boxHeight <= 0) return;
@@ -446,14 +456,15 @@ const ViewPage = () => {
                     ctx.restore();
                 });
 
-                ctx.drawImage(frameImage, offsetX, 0, stripWidth, stripHeight);
+                ctx.drawImage(frameImage, offsetX, offsetY, stripWidth, stripHeight);
             };
 
             const maxDuration = mediaItems.reduce((duration, item) => Math.max(duration, item?.duration || 0), 0);
             const durationMs = Math.min(12000, Math.max(5000, maxDuration * 1000 || 7000));
             const webmBlob = await recordCanvas(canvas, () => {
                 for (let index = 0; index < repeatCount; index += 1) {
-                    drawOneStrip(index * stripWidth);
+                    if (stripHorizontal) drawOneStrip(0, index * stripHeight);
+                    else drawOneStrip(index * stripWidth, 0);
                 }
             }, durationMs);
 
@@ -608,7 +619,7 @@ const ViewPage = () => {
                         </div>
 
                         <div className="bg-white p-3 shadow-md sm:p-4">
-                            <div className={`mx-auto grid w-full gap-0 ${strip ? 'grid-cols-2' : 'grid-cols-1'} max-w-[680px]`}>
+                            <div className={`mx-auto grid w-full gap-0 ${strip && !stripHorizontal ? 'grid-cols-2' : 'grid-cols-1'} ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
                                 <img
                                     src={session.composite_url}
                                     alt="Ảnh đã ghép"
