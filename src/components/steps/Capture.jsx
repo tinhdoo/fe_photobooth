@@ -72,6 +72,11 @@ const Capture = () => {
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState(null);
     const cameraMode = configs?.camera_mode || 'webcam';
+    // Token đổi mỗi lần mount (và mỗi lần retry) -> ép <img> mở kết nối /liveview MỚI.
+    // Tránh trình duyệt tái dùng kết nối MJPEG ĐÃ CHẾT sau /capture -> live view bị trắng/đen
+    // khi quay lại chụp lại (retake). URL mới buộc CanonMiddleware khởi động lại live view.
+    const [liveViewToken, setLiveViewToken] = useState(() => Date.now());
+    const liveViewUrl = `http://localhost:5001/liveview?t=${liveViewToken}`;
 
     // Motion Photo Refs
     const videoChunksRef = useRef([]);
@@ -574,7 +579,7 @@ const Capture = () => {
                     ) : cameraMode === 'canon' ? (
                         <div className="w-full h-full bg-black relative">
                             <img
-                                src="http://localhost:5001/liveview"
+                                src={liveViewUrl}
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
@@ -589,7 +594,7 @@ const Capture = () => {
                             <img
                                 ref={liveViewImgRef}
                                 crossOrigin="anonymous"
-                                src="http://localhost:5001/liveview"
+                                src={liveViewUrl}
                                 alt=""
                                 aria-hidden="true"
                                 style={{ display: 'none' }}
