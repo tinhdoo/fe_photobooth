@@ -587,7 +587,7 @@ const ViewPage = () => {
                     type="button"
                     onClick={downloadAll}
                     disabled={downloading}
-                    className="mx-auto flex min-h-12 w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-[#D5B895] px-5 py-3 text-base font-extrabold text-white shadow-md disabled:opacity-70 sm:w-auto sm:min-w-64"
+                    className="mx-auto flex min-h-12 w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-[#D9BE92] bg-[#E6D0A8] px-5 py-3 text-base font-extrabold text-[#6B5234] shadow-sm disabled:opacity-70 sm:w-auto sm:min-w-64"
                 >
                     <Download size={20} />
                     {downloading ? 'Đang tải...' : 'Tải xuống tất cả'}
@@ -602,7 +602,7 @@ const ViewPage = () => {
                             Motion trong khung
                         </div>
 
-                        <div className="bg-white p-3 shadow-md sm:p-4">
+                        <div className="rounded-3xl border border-[#EFE0C8] bg-[#FFFDF7] p-3 shadow-sm sm:p-4">
                             <div className={`mx-auto grid w-full gap-0 ${strip ? 'grid-cols-2' : 'grid-cols-1'} max-w-[680px]`}>
                                 <FrameMotionPreview
                                     frameUrl={frameUrl}
@@ -639,7 +639,7 @@ const ViewPage = () => {
                             Ảnh đã ghép
                         </div>
 
-                        <div className="bg-white p-3 shadow-md sm:p-4">
+                        <div className="rounded-3xl border border-[#EFE0C8] bg-[#FFFDF7] p-3 shadow-sm sm:p-4">
                             <div className={`mx-auto grid w-full gap-0 ${strip && !stripHorizontal ? 'grid-cols-2' : 'grid-cols-1'} ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
                                 <img
                                     src={session.composite_url}
@@ -684,7 +684,7 @@ const ViewPage = () => {
                                 if (!photoUrl) return null;
 
                                 return (
-                                    <article key={`${photoUrl}-${index}`} className="rounded-2xl bg-white p-2 shadow-sm">
+                                    <article key={`${photoUrl}-${index}`} className="rounded-2xl border border-[#EFE0C8] bg-[#FFFDF7] p-2 shadow-sm">
                                         <img
                                             src={photoUrl}
                                             alt={`Ảnh gốc ${index + 1}`}
@@ -707,9 +707,6 @@ const ViewPage = () => {
                     </section>
                 )}
 
-                <footer className="mt-12 text-center text-xs font-semibold uppercase tracking-widest text-[#7B5E43]/70">
-                    Session ID: {id}
-                </footer>
             </main>
         </div>
     );
