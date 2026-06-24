@@ -556,8 +556,17 @@ const ViewPage = () => {
                 </div>
             )}
 
-            <header className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pb-5 pt-8 text-center sm:px-6 md:pt-12">
-                <div>
+            <header className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center gap-5 px-4 pb-5 pt-8 text-center sm:px-6 md:pt-12">
+                {/* Tiêu đề album: logo "tomato memories". Dòng hết hạn căn ngay dưới ảnh. */}
+                <div className="flex flex-col items-center gap-1.5">
+                    <img
+                        src="/tomato_memories.png"
+                        alt="Tomato Memories"
+                        className="mx-auto h-auto w-full max-w-[260px] object-contain sm:max-w-[340px]"
+                        loading="eager"
+                        decoding="async"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
                     <p className="text-sm font-semibold text-[#7B5E43] sm:text-base">
                         Lưu ý: link sẽ hết hạn sau 72 giờ
                     </p>
