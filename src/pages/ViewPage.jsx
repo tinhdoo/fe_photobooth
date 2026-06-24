@@ -514,11 +514,22 @@ const ViewPage = () => {
     };
 
     if (loading) {
+        // Dùng CÙNG kiểu với LoadingScreen của Suspense (logo + 3 chấm nảy, nền trắng) để khi
+        // reload không hiện 2 loader khác nhau (Suspense -> rồi loader nội bộ).
         return (
-            <div className="flex min-h-dvh items-center justify-center px-6 font-serif text-[#7B5E43]" style={ALBUM_BG_STYLE}>
-                <div className="text-center">
-                    <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#F6E6C9] border-t-[#7B5E43]" />
-                    <p className="text-lg font-bold">Đang tải album...</p>
+            <div className="flex h-dvh min-h-dvh w-full flex-col items-center justify-center bg-white font-serif">
+                <div className="flex flex-col items-center gap-5">
+                    <img
+                        src={logoUrl}
+                        alt="Đang tải..."
+                        className="h-24 w-24 animate-pulse rounded-full object-contain shadow-lg"
+                        onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
+                    />
+                    <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '0ms' }} />
+                        <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '150ms' }} />
+                        <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#e63946]" style={{ animationDelay: '300ms' }} />
+                    </div>
                 </div>
             </div>
         );
