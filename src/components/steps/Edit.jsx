@@ -873,7 +873,26 @@ const Edit = () => {
             // Bỏ xử lý màu khi in -> file gửi máy in GIỮ NGUYÊN MÀU GỐC (chỉ áp filter người chọn).
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
-            // 8. Upload & Create Session
+            // === IN TRƯỚC, UPLOAD CLOUD SAU ===
+            // Gửi lệnh in NGAY khi có ảnh in, KHÔNG chờ upload composite/ảnh gốc/tạo session
+            // (các bước cloud có thể vài giây) -> máy in bắt đầu in liền, khách không phải đợi.
+            const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
+            const printerCopies = (printMode === 'double_strip' || printMode === 'double_strip_horizontal')
+                ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
+                : selectedPrintQuantity;
+            try {
+                const printResult = await sendToPrinter(printBlob, printerCopies, { printMode, cutMode, sessionId });
+                console.log('Print job queued:', printResult);
+            } catch (printError) {
+                const data = printError.response?.data;
+                const available = data?.available_printers?.length
+                    ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
+                    : '';
+                const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
+                setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+            }
+
+            // 8. Upload & Create Session (chạy SAU khi đã gửi lệnh in)
             compositeCanvas.toBlob(async (blob) => {
                 if (!blob || !printBlob) { setIsUploading(false); return; }
                 try {
@@ -944,10 +963,6 @@ const Edit = () => {
                     // Session phải được tạo ở cùng nơi mà QR album và trang doanh thu đọc
                     // (CLOUD_API_URL). Nếu chỉ lưu local thì quét QR / xem doanh thu sẽ không thấy.
                     const sessionBaseUrl = CLOUD_API_URL || API_URL;
-                    const selectedPrintQuantity = Math.max(1, parseInt(sessionData.printQuantity, 10) || 1);
-                    const printerCopies = (printMode === 'double_strip' || printMode === 'double_strip_horizontal')
-                        ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
-                        : selectedPrintQuantity;
 
                     const sessionRes = await axios.post(`${sessionBaseUrl}/api/sessions`, {
                         layout_id: layout.id || 'strip_4',
@@ -979,26 +994,7 @@ const Edit = () => {
                     // và PrintJob local sẽ lệch với Session cloud. Backend đã honor session_id gửi lên.
                     updateSessionData('sessionId', sessionId);
 
-                    try {
-                        const printResult = await sendToPrinter(printBlob, printerCopies, {
-                            printMode,
-                            cutMode,
-                            sessionId,
-                        });
-                        console.log('Print job queued:', printResult);
-                    } catch (printError) {
-                        const data = printError.response?.data;
-                        const available = data?.available_printers?.length
-                            ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
-                            : '';
-                        const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
-                        setErrorDialog({
-                            show: true,
-                            title: 'Không thể in ảnh',
-                            message: `${message}${available}`,
-                        });
-                    }
-
+                    // (Đã gửi lệnh in ở trên, trước khi upload — không in lại ở đây.)
                     nextStep();
                 } catch (err) {
                     console.error("Upload process failed:", err);
