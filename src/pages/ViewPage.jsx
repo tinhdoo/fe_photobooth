@@ -517,12 +517,12 @@ const ViewPage = () => {
         // Dùng CÙNG kiểu với LoadingScreen của Suspense (logo + 3 chấm nảy, nền trắng) để khi
         // reload không hiện 2 loader khác nhau (Suspense -> rồi loader nội bộ).
         return (
-            <div className="flex h-dvh min-h-dvh w-full flex-col items-center justify-center bg-white font-serif">
+            <div className="flex h-dvh min-h-dvh w-full flex-col items-center justify-center bg-[#FFF8E7] font-serif">
                 <div className="flex flex-col items-center gap-5">
                     <img
                         src={logoUrl}
                         alt="Đang tải..."
-                        className="h-24 w-24 animate-pulse rounded-full object-contain shadow-lg"
+                        className="h-24 w-24 animate-pulse object-contain"
                         onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                     />
                     <div className="flex items-center gap-2">

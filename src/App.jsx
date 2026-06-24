@@ -39,12 +39,12 @@ const LoadingScreen = () => {
     }
 
     return (
-        <div className="flex h-full min-h-screen w-full flex-col items-center justify-center bg-white">
+        <div className="flex h-full min-h-screen w-full flex-col items-center justify-center bg-[#FFF8E7]">
             <div className="flex flex-col items-center gap-5">
                 <img
                     src={logoUrl}
                     alt="Loading..."
-                    className="h-24 w-24 animate-pulse rounded-full object-contain shadow-lg"
+                    className="h-24 w-24 animate-pulse object-contain"
                     onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = '/logo_tomato.png';
