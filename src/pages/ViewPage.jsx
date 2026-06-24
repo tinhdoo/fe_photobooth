@@ -477,19 +477,29 @@ const ViewPage = () => {
                 }
             }, durationMs);
 
-            const formData = new FormData();
-            formData.append('file', webmBlob, 'motion_frame.webm');
-            const res = await fetch(`${API_URL}/api/convert-motion`, {
-                method: 'POST',
-                body: formData
-            });
-            if (!res.ok) throw new Error('Không thể chuyển video sang MP4.');
+            // Thử chuyển sang MP4 qua backend (CHỈ có trên booth có ffmpeg). Nếu không khả dụng
+            // (vd xem album trên cloud/Vercel -> 405) thì TẢI THẲNG WebM trình duyệt vừa ghi
+            // -> nút "Tải video" luôn ra file, không báo lỗi.
+            let downloadBlob = webmBlob;
+            let ext = 'webm';
+            try {
+                const formData = new FormData();
+                formData.append('file', webmBlob, 'motion_frame.webm');
+                const res = await fetch(`${API_URL}/api/convert-motion`, { method: 'POST', body: formData });
+                if (res.ok) {
+                    downloadBlob = await res.blob();
+                    ext = 'mp4';
+                } else {
+                    console.warn(`convert-motion không khả dụng (${res.status}) -> tải WebM trực tiếp`);
+                }
+            } catch (convErr) {
+                console.warn('convert-motion lỗi -> tải WebM trực tiếp', convErr);
+            }
 
-            const mp4Blob = await res.blob();
-            const downloadObjectUrl = URL.createObjectURL(mp4Blob);
+            const downloadObjectUrl = URL.createObjectURL(downloadBlob);
             const link = document.createElement('a');
             link.href = downloadObjectUrl;
-            link.download = getDownloadFilename(session, 'mp4', 'motion-trong-khung');
+            link.download = getDownloadFilename(session, ext, 'motion-trong-khung');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
