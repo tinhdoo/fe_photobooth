@@ -250,6 +250,15 @@ const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions }) => {
     );
 };
 
+const ALBUM_BG_STYLE = {
+    backgroundImage: "url('/album-bg.png')",
+    backgroundColor: '#FFF8E7',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center top',
+    backgroundRepeat: 'no-repeat',
+    backgroundAttachment: 'fixed'
+};
+
 const ViewPage = () => {
     const { id } = useParams();
     const { configs } = useWorkflow();
@@ -496,7 +505,7 @@ const ViewPage = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-dvh items-center justify-center bg-[#FFF8E7] px-6 font-serif text-[#7B5E43]">
+            <div className="flex min-h-dvh items-center justify-center px-6 font-serif text-[#7B5E43]" style={ALBUM_BG_STYLE}>
                 <div className="text-center">
                     <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#F6E6C9] border-t-[#7B5E43]" />
                     <p className="text-lg font-bold">Đang tải album...</p>
@@ -507,7 +516,7 @@ const ViewPage = () => {
 
     if (error) {
         return (
-            <div className="flex min-h-dvh items-center justify-center bg-[#FFF8E7] px-5 font-serif text-[#3F3127]">
+            <div className="flex min-h-dvh items-center justify-center px-5 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
                 <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-md">
                     <img
                         src={logoUrl}
@@ -524,9 +533,10 @@ const ViewPage = () => {
 
     return (
         <div
-            className="h-dvh overflow-y-auto overflow-x-hidden bg-[#FFF8E7] font-serif text-[#3F3127]"
-            style={{ WebkitOverflowScrolling: 'touch' }}
+            className="relative h-dvh overflow-y-auto overflow-x-hidden font-serif text-[#3F3127]"
+            style={{ WebkitOverflowScrolling: 'touch', backgroundColor: '#FFF8E7' }}
         >
+            <div className="pointer-events-none fixed inset-0 z-0" style={ALBUM_BG_STYLE} aria-hidden="true" />
             {errorDialog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6">
                     <div className="w-full max-w-sm rounded-3xl border border-[#E7D3B7] bg-white p-7 text-center shadow-2xl">
@@ -546,18 +556,9 @@ const ViewPage = () => {
                 </div>
             )}
 
-            <header className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pb-5 pt-8 text-center sm:px-6 md:pt-12">
+            <header className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pb-5 pt-8 text-center sm:px-6 md:pt-12">
                 <div>
-                    <img
-                        src={logoUrl}
-                        onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
-                        alt="Tomato Photobooth"
-                        className="mx-auto mb-3 h-16 w-16 rounded-full object-contain sm:h-20 sm:w-20"
-                    />
-                    <h1 className="text-3xl font-extrabold uppercase tracking-[0.12em] text-[#7B5E43] sm:text-5xl">
-                        Tomato Photobooth
-                    </h1>
-                    <p className="mt-2 text-sm font-semibold text-[#7B5E43] sm:text-base">
+                    <p className="text-sm font-semibold text-[#7B5E43] sm:text-base">
                         Lưu ý: link sẽ hết hạn sau 72 giờ
                     </p>
                 </div>
@@ -573,7 +574,7 @@ const ViewPage = () => {
                 </button>
             </header>
 
-            <main className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-6">
+            <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-16 sm:px-6">
                 {canRenderMotionFrame && (
                     <section className="mb-8">
                         <div className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#7B5E43]">
