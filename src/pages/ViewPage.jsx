@@ -251,7 +251,7 @@ const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions }) => {
 };
 
 const ALBUM_BG_STYLE = {
-    backgroundImage: "url('/album-bg.png')",
+    backgroundImage: "url('/background.png')",
     backgroundColor: '#FFF8E7',
     backgroundSize: 'cover',
     backgroundPosition: 'center top',
