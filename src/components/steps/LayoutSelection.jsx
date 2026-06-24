@@ -122,7 +122,7 @@ const LayoutSelection = () => {
                     </button>
                 )}
 
-                <div className={`grid gap-8 w-full ${isUploadFlow ? 'grid-cols-2 lg:grid-cols-3 max-w-4xl' : 'grid-cols-2 md:grid-cols-4 w-full'}`}>
+                <div className="grid w-full grid-cols-2 gap-8 md:grid-cols-4">
                     {currentLayouts.map((layout, index) => (
                         <motion.div
                             key={layout.id}
