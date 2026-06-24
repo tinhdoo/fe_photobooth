@@ -185,6 +185,7 @@ const RevenueDashboard = () => {
 
         socket.on('revenue_reset', () => {
             fetchRevenue();
+            fetchDevices();
         });
 
         return () => socket.disconnect();
@@ -257,6 +258,9 @@ const RevenueDashboard = () => {
 
             setShowResetModal(false);
             setResetCode('');
+
+            fetchRevenue();
+            fetchDevices();
 
             setNotification('Đã reset doanh thu thành công');
             setTimeout(() => setNotification(null), 3000);

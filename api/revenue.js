@@ -229,6 +229,20 @@ async function writeRevenueResetAt(supabase) {
     return resetAt;
 }
 
+async function clearBoothReports(supabase) {
+    // Reset doanh thu cũng xóa báo cáo cuối ngày của booth (giấy còn + tiền mặt),
+    // để dòng "💵 Tiền mặt" trên thẻ booth không còn dữ liệu cũ sau khi reset.
+    const { error } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: 'booth_reports',
+            config: {},
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+
+    if (error && !isMissingTable(error)) throw error;
+}
+
 async function readHiddenBooths(supabase) {
     const { data, error } = await supabase
         .from('app_configs')
@@ -327,6 +341,7 @@ export default async function handler(req, res) {
             }
 
             const resetAt = await writeRevenueResetAt(supabase);
+            await clearBoothReports(supabase);
             return json(res, 200, { success: true, reset_at: resetAt });
         }
 
