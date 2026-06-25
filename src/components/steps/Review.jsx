@@ -55,6 +55,7 @@ const Review = () => {
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
     const photos = useMemo(() => sessionData.photos || [], [sessionData.photos]);
     const currentLayout = sessionData.layout || { photoCount: 4, type: 'grid', cols: 2, rows: 2 };
+    const isUpload = sessionData.source === 'upload'; // nguồn ảnh: tải lên từ điện thoại
     const [showError, setShowError] = useState(false);
 
     const displayPhotos = useMemo(
@@ -195,7 +196,7 @@ const Review = () => {
                 <section className="flex min-h-0 flex-col">
                     <div className="mb-4 flex items-end justify-between">
                         <div>
-                            <h3 className="text-xl font-extrabold" style={{ color: primaryTextColor }}>Ảnh đã chụp</h3>
+                            <h3 className="text-xl font-extrabold" style={{ color: primaryTextColor }}>{isUpload ? 'Ảnh đã tải lên' : 'Ảnh đã chụp'}</h3>
                             <p className="text-sm font-semibold" style={{ color: secondaryTextColor }}>
                                 {activeSlot !== null && activeSlot !== undefined ? `Chọn ảnh cho ô ${activeSlot + 1}` : 'Bạn đã chọn đủ ảnh'}
                             </p>
@@ -218,7 +219,9 @@ const Review = () => {
                                         {photoSrc && <img src={photoSrc} className="h-full w-full object-cover" alt={`Ảnh đã chụp ${index + 1}`} />}
                                     </button>
 
-                                    {photoSrc && (
+                                    {/* Up lại từng tấm chỉ có ý nghĩa khi chụp tại quầy; ảnh tải từ
+                                        điện thoại thì re-upload cả lượt -> ẩn nút này cho nguồn upload. */}
+                                    {photoSrc && !isUpload && (
                                         <button
                                             type="button"
                                             onClick={(event) => {
@@ -245,7 +248,7 @@ const Review = () => {
                     className="flex min-h-14 items-center gap-3 rounded-full border-2 border-[#D5B895] bg-white px-8 text-lg font-extrabold uppercase tracking-wide text-[#7A5A3B] shadow-sm transition-none active:scale-95"
                 >
                     <RotateCcw size={20} />
-                    Chụp lại tất cả
+                    {isUpload ? 'Tải ảnh khác' : 'Chụp lại tất cả'}
                 </button>
 
                 <button

@@ -225,7 +225,7 @@ const MobileUploadClient = () => {
 
     return (
         <div
-            className="px-4 pt-6 font-sans"
+            className="relative px-4 pt-8 font-sans"
             style={{
                 backgroundColor: CREAM,
                 minHeight: '100dvh',
@@ -234,7 +234,20 @@ const MobileUploadClient = () => {
                 paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)',
             }}
         >
-            <div className="mx-auto w-full max-w-md">
+            {/* Nền cố định — DÙNG CHUNG ảnh nền với trang album (/background.png).
+                Lớp fixed riêng để mượt trên iOS (không dùng background-attachment:fixed). */}
+            <div
+                className="pointer-events-none fixed inset-0 -z-10"
+                aria-hidden="true"
+                style={{
+                    backgroundColor: CREAM,
+                    backgroundImage: "url('/background.png')",
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center top',
+                    backgroundRepeat: 'no-repeat',
+                }}
+            />
+            <div className="relative mx-auto w-full max-w-md">
                 <div className="w-full overflow-hidden rounded-3xl border border-[#E7D3B7] bg-white shadow-[0_18px_50px_rgba(142,107,77,0.18)]">
                     <div className="border-b border-[#E7D3B7] p-6 text-center" style={{ backgroundColor: '#F7E8CF' }}>
                         <img

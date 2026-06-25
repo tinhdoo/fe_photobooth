@@ -146,11 +146,9 @@ const Capture = () => {
                 // trống -> video motion ảnh đầu bị rỗng/đè lên ảnh).
                 if (!img.complete || !img.naturalWidth) return;
                 try {
-                    // Lật ngang để khớp với ảnh chụp Canon (đã mirror)
-                    ctx.save();
-                    ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
+                    // Quay RAW (KHÔNG lật). Việc lật gương để khớp ảnh chụp được làm thống nhất ở
+                    // khâu hiển thị (CSS scaleX(-1)) và khâu xuất video -> tránh lật 2 lần (ảnh ngược).
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    ctx.restore();
                     canonHasFramesRef.current = true;
                 } catch (e) { /* frame chưa sẵn sàng */ }
             };
@@ -341,20 +339,73 @@ const Capture = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraMode]);
 
-    // Canon: POLL từng frame /frame (kết nối ngắn) thay vì stream MJPEG. Mỗi request đóng ngay
-    // -> không tích tụ kết nối, không bao giờ chạm trần ~6/host dù chụp lại liên tục.
+    // Canon liveview: ƯU TIÊN WebSocket (/ws) -> server đẩy frame liên tục qua 1 kết nối, mượt
+    // như stream nhưng không tích tụ kết nối. Nếu /ws không có (middleware cũ) -> FALLBACK poll /frame.
     useEffect(() => {
         if (cameraMode !== 'canon') return undefined;
         let alive = true;
+        let ws = null;
+        let lastUrl = null;
+        let reconnectTimer = null;
+        let pollTimer = null;
+        let wsFails = 0;
+        let mode = 'ws'; // 'ws' | 'poll'
         liveFrameFailRef.current = 0;
-        const tick = () => {
+
+        // --- Fallback: poll /frame nối tiếp ---
+        const pollNext = () => {
             if (!alive) return;
-            const img = liveViewVisibleRef.current;
-            if (img) img.src = `http://localhost:5001/frame?t=${Date.now()}`;
+            const el = liveViewVisibleRef.current;
+            if (el) el.src = `http://localhost:5001/frame?t=${Date.now()}`;
         };
-        tick();
-        const id = setInterval(tick, 60); // ~16 fps đủ mượt cho preview + motion
-        return () => { alive = false; clearInterval(id); };
+        const onPollDone = () => { if (alive && mode === 'poll') pollTimer = window.setTimeout(pollNext, 20); };
+        const startPolling = () => {
+            if (mode === 'poll' || !alive) return;
+            mode = 'poll';
+            const el = liveViewVisibleRef.current;
+            if (el) { el.addEventListener('load', onPollDone); el.addEventListener('error', onPollDone); }
+            pollNext();
+        };
+
+        // --- WebSocket (chính) ---
+        const connect = () => {
+            if (!alive || mode === 'poll') return;
+            try {
+                ws = new WebSocket('ws://localhost:5001/ws');
+                ws.binaryType = 'blob';
+                ws.onopen = () => { wsFails = 0; liveFrameFailRef.current = 0; };
+                ws.onmessage = (event) => {
+                    if (!alive) return;
+                    const el = liveViewVisibleRef.current;
+                    if (!el) return;
+                    const url = URL.createObjectURL(event.data);
+                    const prev = lastUrl;
+                    lastUrl = url;
+                    el.src = url;
+                    if (prev) setTimeout(() => URL.revokeObjectURL(prev), 250);
+                };
+                ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+                ws.onclose = () => {
+                    if (!alive || mode === 'poll') return;
+                    wsFails += 1;
+                    if (wsFails >= 2) { startPolling(); return; } // /ws không khả dụng -> dùng /frame
+                    reconnectTimer = window.setTimeout(connect, 500);
+                };
+            } catch (e) {
+                startPolling();
+            }
+        };
+        connect();
+
+        return () => {
+            alive = false;
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            if (pollTimer) clearTimeout(pollTimer);
+            if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ } }
+            const el = liveViewVisibleRef.current;
+            if (el) { el.removeEventListener('load', onPollDone); el.removeEventListener('error', onPollDone); }
+            if (lastUrl) URL.revokeObjectURL(lastUrl);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraMode]);
 

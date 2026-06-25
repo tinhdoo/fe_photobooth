@@ -462,6 +462,9 @@ const ViewPage = () => {
 
                     ctx.save();
                     ctx.rotate((innerRotation * Math.PI) / 180);
+                    // Video quay RAW -> lật gương khi xuất cho khớp ảnh chụp + bản preview (CSS scaleX(-1)).
+                    // Ảnh tĩnh đã mirror sẵn nên KHÔNG lật.
+                    if (mediaItem.type === 'video') ctx.scale(-1, 1);
                     drawCoverMedia(ctx, mediaItem.media, innerWidth, innerHeight, position);
                     ctx.restore();
                     ctx.restore();

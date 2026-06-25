@@ -158,8 +158,16 @@ const Edit = () => {
     const [stickerIcons, setStickerIcons] = useState([]);   // icon do admin quản lý
     const [stickers, setStickers] = useState([]);           // {id,url,ratio,x,y,size,rot} (x,y,size theo % khung)
     const [selectedSticker, setSelectedSticker] = useState(null);
+    const [stickerPage, setStickerPage] = useState(0);
     const stickerDragRef = useRef(null);
     const stickerSeq = useRef(0);
+
+    // Phân trang sticker: 1 hàng, dùng mũi tên ‹ › giống chọn frame.
+    const STICKERS_PER_PAGE = 8;
+    const totalStickerPages = Math.max(1, Math.ceil(stickerIcons.length / STICKERS_PER_PAGE));
+    const displayedStickers = stickerIcons.slice(stickerPage * STICKERS_PER_PAGE, (stickerPage + 1) * STICKERS_PER_PAGE);
+    const nextStickerPage = () => setStickerPage((p) => (p + 1) % totalStickerPages);
+    const prevStickerPage = () => setStickerPage((p) => (p - 1 + totalStickerPages) % totalStickerPages);
 
     useEffect(() => {
         axios.get(`${CLOUD_API_URL}/api/frames?kind=sticker`)
@@ -1428,20 +1436,23 @@ const Edit = () => {
                         {stickerIcons.length === 0 ? (
                             <p className="text-[11px] text-gray-400 px-1 py-1">Chưa có sticker. Thêm ở Admin → Quản lý khung hình → Icons.</p>
                         ) : (
-                            // Nhiều sticker -> lưới 2 HÀNG cuộn ngang (vuốt để xem thêm), gọn chiều cao.
-                            <div className="grid grid-flow-col grid-rows-2 auto-cols-max gap-2.5 overflow-x-auto pb-1.5"
-                                style={{ scrollbarWidth: 'thin' }}>
-                                {stickerIcons.map((icon) => (
-                                    <button
-                                        key={icon.id}
-                                        type="button"
-                                        onClick={() => addSticker(icon)}
-                                        title={icon.name}
-                                        className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E7D3B7] bg-white p-1.5 shadow-sm transition-colors hover:border-[#7B5E43]/50 active:scale-95"
-                                    >
-                                        <img src={icon.url} alt={icon.name} className="max-h-full max-w-full object-contain" />
-                                    </button>
-                                ))}
+                            // 1 HÀNG + mũi tên ‹ › phân trang (giống chọn frame), nút vuông giữ nguyên.
+                            <div className="flex items-center justify-center gap-2">
+                                <button type="button" onClick={prevStickerPage} disabled={totalStickerPages <= 1} className="shrink-0 p-1 text-3xl font-bold text-[#7B5E43] disabled:opacity-20">‹</button>
+                                <div className="flex flex-1 justify-center gap-2.5">
+                                    {displayedStickers.map((icon) => (
+                                        <button
+                                            key={icon.id}
+                                            type="button"
+                                            onClick={() => addSticker(icon)}
+                                            title={icon.name}
+                                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#E7D3B7] bg-white p-1.5 shadow-sm transition-colors hover:border-[#7B5E43]/50 active:scale-95"
+                                        >
+                                            <img src={icon.url} alt={icon.name} className="max-h-full max-w-full object-contain" />
+                                        </button>
+                                    ))}
+                                </div>
+                                <button type="button" onClick={nextStickerPage} disabled={totalStickerPages <= 1} className="shrink-0 p-1 text-3xl font-bold text-[#7B5E43] disabled:opacity-20">›</button>
                             </div>
                         )}
                     </div>
