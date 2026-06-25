@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120">
+  <defs>
+    <linearGradient id="hornGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff6a5a"/>
+      <stop offset="45%" stop-color="#d8281c"/>
+      <stop offset="100%" stop-color="#8c1109"/>
+    </linearGradient>
+    <filter id="hornShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g filter="url(#hornShadow)">
+    <path d="M58 112 C40 80 34 42 60 6 C66 16 70 30 72 46 C76 74 80 96 88 110 C78 114 68 114 58 112 Z" fill="url(#hornGrad)"/>
+    <path d="M142 112 C160 80 166 42 140 6 C134 16 130 30 128 46 C124 74 120 96 112 110 C122 114 132 114 142 112 Z" fill="url(#hornGrad)"/>
+  </g>
+  <path d="M56 104 C44 76 42 44 58 16 C58 42 60 74 66 98 C62 101 59 103 56 104 Z" fill="#ffffff" opacity="0.28"/>
+  <path d="M144 104 C156 76 158 44 142 16 C142 42 140 74 134 98 C138 101 141 103 144 104 Z" fill="#ffffff" opacity="0.28"/>
+</svg>

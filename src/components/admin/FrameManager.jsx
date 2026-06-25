@@ -5,6 +5,7 @@ import { LAYOUTS } from '../../data/layouts';
 import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
 import ConfirmDialog from './ConfirmDialog';
+import IconManager from './IconManager';
 
 import { FRAME_API_URL } from '../../config/api';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
@@ -345,10 +346,24 @@ const FrameManager = () => {
                         >
                             📱 Upload
                         </button>
+                        <button
+                            onClick={() => setActiveTab('icons')}
+                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
+                                ${activeTab === 'icons'
+                                    ? 'bg-white shadow text-[#e63946]'
+                                    : 'text-gray-500 hover:text-[#e63946]'
+                                }`}
+                        >
+                            🎭 Icons
+                        </button>
                     </div>
                 </div>
             </div>
 
+            {activeTab === 'icons' ? (
+                <IconManager apiBase={FRAME_API_URL} />
+            ) : (
+              <>
             {/* Layout Selector - Tabs */}
             <div className="mb-6 overflow-hidden">
                 <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none -mx-4 px-4">
@@ -695,6 +710,8 @@ const FrameManager = () => {
                     )
                 }
             </div>
+              </>
+            )}
         </div >
     );
 };

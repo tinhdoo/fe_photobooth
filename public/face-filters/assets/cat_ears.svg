@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="130" viewBox="0 0 220 130">
+  <defs>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a5a5e"/>
+      <stop offset="55%" stop-color="#37373b"/>
+      <stop offset="100%" stop-color="#1d1d20"/>
+    </linearGradient>
+    <radialGradient id="catpink" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#ffd0dd"/>
+      <stop offset="60%" stop-color="#f6a5b8"/>
+      <stop offset="100%" stop-color="#e07f97"/>
+    </radialGradient>
+    <filter id="catShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <g filter="url(#catShadow)">
+    <path d="M16 120 C28 70 40 30 52 8 C70 34 88 78 100 110 C72 120 40 122 16 120 Z" fill="url(#fur)"/>
+    <path d="M204 120 C192 70 180 30 168 8 C150 34 132 78 120 110 C148 120 180 122 204 120 Z" fill="url(#fur)"/>
+  </g>
+  <path d="M40 106 C48 74 52 50 56 36 C66 56 76 86 82 102 C68 108 52 108 40 106 Z" fill="url(#catpink)"/>
+  <path d="M180 106 C172 74 168 50 164 36 C154 56 144 86 138 102 C152 108 168 108 180 106 Z" fill="url(#catpink)"/>
+  <path d="M30 96 C36 64 44 34 52 16 C50 44 46 78 46 100 C40 100 34 99 30 96 Z" fill="#ffffff" opacity="0.18"/>
+  <path d="M190 96 C184 64 176 34 168 16 C170 44 174 78 174 100 C180 100 186 99 190 96 Z" fill="#ffffff" opacity="0.18"/>
+</svg>

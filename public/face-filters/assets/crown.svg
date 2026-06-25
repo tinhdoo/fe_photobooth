@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120">
+  <defs>
+    <linearGradient id="crGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff3b0"/>
+      <stop offset="45%" stop-color="#ffd24d"/>
+      <stop offset="100%" stop-color="#d18a00"/>
+    </linearGradient>
+    <linearGradient id="crBand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffcf4a"/>
+      <stop offset="100%" stop-color="#b87600"/>
+    </linearGradient>
+    <radialGradient id="gemR" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ff9db0"/>
+      <stop offset="100%" stop-color="#e23b5a"/>
+    </radialGradient>
+    <radialGradient id="gemB" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#bfe6ff"/>
+      <stop offset="100%" stop-color="#3a9fe0"/>
+    </radialGradient>
+    <filter id="crShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <g filter="url(#crShadow)">
+    <path d="M22 104 L14 34 L66 70 L100 16 L134 70 L186 34 L178 104 Z" fill="url(#crGold)" stroke="#c98a00" stroke-width="2.5" stroke-linejoin="round"/>
+    <rect x="22" y="98" width="156" height="16" rx="5" fill="url(#crBand)" stroke="#c98a00" stroke-width="2"/>
+  </g>
+  <path d="M30 96 L24 44 L62 70 Z" fill="#ffffff" opacity="0.22"/>
+  <path d="M100 24 L120 64 L100 60 Z" fill="#ffffff" opacity="0.22"/>
+  <circle cx="100" cy="26" r="9" fill="url(#gemR)" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="38" cy="58" r="6.5" fill="url(#gemB)" stroke="#ffffff" stroke-width="1.2"/>
+  <circle cx="162" cy="58" r="6.5" fill="url(#gemB)" stroke="#ffffff" stroke-width="1.2"/>
+  <circle cx="100" cy="106" r="4.5" fill="url(#gemR)"/>
+  <circle cx="60" cy="106" r="4" fill="url(#gemB)"/>
+  <circle cx="140" cy="106" r="4" fill="url(#gemB)"/>
+</svg>

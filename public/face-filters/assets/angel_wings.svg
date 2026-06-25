@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="wingG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#eef3ff"/>
+      <stop offset="100%" stop-color="#cdddf7"/>
+    </linearGradient>
+    <filter id="wSh" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#5b6b8c" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g filter="url(#wSh)">
+    <path d="M150 92 C95 40 35 38 18 78 C58 70 92 84 118 110 C70 96 40 108 30 138 C70 120 110 122 150 120 Z" fill="url(#wingG)" stroke="#bccdf0" stroke-width="2"/>
+    <path d="M170 92 C225 40 285 38 302 78 C262 70 228 84 202 110 C250 96 280 108 290 138 C250 120 210 122 170 120 Z" fill="url(#wingG)" stroke="#bccdf0" stroke-width="2"/>
+  </g>
+  <g stroke="#c9d6f0" stroke-width="1.5" fill="none" opacity="0.7">
+    <path d="M40 78 C70 78 96 90 116 108"/>
+    <path d="M44 108 C74 104 100 110 128 122"/>
+    <path d="M280 78 C250 78 224 90 204 108"/>
+    <path d="M276 108 C246 104 220 110 192 122"/>
+  </g>
+</svg>

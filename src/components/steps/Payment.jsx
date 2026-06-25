@@ -124,8 +124,9 @@ const Payment = () => {
         });
 
         socket.on('money_inserted', (data) => {
-            if (!method || method === 'cash') {
-                if (method !== 'cash') setMethod('cash');
+            // CHỈ ghi nhận tiền khi đang ở đúng màn nhận tiền mặt (đã chọn 'cash').
+            // Không tự nhảy sang 'cash' từ màn khác -> tránh nhận tiền ngoài bước này.
+            if (method === 'cash') {
                 setCashInserted((prev) => prev + data.amount);
             }
         });
@@ -145,16 +146,17 @@ const Payment = () => {
         }
     }, [cashInserted, handlePaymentSuccess, method, remainingAmount]);
 
-    // Chỉ bật máy đọc tiền (LED + cho nhét tiền) khi khách chọn tiền mặt và còn phải trả.
-    // Rời khỏi chế độ tiền mặt / rời bước thanh toán -> tắt nhận tiền.
+    // Máy đọc tiền (LED + cho nhét tiền) CHỈ bật khi đang Ở MÀN "Đưa tiền vào khe":
+    // đã chọn tiền mặt, còn phải trả, và không đang xử lý. Mọi trạng thái khác (mới vào
+    // Payment, màn chọn phương thức, QR, nhập mã, đang xử lý, rời bước) -> chủ động TẮT.
     useEffect(() => {
-        if (method === 'cash' && remainingAmount > 0) {
-            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: true }).catch(() => {});
-            return () => {
-                axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: false }).catch(() => {});
-            };
-        }
-    }, [method, remainingAmount]);
+        const onCashScreen = method === 'cash' && remainingAmount > 0 && !loading;
+        axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: onCashScreen }).catch(() => {});
+        return () => {
+            // Rời màn / unmount -> luôn tắt nhận tiền.
+            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: false }).catch(() => {});
+        };
+    }, [method, remainingAmount, loading]);
 
     useEffect(() => {
         if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;

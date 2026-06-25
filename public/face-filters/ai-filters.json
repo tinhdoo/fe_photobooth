@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "_note": "Beauty schema: beauty{retouch,toneRed,toneYellow,brightness,glow} makeup{blush,lips,eye} color{saturation,contrast,brightness,warmth,pinkTint,highlight}. warps = sculpting rất nhẹ.",
+  "filters": [
+    {
+      "id": "natural", "name": "✨ Natural", "category": "Beauty",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.03, "axis": "x" },
+        { "anchor": "nose", "radius": 0.33, "strength": -0.02, "axis": "x" },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
+      ],
+      "beauty": { "retouch": 0.15, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.30 },
+      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.40 },
+      "color": { "saturation": 1.02, "warmth": 0.05 }
+    },
+    {
+      "id": "soft_pink", "name": "🌸 Soft Pink", "category": "Beauty",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.03, "axis": "x" },
+        { "anchor": "nose", "radius": 0.33, "strength": -0.02, "axis": "x" },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
+      ],
+      "beauty": { "retouch": 0.18, "toneRed": 0.30, "toneYellow": 0.15, "brightness": 0.30 },
+      "makeup": { "blush": 0.28, "lips": 0.45, "eye": 0.40 },
+      "color": { "saturation": 1.04, "warmth": 0.10, "pinkTint": 0.06 }
+    },
+    {
+      "id": "glass_skin", "name": "🫧 Glass Skin", "category": "Beauty",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.03, "axis": "x" },
+        { "anchor": "nose", "radius": 0.33, "strength": -0.02, "axis": "x" },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
+      ],
+      "beauty": { "retouch": 0.22, "toneRed": 0.35, "toneYellow": 0.25, "brightness": 0.28, "glow": 0.3 },
+      "makeup": { "blush": 0.15, "lips": 0.40, "eye": 0.45 },
+      "color": { "saturation": 1.0, "contrast": 0.98, "warmth": 0.03, "highlight": 0.06 }
+    },
+    {
+      "id": "korean_idol", "name": "🎀 Korean Idol", "category": "Beauty",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.035, "axis": "x" },
+        { "anchor": "nose", "radius": 0.33, "strength": -0.02, "axis": "x" },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.025, "axis": "y" }
+      ],
+      "beauty": { "retouch": 0.20, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.30, "glow": 0.4 },
+      "makeup": { "blush": 0.20, "lips": 0.50, "eye": 0.70 },
+      "color": { "saturation": 1.03, "contrast": 0.98, "warmth": 0.06, "highlight": 0.08 }
+    },
+    {
+      "id": "studio", "name": "📸 Studio", "category": "Beauty",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.03, "axis": "x" },
+        { "anchor": "nose", "radius": 0.33, "strength": -0.02, "axis": "x" },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
+      ],
+      "beauty": { "retouch": 0.18, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.25 },
+      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.60 },
+      "color": { "saturation": 1.05, "contrast": 1.05, "warmth": 0.04 }
+    },
+    {
+      "id": "big_head", "name": "Đầu to", "category": "Funny",
+      "warps": [
+        { "anchor": "headCenter", "radius": 1.70, "strength": 0.30 }
+      ],
+      "beauty": {}, "makeup": {}, "color": {}
+    },
+    {
+      "id": "baby_face", "name": "Em bé", "category": "Funny",
+      "warps": [
+        { "anchor": "left_eye", "radius": 0.46, "strength": 0.35 },
+        { "anchor": "right_eye", "radius": 0.46, "strength": 0.35 },
+        { "anchor": "nose", "radius": 0.34, "strength": -0.30 },
+        { "anchor": "chin", "radius": 0.55, "strength": -0.30 },
+        { "anchor": "faceCenter", "radius": 1.10, "strength": 0.08 }
+      ],
+      "beauty": { "retouch": 0.2, "brightness": 0.2 },
+      "makeup": { "blush": 0.30, "lips": 0.30, "eye": 0.30 },
+      "color": { "saturation": 1.05 }
+    },
+    {
+      "id": "alien", "name": "Người ngoài hành tinh", "category": "Funny",
+      "warps": [
+        { "anchor": "headCenter", "radius": 1.30, "strength": 0.28 },
+        { "anchor": "left_eye", "radius": 0.50, "strength": 0.55 },
+        { "anchor": "right_eye", "radius": 0.50, "strength": 0.55 },
+        { "anchor": "chin", "radius": 0.55, "strength": -0.45 },
+        { "anchor": "faceCenter", "radius": 1.20, "strength": -0.20, "axis": "x" }
+      ],
+      "beauty": { "retouch": 0.3 }, "makeup": {},
+      "color": { "saturation": 1.10, "contrast": 1.05 }
+    },
+    {
+      "id": "potato", "name": "Khoai tây", "category": "Funny",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.40, "strength": 0.18, "axis": "x" },
+        { "anchor": "nose", "radius": 0.35, "strength": 0.12 },
+        { "anchor": "chin", "radius": 0.50, "strength": -0.08, "axis": "y" }
+      ],
+      "beauty": {}, "makeup": {},
+      "color": { "saturation": 1.05 }
+    },
+    {
+      "id": "fish_eye", "name": "Mắt cá", "category": "Funny",
+      "warps": [
+        { "anchor": "faceCenter", "radius": 1.40, "strength": 0.55 },
+        { "anchor": "nose", "radius": 0.40, "strength": 0.20 }
+      ],
+      "beauty": {}, "makeup": {}, "color": {}
+    },
+    {
+      "id": "monster", "name": "Quái vật", "category": "Funny",
+      "warps": [
+        { "anchor": "left_eye", "radius": 0.50, "strength": 0.60 },
+        { "anchor": "right_eye", "radius": 0.40, "strength": -0.20 },
+        { "anchor": "mouth", "radius": 0.45, "strength": 0.30 },
+        { "anchor": "chin", "radius": 0.50, "strength": 0.18 }
+      ],
+      "beauty": {}, "makeup": {},
+      "color": { "saturation": 1.20, "contrast": 1.18 }
+    }
+  ]
+}

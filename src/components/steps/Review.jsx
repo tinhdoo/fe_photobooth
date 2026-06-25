@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, RotateCcw } from 'lucide-react';
+import { ArrowRight, RotateCcw, Sticker } from 'lucide-react';
 import { useWorkflow } from '../../context/WorkflowContext';
+
+const StickerEditor = lazy(() => import('../../faceFilter/StickerEditor'));
 
 const getPhotoUrl = (photo) => {
     if (!photo) return null;
@@ -67,6 +69,26 @@ const Review = () => {
         : (sessionData.photos || []);
     const activeSlot = sessionData.activeSlot;
     const setActiveSlot = (value) => updateSessionData('activeSlot', value);
+
+    // Ảnh đang mở trình dán sticker (theo chỉ số trong pool nguồn). null = đóng.
+    const [stickerIndex, setStickerIndex] = useState(null);
+
+    // Thay ảnh đã dán sticker vào pool nguồn + mọi ô đang dùng ảnh đó (khớp theo id).
+    const applyStickerPhoto = (sourceIndex, result) => {
+        const original = sourcePhotos[sourceIndex];
+        if (!original || !result?.url) { setStickerIndex(null); return; }
+        const oldId = typeof original === 'string' ? original : original.id;
+        const oldUrl = typeof original === 'string' ? original : original.url;
+        const updated = typeof original === 'string' ? result.url : { ...original, url: result.url, videoUrl: null };
+        const sameRef = (p) => {
+            if (!p) return false;
+            if (typeof p === 'string') return p === oldId;
+            return p.id ? p.id === oldId : p.url === oldUrl;
+        };
+        updateSessionData('capturedPhotos', sourcePhotos.map((p, i) => (i === sourceIndex ? updated : p)));
+        updateSessionData('photos', (sessionData.photos || []).map((p) => (sameRef(p) ? updated : p)));
+        setStickerIndex(null);
+    };
     const previewGrid = getReviewGrid(currentLayout);
 
     // Prefetch chunk bước Edit (chọn frame/filter) khi vào Review, nhưng CHỈ lúc CPU rảnh
@@ -219,17 +241,30 @@ const Review = () => {
                                     </button>
 
                                     {photoSrc && (
-                                        <button
-                                            type="button"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                handleRetakePhoto(index);
-                                            }}
-                                            className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#4A5D4E] shadow-md transition-none active:scale-95"
-                                            title="Chụp lại tấm này"
-                                        >
-                                            <RotateCcw size={16} />
-                                        </button>
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleRetakePhoto(index);
+                                                }}
+                                                className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#4A5D4E] shadow-md transition-none active:scale-95"
+                                                title="Chụp lại tấm này"
+                                            >
+                                                <RotateCcw size={16} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setStickerIndex(index);
+                                                }}
+                                                className="absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#e63946] shadow-md transition-none active:scale-95"
+                                                title="Dán sticker"
+                                            >
+                                                <Sticker size={16} />
+                                            </button>
+                                        </>
                                     )}
                                 </article>
                             );
@@ -256,6 +291,20 @@ const Review = () => {
                     Tiếp tục <ArrowRight size={20} />
                 </button>
             </div>
+
+            {stickerIndex !== null && (
+                <div className="fixed inset-0 z-[60] bg-black/50">
+                    <div className="absolute inset-0 sm:inset-6 md:inset-10 overflow-hidden bg-[#FFF8E7] shadow-2xl sm:rounded-3xl">
+                        <Suspense fallback={<div className="flex h-full items-center justify-center font-serif text-[#7B5E43]">Đang mở trình dán sticker...</div>}>
+                            <StickerEditor
+                                imageUrl={getPhotoUrl(sourcePhotos[stickerIndex])}
+                                onCancel={() => setStickerIndex(null)}
+                                onConfirm={(result) => applyStickerPhoto(stickerIndex, result)}
+                            />
+                        </Suspense>
+                    </div>
+                </div>
+            )}
 
             <AnimatePresence>
                 {showError && (

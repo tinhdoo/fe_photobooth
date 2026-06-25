@@ -26,11 +26,8 @@ const FILTERS = [
             ctx.putImageData(imageData, 0, 0);
         }
     },
-    { id: 'makeup_light', name: 'Makeup nhẹ', type: 'backend', description: 'Cà da nhẹ, sáng trong tự nhiên' },
-    { id: 'makeup_soft', name: 'Makeup mềm', type: 'backend', description: 'Môi, má và mắt nhẹ tự nhiên' },
-    { id: 'korean', name: 'Trắng hồng', type: 'backend', description: 'Da sáng hồng mức vừa, giữ nét tự nhiên' },
-    { id: 'natural', name: 'Da Tự Nhiên', type: 'backend', description: 'Mịn da tự nhiên' },
-    { id: 'men', name: 'Da Nam', type: 'backend', description: 'Mịn nhẹ, giữ chi tiết' }
+    // 5 filter beauty (Natural, Soft Pink, Glass Skin, Korean Idol, Studio) được nạp động
+    // từ /face-filters/ai-filters.json và chèn vào đây lúc chạy (xem state beautyFilters).
 ];
 
 const mapWithConcurrency = async (items, limit, worker) => {
@@ -138,7 +135,24 @@ const Edit = () => {
     const layout = LAYOUTS.find(l => l.id === sessionLayout.id) || sessionLayout;
 
     const [selectedFilter, setSelectedFilter] = useState(FILTERS[0]);
+    const [beautyFilters, setBeautyFilters] = useState([]); // 5 preset beauty nạp từ JSON
     const [filteredPhotos, setFilteredPhotos] = useState(photos); // Init with original photos
+
+    // Nạp danh sách beauty preset (Natural / Soft Pink / Glass Skin / Korean Idol / Studio).
+    useEffect(() => {
+        let alive = true;
+        import('../../faceFilter/ai/applyBeauty.js')
+            .then(({ loadBeautyPresets }) => loadBeautyPresets())
+            .then((list) => {
+                if (!alive) return;
+                setBeautyFilters(list.map((def) => ({ id: def.id, name: def.name, type: 'beauty', def })));
+            })
+            .catch((e) => console.error('Không tải được beauty preset:', e));
+        return () => { alive = false; };
+    }, []);
+
+    // Danh sách filter hiển thị = base (Gốc, Đen Trắng) + 5 beauty.
+    const allFilters = useMemo(() => [...FILTERS, ...beautyFilters], [beautyFilters]);
     const [frames, setFrames] = useState([]);
     const [selectedFrame, setSelectedFrame] = useState({ id: 'none', name: 'None', color: '#ffffff', image: null });
     const selectedFrameRef = useRef(selectedFrame);
@@ -304,6 +318,31 @@ const Edit = () => {
                     });
                 });
                 if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
+                return;
+            }
+
+            // Beauty Filters (xử lý ngay trên máy: nhận diện mặt + warp + làm đẹp)
+            if (selectedFilter.type === 'beauty') {
+                setIsFiltering(true);
+                try {
+                    const { applyBeautyToImage } = await import('../../faceFilter/ai/applyBeauty.js');
+                    const filtered = await mapWithConcurrency(photos, 1, async (photoSrc) => {
+                        if (!photoSrc) return null;
+                        const cacheKey = `${selectedFilter.id}:${photoSrc}`;
+                        if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+                        try {
+                            const url = await applyBeautyToImage(photoSrc, selectedFilter.def);
+                            filterCacheRef.current.set(cacheKey, url);
+                            return url;
+                        } catch (e) {
+                            console.error('Beauty filter error', e);
+                            return photoSrc;
+                        }
+                    });
+                    if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
+                } finally {
+                    if (isMounted && filterRunRef.current === runId) setIsFiltering(false);
+                }
                 return;
             }
 
@@ -1186,7 +1225,7 @@ const Edit = () => {
                     {/* Filter List */}
                     <div className="bg-[#F6E6C9]/70 p-4 rounded-[2rem] w-full max-w-4xl shadow-sm flex flex-col gap-4">
                         <div className="grid grid-cols-7 gap-2">
-                            {FILTERS.map((filter) => (
+                            {allFilters.map((filter) => (
                                 <motion.div key={filter.id}
                                     onClick={() => !isFiltering && setSelectedFilter(filter)}
                                     className={`aspect-[4/5] rounded-xl flex flex-col items-center justify-center border-2 transition-all 

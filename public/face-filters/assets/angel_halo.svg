@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="90" viewBox="0 0 220 90">
+  <defs>
+    <linearGradient id="haloGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff6c2"/>
+      <stop offset="45%" stop-color="#ffd75e"/>
+      <stop offset="100%" stop-color="#e09e1c"/>
+    </linearGradient>
+    <filter id="haloGlow" x="-30%" y="-60%" width="160%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <ellipse cx="110" cy="45" rx="92" ry="24" fill="none" stroke="#ffe9a8" stroke-width="16" opacity="0.35" filter="url(#haloGlow)"/>
+  <ellipse cx="110" cy="45" rx="92" ry="24" fill="none" stroke="url(#haloGold)" stroke-width="12"/>
+  <ellipse cx="110" cy="45" rx="92" ry="24" fill="none" stroke="#fffdf2" stroke-width="2.5" opacity="0.85" stroke-dasharray="40 250" stroke-dashoffset="20"/>
+  <ellipse cx="110" cy="45" rx="92" ry="24" fill="none" stroke="#b97d12" stroke-width="2" opacity="0.5" stroke-dasharray="30 260" stroke-dashoffset="150"/>
+</svg>

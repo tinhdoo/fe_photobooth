@@ -1,0 +1,36 @@
+{
+  "version": 4,
+  "_note": "anchorY=bottom: đáy sticker đặt lên đỉnh đầu. offset.y + = xuống (sát tóc), - = lên. scale theo bề ngang mặt.",
+  "filters": [
+    {
+      "id": "cat", "name": "Mèo", "thumbnail": "cat_ears.png",
+      "assets": [
+        { "image": "cat_ears.png", "anchor": "head_top", "anchorY": "bottom", "scale": 1.5, "offset": { "x": 0, "y": 0.28 } }
+      ]
+    },
+    {
+      "id": "fox", "name": "Cáo", "thumbnail": "fox_ears.png",
+      "assets": [
+        { "image": "fox_ears.png", "anchor": "head_top", "anchorY": "bottom", "scale": 1.45, "offset": { "x": 0, "y": 0.26 } }
+      ]
+    },
+    {
+      "id": "devil", "name": "Quỷ", "thumbnail": "devil_horns.png",
+      "assets": [
+        { "image": "devil_horns.png", "anchor": "head_top", "anchorY": "bottom", "scale": 1.25, "offset": { "x": 0, "y": 0.30 } }
+      ]
+    },
+    {
+      "id": "angel", "name": "Thiên thần", "thumbnail": "halo.png",
+      "assets": [
+        { "image": "halo.png", "anchor": "head_top", "anchorY": "bottom", "scale": 1.3, "offset": { "x": 0, "y": -0.05 } }
+      ]
+    },
+    {
+      "id": "crown", "name": "Vương miện", "thumbnail": "crown.png",
+      "assets": [
+        { "image": "crown.png", "anchor": "head_top", "anchorY": "bottom", "scale": 1.12, "offset": { "x": 0, "y": 0.34 } }
+      ]
+    }
+  ]
+}
