@@ -12,6 +12,7 @@ const IconManager = ({ apiBase }) => {
     const [editing, setEditing] = useState(null); // name đang đổi tên
     const [editValue, setEditValue] = useState('');
     const [msg, setMsg] = useState(null);
+    const [dragOver, setDragOver] = useState(false);
     const fileRef = useRef(null);
 
     const notify = (text, ok = true) => { setMsg({ text, ok }); setTimeout(() => setMsg(null), 2500); };
@@ -30,8 +31,8 @@ const IconManager = ({ apiBase }) => {
     };
     useEffect(() => { fetchIcons(); /* eslint-disable-next-line */ }, []);
 
-    const handleUpload = async (e) => {
-        const files = Array.from(e.target.files || []);
+    const uploadFiles = async (fileList) => {
+        const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
         if (!files.length) return;
         setUploading(true);
         try {
@@ -49,6 +50,14 @@ const IconManager = ({ apiBase }) => {
             setUploading(false);
             if (fileRef.current) fileRef.current.value = '';
         }
+    };
+
+    const handleUpload = (e) => uploadFiles(e.target.files);
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        uploadFiles(e.dataTransfer?.files);
     };
 
     const handleDelete = async (name) => {
@@ -105,6 +114,23 @@ const IconManager = ({ apiBase }) => {
                     Thêm icon
                 </button>
                 <input ref={fileRef} type="file" accept="image/png,image/webp" multiple className="hidden" onChange={handleUpload} />
+            </div>
+
+            {/* Ô kéo & thả để thêm nhiều sticker cùng lúc */}
+            <div
+                onClick={() => !uploading && fileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`mb-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-9 text-center transition-colors ${dragOver ? 'border-[#e63946] bg-red-50' : 'border-gray-200 bg-gray-50/60 hover:border-[#e63946]/50'}`}
+            >
+                {uploading ? (
+                    <Loader2 size={30} className="mb-2 animate-spin text-[#e63946]" />
+                ) : (
+                    <Upload size={30} className="mb-2 text-[#e63946]" />
+                )}
+                <p className="font-bold text-[#1a1a2e]">{uploading ? 'Đang tải lên...' : 'Kéo & thả ảnh PNG vào đây'}</p>
+                <p className="text-sm text-gray-400">hoặc bấm để chọn nhiều ảnh cùng lúc (PNG nền trong suốt)</p>
             </div>
 
             {loading ? (

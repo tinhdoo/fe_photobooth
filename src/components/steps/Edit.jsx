@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
-import { Monitor, Edit2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2 } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 import { getDeviceId } from '../../utils/deviceId';
@@ -153,6 +153,71 @@ const Edit = () => {
 
     // Danh sách filter hiển thị = base (Gốc, Đen Trắng) + 5 beauty.
     const allFilters = useMemo(() => [...FILTERS, ...beautyFilters], [beautyFilters]);
+
+    // === STICKER: khách dán icon (từ cloud) lên ảnh khung, tự kéo/phóng/xoay ===
+    const [stickerIcons, setStickerIcons] = useState([]);   // icon do admin quản lý
+    const [stickers, setStickers] = useState([]);           // {id,url,ratio,x,y,size,rot} (x,y,size theo % khung)
+    const [selectedSticker, setSelectedSticker] = useState(null);
+    const stickerDragRef = useRef(null);
+    const stickerSeq = useRef(0);
+
+    useEffect(() => {
+        axios.get(`${CLOUD_API_URL}/api/frames?kind=sticker`)
+            .then((res) => setStickerIcons(Array.isArray(res.data) ? res.data : []))
+            .catch(() => {});
+    }, []);
+
+    const addSticker = (icon) => {
+        const img = new Image();
+        img.onload = () => {
+            const ratio = (img.naturalHeight || 1) / (img.naturalWidth || 1);
+            const id = `st${++stickerSeq.current}`;
+            setStickers((p) => [...p, { id, url: icon.url, ratio, x: 50, y: 45, size: 22, rot: 0 }]);
+            setSelectedSticker(id);
+        };
+        img.src = icon.url;
+    };
+
+    const removeSticker = (id) => {
+        setStickers((p) => p.filter((s) => s.id !== id));
+        setSelectedSticker((cur) => (cur === id ? null : cur));
+    };
+
+    const onStickerMove = useCallback((e) => {
+        const d = stickerDragRef.current;
+        if (!d) return;
+        if (d.mode === 'move') {
+            const nx = d.x + ((e.clientX - d.sx) / d.w) * 100;
+            const ny = d.y + ((e.clientY - d.sy) / d.h) * 100;
+            setStickers((p) => p.map((s) => s.id === d.id ? { ...s, x: Math.max(0, Math.min(100, nx)), y: Math.max(0, Math.min(100, ny)) } : s));
+        } else {
+            const dx = e.clientX - d.cx, dy = e.clientY - d.cy;
+            const dist = Math.hypot(dx, dy);
+            const diag = Math.sqrt(1 + d.ratio * d.ratio);
+            const size = Math.max(4, Math.min(140, (2 * dist) / (d.w * diag) * 100));
+            const rot = Math.atan2(dy, dx) * 180 / Math.PI - 45;
+            setStickers((p) => p.map((s) => s.id === d.id ? { ...s, size, rot } : s));
+        }
+    }, []);
+
+    const onStickerUp = useCallback(() => {
+        stickerDragRef.current = null;
+        window.removeEventListener('pointermove', onStickerMove);
+        window.removeEventListener('pointerup', onStickerUp);
+    }, [onStickerMove]);
+
+    const startStickerDrag = (e, s, mode) => {
+        e.stopPropagation();
+        setSelectedSticker(s.id);
+        const rect = captureRef.current.getBoundingClientRect();
+        if (mode === 'move') {
+            stickerDragRef.current = { mode, id: s.id, sx: e.clientX, sy: e.clientY, x: s.x, y: s.y, w: rect.width, h: rect.height };
+        } else {
+            stickerDragRef.current = { mode, id: s.id, cx: rect.left + (s.x / 100) * rect.width, cy: rect.top + (s.y / 100) * rect.height, w: rect.width, ratio: s.ratio };
+        }
+        window.addEventListener('pointermove', onStickerMove);
+        window.addEventListener('pointerup', onStickerUp);
+    };
     const [frames, setFrames] = useState([]);
     const [selectedFrame, setSelectedFrame] = useState({ id: 'none', name: 'None', color: '#ffffff', image: null });
     const selectedFrameRef = useRef(selectedFrame);
@@ -842,6 +907,19 @@ const Edit = () => {
                     const frameImg = await cachedLoadImage(selectedFrame.url || selectedFrame.image);
                     if (frameImg) targetCtx.drawImage(frameImg, 0, 0, targetCanvas.width, targetCanvas.height);
                 }
+
+                // 6. Draw Stickers (dán lên ảnh khung — bake vào cả ảnh in lẫn ảnh album)
+                for (const st of stickers) {
+                    const stImg = await cachedLoadImage(st.url);
+                    if (!stImg) continue;
+                    const w = (st.size / 100) * targetCanvas.width;
+                    const h = w * st.ratio;
+                    targetCtx.save();
+                    targetCtx.translate((st.x / 100) * targetCanvas.width, (st.y / 100) * targetCanvas.height);
+                    targetCtx.rotate((st.rot * Math.PI) / 180);
+                    targetCtx.drawImage(stImg, -w / 2, -h / 2, w, h);
+                    targetCtx.restore();
+                }
             };
 
             // Draw photos + frame (clean version, no QR/date)
@@ -1117,7 +1195,7 @@ const Edit = () => {
 
             <div className="flex-1 flex gap-8 overflow-hidden px-4">
                 {/* LEFT: Preview */}
-                <div className="w-5/12 flex items-center justify-center p-8 bg-[#F6E6C9]/55 rounded-3xl ml-4">
+                <div className="w-5/12 flex items-center justify-center p-8 bg-[#F6E6C9]/55 rounded-3xl ml-4" onPointerDown={() => setSelectedSticker(null)}>
                     <div ref={captureRef}
                         className="shadow-2xl relative transition-all duration-300"
                         style={{
@@ -1173,6 +1251,33 @@ const Edit = () => {
                                 <img src={selectedFrame.url || selectedFrame.image} className="w-full h-full object-fill" alt="Frame" onError={(e) => e.target.style.display = 'none'} />
                             </div>
                         )}
+
+                        {/* 2b. Sticker Layer (khách kéo/phóng/xoay) */}
+                        {stickers.map((s) => (
+                            <div
+                                key={s.id}
+                                onPointerDown={(e) => startStickerDrag(e, s, 'move')}
+                                className="absolute z-40 cursor-move touch-none"
+                                style={{ left: `${s.x}%`, top: `${s.y}%`, width: `${s.size}%`, transform: `translate(-50%, -50%) rotate(${s.rot}deg)` }}
+                            >
+                                <img src={s.url} crossOrigin="anonymous" className="pointer-events-none block w-full select-none" draggable={false} alt="sticker" />
+                                {selectedSticker === s.id && (
+                                    <>
+                                        <span className="pointer-events-none absolute inset-0 rounded ring-2 ring-[#e63946]/70" />
+                                        <button
+                                            type="button"
+                                            onPointerDown={(e) => { e.stopPropagation(); removeSticker(s.id); }}
+                                            className="absolute -left-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow"
+                                        ><Trash2 size={13} /></button>
+                                        <button
+                                            type="button"
+                                            onPointerDown={(e) => startStickerDrag(e, s, 'transform')}
+                                            className="absolute -bottom-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full bg-[#987351] text-white shadow touch-none"
+                                        ><RotateCw size={13} /></button>
+                                    </>
+                                )}
+                            </div>
+                        ))}
 
                         {/* 3. Draggable Overlays */}
                         {isFiltering && (
@@ -1306,6 +1411,39 @@ const Edit = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Sticker palette — thẻ cùng phong cách với khối filter/QR phía trên */}
+                    <div className="w-full max-w-4xl bg-[#F6E6C9]/70 p-4 rounded-[2rem] shadow-sm">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-1 rounded-md bg-[#7B5E43] text-white">
+                                <Sticker size={12} />
+                            </div>
+                            <span className="font-bold text-[10px] uppercase tracking-wide text-[#7B5E43]">Sticker</span>
+                            <span className="text-[10px] text-[#7B5E43]/60">· chạm để thêm · kéo di chuyển · nắm góc để xoay / phóng to</span>
+                            {stickerIcons.length > 0 && (
+                                <span className="ml-auto rounded-full bg-[#7B5E43]/10 px-2 py-0.5 text-[10px] font-bold text-[#7B5E43]">{stickerIcons.length}</span>
+                            )}
+                        </div>
+                        {stickerIcons.length === 0 ? (
+                            <p className="text-[11px] text-gray-400 px-1 py-1">Chưa có sticker. Thêm ở Admin → Quản lý khung hình → Icons.</p>
+                        ) : (
+                            // Nhiều sticker -> lưới 2 HÀNG cuộn ngang (vuốt để xem thêm), gọn chiều cao.
+                            <div className="grid grid-flow-col grid-rows-2 auto-cols-max gap-2.5 overflow-x-auto pb-1.5"
+                                style={{ scrollbarWidth: 'thin' }}>
+                                {stickerIcons.map((icon) => (
+                                    <button
+                                        key={icon.id}
+                                        type="button"
+                                        onClick={() => addSticker(icon)}
+                                        title={icon.name}
+                                        className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E7D3B7] bg-white p-1.5 shadow-sm transition-colors hover:border-[#7B5E43]/50 active:scale-95"
+                                    >
+                                        <img src={icon.url} alt={icon.name} className="max-h-full max-w-full object-contain" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Frame Selector */}
