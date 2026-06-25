@@ -30,7 +30,7 @@ const StickerEditor = ({ imageUrl, onConfirm, onCancel }) => {
     // Nạp danh sách icon do admin quản lý.
     useEffect(() => {
         let alive = true;
-        axios.get(`${CLOUD_API_URL}/api/icons`)
+        axios.get(`${CLOUD_API_URL}/api/frames?kind=sticker`)
             .then((res) => { if (alive) setIcons(Array.isArray(res.data) ? res.data : []); })
             .catch(() => {})
             .finally(() => { if (alive) setIconsLoading(false); });

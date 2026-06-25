@@ -19,7 +19,7 @@ const IconManager = ({ apiBase }) => {
     const fetchIcons = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(api('/api/icons'));
+            const res = await axios.get(api('/api/frames?kind=sticker'));
             setIcons(Array.isArray(res.data) ? res.data : []);
         } catch (e) {
             console.error('fetch icons', e);
@@ -38,7 +38,7 @@ const IconManager = ({ apiBase }) => {
             for (const file of files) {
                 const form = new FormData();
                 form.append('file', file);
-                await axios.post(api('/api/icons'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await axios.post(api('/api/frames?kind=sticker'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
             }
             notify(`Đã tải lên ${files.length} icon`);
             await fetchIcons();
@@ -54,7 +54,7 @@ const IconManager = ({ apiBase }) => {
     const handleDelete = async (name) => {
         if (!window.confirm(`Xoá icon "${name}"?`)) return;
         try {
-            await axios.delete(api('/api/icons'), { params: { name } });
+            await axios.delete(api('/api/frames?kind=sticker'), { params: { name } });
             notify('Đã xoá icon');
             setIcons((prev) => prev.filter((i) => i.name !== name));
         } catch (err) {
@@ -73,7 +73,7 @@ const IconManager = ({ apiBase }) => {
         const newName = editValue.trim();
         if (!newName || newName === name) { setEditing(null); return; }
         try {
-            await axios.post(api('/api/icons'), { action: 'rename', name, newName });
+            await axios.post(api('/api/frames?kind=sticker'), { action: 'rename', name, newName });
             notify('Đã đổi tên');
             setEditing(null);
             await fetchIcons();

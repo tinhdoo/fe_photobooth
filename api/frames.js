@@ -296,6 +296,69 @@ async function deleteFrame(req, res, supabase, bucket, layout, name) {
     return json(res, 200, { success: true });
 }
 
+// ─── Icon/Sticker cho khách (gộp chung function để không vượt 12 serverless của Vercel Hobby) ───
+// Lưu ở thư mục `face-icons/`. Truy cập qua /api/frames?kind=sticker.
+const ICON_FOLDER = 'face-icons';
+
+async function listStickerIcons(res, supabase, bucket) {
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .list(ICON_FOLDER, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw error;
+    const icons = (Array.isArray(data) ? data : [])
+        .filter((it) => it.id && it.name && !it.name.startsWith('.'))
+        .map((it) => ({
+            id: it.name,
+            name: it.name,
+            url: withVersion(publicUrl(supabase, bucket, `${ICON_FOLDER}/${it.name}`), it.updated_at || it.created_at),
+        }));
+    return json(res, 200, icons);
+}
+
+async function uploadStickerIcon(req, res, supabase, bucket) {
+    const { files } = await parseForm(req);
+    const file = firstValue(files.file);
+    if (!file) return json(res, 400, { error: 'Missing file' });
+    const name = cleanFilename(file.originalFilename);
+    const buffer = await fs.readFile(file.filepath);
+    const { error } = await supabase.storage
+        .from(bucket)
+        .upload(`${ICON_FOLDER}/${name}`, buffer, { contentType: file.mimetype || 'image/png', upsert: true });
+    if (error) throw error;
+    return json(res, 201, { id: name, name, url: withVersion(publicUrl(supabase, bucket, `${ICON_FOLDER}/${name}`), Date.now()) });
+}
+
+async function renameStickerIcon(req, res, supabase, bucket) {
+    const body = await readJsonBody(req);
+    const from = cleanFrameName(body.name);
+    let to = cleanFrameName(body.newName);
+    if (!from || !to) return json(res, 400, { error: 'Missing name/newName' });
+    if (!to.includes('.') && from.includes('.')) to = `${to}.${from.split('.').pop()}`;
+    const { error } = await supabase.storage.from(bucket).move(`${ICON_FOLDER}/${from}`, `${ICON_FOLDER}/${to}`);
+    if (error) throw error;
+    return json(res, 200, { id: to, name: to, url: withVersion(publicUrl(supabase, bucket, `${ICON_FOLDER}/${to}`), Date.now()) });
+}
+
+async function deleteStickerIcon(req, res, supabase, bucket) {
+    const name = cleanFrameName(req.query.name);
+    if (!name) return json(res, 400, { error: 'Missing name' });
+    const { error } = await supabase.storage.from(bucket).remove([`${ICON_FOLDER}/${name}`]);
+    if (error) throw error;
+    return json(res, 200, { success: true });
+}
+
+async function handleStickerIcons(req, res, supabase, bucket) {
+    if (req.method === 'GET') return listStickerIcons(res, supabase, bucket);
+    if (req.method === 'POST') {
+        const ct = String(req.headers['content-type'] || '');
+        if (ct.includes('multipart/form-data')) return uploadStickerIcon(req, res, supabase, bucket);
+        return renameStickerIcon(req, res, supabase, bucket);
+    }
+    if (req.method === 'DELETE') return deleteStickerIcon(req, res, supabase, bucket);
+    res.setHeader('Allow', 'GET,POST,DELETE,OPTIONS');
+    return json(res, 405, { error: 'Method not allowed' });
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -303,6 +366,11 @@ export default async function handler(req, res) {
         const supabase = getSupabaseAdmin();
         const bucket = await resolveBucket(supabase);
         await supabase.storage.updateBucket(bucket, { public: true }).catch(() => null);
+
+        // Nhánh quản lý icon/sticker cho khách.
+        if (String(req.query.kind || '') === 'sticker') {
+            return handleStickerIcons(req, res, supabase, bucket);
+        }
 
         const layout = cleanLayout(req.query.layout);
         const name = cleanFrameName(req.query.name || '');
