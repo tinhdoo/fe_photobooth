@@ -76,11 +76,6 @@ const Capture = () => {
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState(null);
     const cameraMode = configs?.camera_mode || 'webcam';
-    // Token đổi mỗi lần mount (và mỗi lần retry) -> ép <img> mở kết nối /liveview MỚI.
-    // Tránh trình duyệt tái dùng kết nối MJPEG ĐÃ CHẾT sau /capture -> live view bị trắng/đen
-    // khi quay lại chụp lại (retake). URL mới buộc CanonMiddleware khởi động lại live view.
-    const [liveViewToken, setLiveViewToken] = useState(() => Date.now());
-    const liveViewUrl = `http://localhost:5001/liveview?t=${liveViewToken}`;
 
     // Motion Photo Refs
     const videoChunksRef = useRef([]);
@@ -94,6 +89,9 @@ const Capture = () => {
     const canonStreamRef = useRef(null);
     // Ref ảnh live view HIỂN THỊ -> để NGẮT kết nối MJPEG khi rời bước chụp.
     const liveViewVisibleRef = useRef(null);
+    // Đếm số frame poll lỗi liên tiếp -> chỉ báo lỗi kết nối khi thực sự hỏng (tránh báo nhầm
+    // do 1-2 frame 503 lúc mới khởi động).
+    const liveFrameFailRef = useRef(0);
 
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
@@ -105,13 +103,16 @@ const Capture = () => {
     // giới hạn ~6 kết nối/host của trình duyệt -> đơ/màn trắng sau nhiều lần retake.
     useEffect(() => {
         return () => {
+            // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
+            // Set src='' với MJPEG nhiều khi không ngắt kết nối -> tích tụ tới trần ~6/host -> đơ.
+            const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
             try { stopCanonDraw(); } catch (e) { /* ignore */ }
             try {
                 const r = mediaRecorderRef.current;
                 if (r && r.state !== 'inactive') r.stop();
             } catch (e) { /* ignore */ }
-            try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = ''; } catch (e) { /* ignore */ }
-            try { if (liveViewImgRef.current) liveViewImgRef.current.src = ''; } catch (e) { /* ignore */ }
+            try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = BLANK; } catch (e) { /* ignore */ }
+            try { if (liveViewImgRef.current) liveViewImgRef.current.src = BLANK; } catch (e) { /* ignore */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -128,7 +129,9 @@ const Capture = () => {
     // rồi dùng canvas.captureStream() làm nguồn cho MediaRecorder (giống luồng webcam).
     const startCanonRecording = () => {
         try {
-            const img = liveViewImgRef.current;
+            // Dùng chính ảnh live view đang HIỂN THỊ (crossOrigin) làm nguồn quay -> motion luôn
+            // khớp khung đang xem, và không cần kết nối MJPEG thứ hai.
+            const img = liveViewVisibleRef.current;
             if (!img) return;
             videoChunksRef.current = [];
             canonHasFramesRef.current = false;
@@ -338,6 +341,23 @@ const Capture = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraMode]);
 
+    // Canon: POLL từng frame /frame (kết nối ngắn) thay vì stream MJPEG. Mỗi request đóng ngay
+    // -> không tích tụ kết nối, không bao giờ chạm trần ~6/host dù chụp lại liên tục.
+    useEffect(() => {
+        if (cameraMode !== 'canon') return undefined;
+        let alive = true;
+        liveFrameFailRef.current = 0;
+        const tick = () => {
+            if (!alive) return;
+            const img = liveViewVisibleRef.current;
+            if (img) img.src = `http://localhost:5001/frame?t=${Date.now()}`;
+        };
+        tick();
+        const id = setInterval(tick, 60); // ~16 fps đủ mượt cho preview + motion
+        return () => { alive = false; clearInterval(id); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cameraMode]);
+
     useEffect(() => {
         const needsRetake = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
         const needsMorePhotos = photosTaken.length < TOTAL_PHOTOS;
@@ -452,12 +472,8 @@ const Capture = () => {
                         setFlash(false);
                         setIsShooting(false);
                         if (count < TOTAL_PHOTOS) {
-                            // /capture vừa TẮT live view (EDSDK). ĐÓNG kết nối live view cũ trước
-                            // (src='') để CanonMiddleware giải phóng slot -> tránh tích tụ kết nối
-                            // gây delay tăng dần; rồi đổi token để mở kết nối /liveview MỚI -> sáng lại.
-                            try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = ''; } catch (e) { /* ignore */ }
-                            try { if (liveViewImgRef.current) liveViewImgRef.current.src = ''; } catch (e) { /* ignore */ }
-                            setLiveViewToken(Date.now());
+                            // Poll /frame tự cập nhật lại khi live view resume sau /capture ->
+                            // KHÔNG cần đóng/đổi token reconnect nữa (đó là nguồn gây tích tụ kết nối cũ).
                             setTimeout(() => startCountdown(), 2000);
                         } else {
                             setTimeout(() => nextStep(), 1500);
@@ -616,27 +632,22 @@ const Capture = () => {
                         />
                     ) : cameraMode === 'canon' ? (
                         <div className="w-full h-full bg-black relative">
+                            {/* POLL từng frame JPEG (/frame) thay vì stream MJPEG sống dai -> mỗi
+                                request ngắn, đóng ngay, dùng lại keep-alive -> KHÔNG bao giờ tích tụ
+                                kết nối dù chụp lại bao nhiêu lần. src do effect poll set liên tục. */}
                             <img
                                 ref={liveViewVisibleRef}
-                                src={liveViewUrl}
+                                crossOrigin="anonymous"
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
-                                onLoad={() => { _cameraReadyOnce = true; setCameraReady(true); }}
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
+                                onLoad={() => { _cameraReadyOnce = true; liveFrameFailRef.current = 0; setCameraReady(true); }}
+                                onError={() => {
+                                    liveFrameFailRef.current += 1;
+                                    if (liveFrameFailRef.current > 25) {
+                                        setCameraError("Không thể kết nối Canon Middleware (Port 5001)");
+                                    }
                                 }}
-                            />
-                            {/* Img ẩn (crossOrigin) chỉ để quay motion — tách khỏi preview để
-                                nếu CORS lỗi thì chỉ mất motion, không vỡ ảnh xem trực tiếp. */}
-                            <img
-                                ref={liveViewImgRef}
-                                crossOrigin="anonymous"
-                                src={liveViewUrl}
-                                alt=""
-                                aria-hidden="true"
-                                style={{ display: 'none' }}
                             />
                         </div>
                     ) : (

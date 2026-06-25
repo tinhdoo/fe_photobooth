@@ -155,7 +155,7 @@ const recordCanvas = (canvas, drawFrame, durationMs = 7000, fps = 24) => new Pro
     animationId = requestAnimationFrame(tick);
 });
 
-const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions }) => {
+const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions, sizerUrl }) => {
     const boxes = Array.isArray(frameConfig?.boxes) ? frameConfig.boxes : [];
     if (!frameUrl || boxes.length === 0 || photos.length === 0) return null;
 
@@ -163,8 +163,10 @@ const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions }) => {
 
     return (
         <div className="relative mx-auto w-full max-w-[680px] overflow-hidden bg-white shadow-sm">
+            {/* Ảnh định kích thước: ưu tiên dùng composite (ảnh ghép) để khung motion có ĐÚNG
+                tỉ lệ như phần "Ảnh đã ghép"; khung overlay vẫn dùng frameUrl. */}
             <img
-                src={frameUrl}
+                src={sizerUrl || frameUrl}
                 alt=""
                 aria-hidden="true"
                 className="block h-auto w-full opacity-0"
@@ -614,16 +616,18 @@ const ViewPage = () => {
                         </div>
 
                         <div className="rounded-3xl border border-[#EFE0C8] bg-[#FFFDF7] p-3 shadow-sm sm:p-4">
-                            <div className={`mx-auto grid w-full gap-0 ${strip ? 'grid-cols-2' : 'grid-cols-1'} max-w-[680px]`}>
+                            <div className={`mx-auto grid w-full gap-0 ${strip && !stripHorizontal ? 'grid-cols-2' : 'grid-cols-1'} ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
                                 <FrameMotionPreview
                                     frameUrl={frameUrl}
+                                    sizerUrl={session?.composite_url}
                                     frameConfig={frameConfig}
                                     photos={photos}
                                     positions={photoPositions}
                                 />
-                                {strip && (
+                                {strip && !stripHorizontal && (
                                     <FrameMotionPreview
                                         frameUrl={frameUrl}
+                                        sizerUrl={session?.composite_url}
                                         frameConfig={frameConfig}
                                         photos={photos}
                                         positions={photoPositions}
