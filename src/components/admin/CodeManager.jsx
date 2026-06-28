@@ -11,36 +11,56 @@ const normalizeCode = (code = {}) => ({
     created_at: code.created_at || new Date().toISOString(),
 });
 
-const statusLabel = (code) => {
-    if (code.is_used) return 'Đã dùng';
-    if (code.expires_at && new Date(code.expires_at) < new Date()) return 'Hết hạn';
-    return 'Hoạt động';
+// Hiển thị mệnh giá gọn: 70000 -> "70k", 100000 -> "100k".
+const denomLabel = (value) => {
+    const n = Number(value) || 0;
+    return n % 1000 === 0 ? `${n / 1000}k` : n.toLocaleString('vi-VN');
 };
 
-// Xuất danh sách mã ra file Excel. Mã được ép kiểu chuỗi để không mất số 0 ở đầu.
+// Xuất danh sách mã ra Excel theo dạng 2 cột voucher song song, nhóm theo
+// mệnh giá, kèm cột NOTE trống — tiện in & cắt.
 const exportCodesToExcel = (list, fileName) => {
     if (!Array.isArray(list) || list.length === 0) return;
 
-    const header = ['STT', 'Mã code', 'Mệnh giá (VND)', 'Trạng thái', 'Ngày tạo', 'Hết hạn'];
-    const rows = list.map((code, idx) => [
-        idx + 1,
-        String(code.code),
-        Number(code.value || 0),
-        statusLabel(code),
-        code.created_at ? new Date(code.created_at).toLocaleString('vi-VN') : '',
-        code.expires_at ? new Date(code.expires_at).toLocaleString('vi-VN') : 'Vĩnh viễn',
-    ]);
+    // Nhóm theo mệnh giá, sắp xếp mệnh giá tăng dần.
+    const groups = {};
+    list.forEach((c) => {
+        const key = Number(c.value) || 0;
+        (groups[key] = groups[key] || []).push(c);
+    });
+    const sortedValues = Object.keys(groups).map(Number).sort((a, b) => a - b);
 
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
-    // Ép cột "Mã code" về dạng text để giữ số 0 đứng đầu khi mở bằng Excel.
-    for (let r = 1; r <= list.length; r += 1) {
-        const cell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
-        if (cell) cell.t = 's';
+    const header = ['Voucher', 'Mệnh giá', 'NOTE', 'Voucher', 'Mệnh giá', 'NOTE'];
+    const aoa = [header];
+
+    // Mỗi mệnh giá bắt đầu trên một dòng mới, xếp 2 voucher mỗi dòng.
+    sortedValues.forEach((value) => {
+        const codes = groups[value];
+        const denom = denomLabel(value);
+        for (let i = 0; i < codes.length; i += 2) {
+            const right = codes[i + 1];
+            aoa.push([
+                String(codes[i].code), denom, '',
+                right ? String(right.code) : '', right ? denom : '', '',
+            ]);
+        }
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [
+        { wch: 12 }, { wch: 10 }, { wch: 20 },
+        { wch: 12 }, { wch: 10 }, { wch: 20 },
+    ];
+    // Ép cột Voucher (A=0, D=3) về text để giữ số 0 đứng đầu.
+    for (let r = 1; r < aoa.length; r += 1) {
+        [0, 3].forEach((c) => {
+            const cell = ws[XLSX.utils.encode_cell({ r, c })];
+            if (cell && cell.v !== '') cell.t = 's';
+        });
     }
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Mã thanh toán');
+    XLSX.utils.book_append_sheet(wb, ws, 'Voucher');
     XLSX.writeFile(wb, fileName);
 };
 
