@@ -303,7 +303,7 @@ const FrameManager = () => {
                             <div key={frame.frame_url} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-xl px-2 py-1">
                                 <span className="text-sm leading-none">{medals[idx]}</span>
                                 <div className="w-7 h-7 rounded-lg overflow-hidden bg-white border border-gray-100 shrink-0">
-                                    <img src={frame.frame_url} alt={frame.frame_name} className="w-full h-full object-contain" />
+                                    <img src={frame.frame_url} alt={frame.frame_name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
                                 </div>
                                 <span className="text-xs font-semibold text-[#1a1a2e] max-w-[80px] truncate" title={frame.frame_name}>
                                     {frame.frame_name}
@@ -596,7 +596,7 @@ const FrameManager = () => {
                                         {/* ICON PREVIEW (If exists) */}
                                         {frame.icon_url && (
                                             <div className="absolute top-2 right-2 z-30 w-10 h-10 rounded-full border-2 border-white shadow-md bg-white overflow-hidden" title="Biểu tượng đã gán">
-                                                <img src={frame.icon_url} className="w-full h-full object-cover" alt="Icon" />
+                                                <img src={frame.icon_url} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="Icon" />
                                             </div>
                                         )}
 
@@ -623,6 +623,8 @@ const FrameManager = () => {
                                             <img
                                                 src={frame.url}
                                                 alt={frame.name}
+                                                loading="lazy"
+                                                decoding="async"
                                                 className="relative z-10 w-full h-full object-contain p-2"
                                             />
 

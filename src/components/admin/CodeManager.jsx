@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet } from 'lucide-react';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -10,15 +11,53 @@ const normalizeCode = (code = {}) => ({
     created_at: code.created_at || new Date().toISOString(),
 });
 
+const statusLabel = (code) => {
+    if (code.is_used) return 'Đã dùng';
+    if (code.expires_at && new Date(code.expires_at) < new Date()) return 'Hết hạn';
+    return 'Hoạt động';
+};
+
+// Xuất danh sách mã ra file Excel. Mã được ép kiểu chuỗi để không mất số 0 ở đầu.
+const exportCodesToExcel = (list, fileName) => {
+    if (!Array.isArray(list) || list.length === 0) return;
+
+    const header = ['STT', 'Mã code', 'Mệnh giá (VND)', 'Trạng thái', 'Ngày tạo', 'Hết hạn'];
+    const rows = list.map((code, idx) => [
+        idx + 1,
+        String(code.code),
+        Number(code.value || 0),
+        statusLabel(code),
+        code.created_at ? new Date(code.created_at).toLocaleString('vi-VN') : '',
+        code.expires_at ? new Date(code.expires_at).toLocaleString('vi-VN') : 'Vĩnh viễn',
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
+    // Ép cột "Mã code" về dạng text để giữ số 0 đứng đầu khi mở bằng Excel.
+    for (let r = 1; r <= list.length; r += 1) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+        if (cell) cell.t = 's';
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mã thanh toán');
+    XLSX.writeFile(wb, fileName);
+};
+
 const CodeManager = () => {
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState({
-        value: 70000,
-        expiresAt: '',
-        quantity: 1
-    });
+    const [rows, setRows] = useState([{ value: 70000, quantity: 1 }]);
+    const [expiresAt, setExpiresAt] = useState('');
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+
+    const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+    const updateRow = (index, patch) => {
+        setRows(prev => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    };
+    const addRow = () => setRows(prev => [...prev, { value: 70000, quantity: 1 }]);
+    const removeRow = (index) => setRows(prev => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
 
     const getMinDateTime = () => {
         const now = new Date();
@@ -59,11 +98,24 @@ const CodeManager = () => {
     };
 
     const handleGenerate = async () => {
+        const batches = rows
+            .map(r => ({ value: Number(r.value) || 0, quantity: Math.max(1, Math.min(100, Number(r.quantity) || 1)) }))
+            .filter(b => b.value > 0 && b.quantity > 0);
+
+        if (batches.length === 0) {
+            setNotification({ show: true, message: "Vui lòng nhập ít nhất một mệnh giá hợp lệ.", type: 'error' });
+            return;
+        }
+        if (batches.reduce((s, b) => s + b.quantity, 0) > 500) {
+            setNotification({ show: true, message: "Tổng số mã không được vượt quá 500.", type: 'error' });
+            return;
+        }
+
         setLoading(true);
         try {
-            const payload = { ...formData };
-            if (formData.expiresAt) {
-                const selectedDate = new Date(formData.expiresAt);
+            const payload = { batches, action: 'generate' };
+            if (expiresAt) {
+                const selectedDate = new Date(expiresAt);
                 if (selectedDate < new Date()) {
                     setNotification({ show: true, message: "Thời gian hết hạn không được ở quá khứ!", type: 'error' });
                     setLoading(false);
@@ -71,12 +123,22 @@ const CodeManager = () => {
                 }
                 payload.expires_at = selectedDate.toISOString();
             }
-            await axios.post('/api/codes', { ...payload, action: 'generate' });
+            const res = await axios.post('/api/codes', payload);
+            const createdRaw = Array.isArray(res.data) ? res.data : [];
+            const created = createdRaw.map(normalizeCode);
+
+            // Tự xuất Excel cho đúng lô vừa tạo.
+            if (created.length > 0) {
+                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                exportCodesToExcel(created, `ma-thanh-toan-${stamp}.xlsx`);
+            }
+
             fetchCodes();
-            setNotification({ show: true, message: "Tạo mã thành công!", type: 'success' });
+            setNotification({ show: true, message: `Đã tạo ${created.length} mã và xuất file Excel!`, type: 'success' });
         } catch (error) {
             console.error("Error generating codes:", error);
-            setNotification({ show: true, message: "Tạo mã thất bại", type: 'error' });
+            const msg = error?.response?.data?.error || "Tạo mã thất bại";
+            setNotification({ show: true, message: msg, type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -113,17 +175,54 @@ const CodeManager = () => {
 
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Mệnh giá (VND)</label>
-                            <div className="relative">
-                                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input
-                                    type="number"
-                                    className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
-                                    value={formData.value}
-                                    onChange={e => setFormData({ ...formData, value: parseInt(e.target.value) || 0 })}
-                                    step="1000"
-                                />
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-semibold text-gray-700">Mệnh giá &amp; số lượng</label>
+                                <span className="text-xs text-gray-400">Tổng: {totalQuantity} mã</span>
                             </div>
+                            <div className="space-y-2">
+                                {rows.map((row, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                        <div className="relative flex-1 min-w-0">
+                                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input
+                                                type="number"
+                                                placeholder="Mệnh giá"
+                                                className="w-full pl-9 pr-2 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium text-sm"
+                                                value={row.value}
+                                                onChange={e => updateRow(index, { value: parseInt(e.target.value) || 0 })}
+                                                step="1000"
+                                            />
+                                        </div>
+                                        <div className="relative w-24 shrink-0">
+                                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input
+                                                type="number"
+                                                placeholder="SL"
+                                                className="w-full pl-9 pr-2 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium text-sm"
+                                                value={row.quantity}
+                                                onChange={e => updateRow(index, { quantity: Math.max(1, Math.min(100, parseInt(e.target.value) || 1)) })}
+                                                min="1" max="100"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeRow(index)}
+                                            disabled={rows.length === 1}
+                                            className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                                            title="Xóa dòng"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={addRow}
+                                className="mt-2 w-full py-2 flex items-center justify-center gap-1.5 text-sm font-semibold text-[#e63946] border border-dashed border-[#e63946]/40 rounded-xl hover:bg-[#e63946]/5 transition-all"
+                            >
+                                <Plus size={16} /> Thêm mệnh giá
+                            </button>
                         </div>
 
                         <div>
@@ -133,38 +232,26 @@ const CodeManager = () => {
                                 <input
                                     type="datetime-local"
                                     className="w-full max-w-full min-w-0 box-border pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all text-xs md:text-sm text-[#1a1a2e]"
-                                    value={formData.expiresAt}
-                                    onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
+                                    value={expiresAt}
+                                    onChange={e => setExpiresAt(e.target.value)}
                                     min={getMinDateTime()}
                                 />
                             </div>
-                            <p className="text-xs text-gray-400 mt-1 ml-1">Để trống nếu mã có hiệu lực vĩnh viễn</p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Số lượng tạo</label>
-                            <div className="relative">
-                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input
-                                    type="number"
-                                    className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white transition-all font-medium"
-                                    value={formData.quantity}
-                                    onChange={e => setFormData({ ...formData, quantity: Math.max(1, Math.min(100, parseInt(e.target.value) || 1)) })}
-                                    min="1" max="100"
-                                />
-                            </div>
+                            <p className="text-xs text-gray-400 mt-1 ml-1">Áp dụng cho tất cả mã. Để trống nếu mã có hiệu lực vĩnh viễn</p>
                         </div>
 
                         <button
                             onClick={handleGenerate}
                             disabled={loading}
-                            className="w-full py-3 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] mt-1 text-base"
+                            className="w-full py-3 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] mt-1 text-base flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
                                     <RefreshCw className="animate-spin" size={20} /> Đang xử lý...
                                 </span>
-                            ) : 'Xác nhận tạo mã'}
+                            ) : (
+                                <><FileSpreadsheet size={20} /> Tạo mã &amp; xuất Excel</>
+                            )}
                         </button>
                     </div>
                 </div>

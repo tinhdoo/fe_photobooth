@@ -11,39 +11,61 @@ function randomPaymentCode() {
     return code;
 }
 
+const MAX_PER_BATCH = 100;
+const MAX_TOTAL = 500;
+
+async function insertOneCode(supabase, value, expiresAt) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+        const code = randomPaymentCode();
+        const { data, error } = await supabase
+            .from('payment_codes')
+            .insert({ code, value, expires_at: expiresAt, is_used: false })
+            .select()
+            .single();
+
+        if (!error) return data;
+
+        lastError = error;
+        if (error.code !== '23505') break; // chỉ retry khi trùng mã (unique violation)
+    }
+    throw lastError || new Error('Cannot create payment code');
+}
+
 async function generateCodes(req, res, supabase) {
-    const value = Number(req.body?.value || 0);
-    const quantity = Math.min(Math.max(Number(req.body?.quantity || 1), 1), 100);
     const expiresAt = req.body?.expires_at || null;
 
-    if (!Number.isFinite(value) || value <= 0) {
+    // Hỗ trợ 2 dạng payload:
+    //  - Nhiều mệnh giá: { batches: [{ value, quantity }, ...] }
+    //  - Một mệnh giá (cũ):  { value, quantity }
+    let batches = [];
+    if (Array.isArray(req.body?.batches)) {
+        batches = req.body.batches.map((b) => ({
+            value: Number(b?.value || 0),
+            quantity: Math.min(Math.max(Number(b?.quantity || 1), 1), MAX_PER_BATCH),
+        }));
+    } else {
+        batches = [{
+            value: Number(req.body?.value || 0),
+            quantity: Math.min(Math.max(Number(req.body?.quantity || 1), 1), MAX_PER_BATCH),
+        }];
+    }
+
+    batches = batches.filter((b) => Number.isFinite(b.value) && b.value > 0 && b.quantity > 0);
+    if (batches.length === 0) {
         return json(res, 400, { error: 'Invalid code value' });
     }
 
+    const total = batches.reduce((sum, b) => sum + b.quantity, 0);
+    if (total > MAX_TOTAL) {
+        return json(res, 400, { error: `Tổng số mã vượt quá giới hạn ${MAX_TOTAL}.` });
+    }
+
     const created = [];
-    for (let i = 0; i < quantity; i += 1) {
-        let inserted = null;
-        let lastError = null;
-
-        for (let attempt = 0; attempt < 10; attempt += 1) {
-            const code = randomPaymentCode();
-            const { data, error } = await supabase
-                .from('payment_codes')
-                .insert({ code, value, expires_at: expiresAt, is_used: false })
-                .select()
-                .single();
-
-            if (!error) {
-                inserted = data;
-                break;
-            }
-
-            lastError = error;
-            if (error.code !== '23505') break;
+    for (const batch of batches) {
+        for (let i = 0; i < batch.quantity; i += 1) {
+            created.push(await insertOneCode(supabase, batch.value, expiresAt));
         }
-
-        if (!inserted) throw lastError || new Error('Cannot create payment code');
-        created.push(inserted);
     }
 
     return json(res, 201, created);

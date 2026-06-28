@@ -121,6 +121,11 @@ const StepContent = () => {
 
 const AdminIndex = () => {
     if (isLocalHost()) return <Navigate to="/admin/settings" replace />;
+    // Trên mobile, mở thẳng trang "Mã thanh toán" (nhẹ + dùng nhiều nhất trên điện thoại).
+    // Desktop vẫn vào trang quản lý khung hình như cũ.
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        return <Navigate to="/admin/codes" replace />;
+    }
     return <FrameManager />;
 };
 

@@ -24,10 +24,11 @@ const Settings = ({ forceLocalAdmin = false }) => {
         print_brightness: '0',
         print_contrast: '0',
         print_saturation: '0',
-        print_pink: '8',
-        print_skin_whitening: '6',
-        print_warmth: '2',
-        camera_mode: 'webcam',
+        print_warmth: '0',
+        print_red: '0',
+        print_green: '0',
+        print_blue: '0',
+        camera_mode: 'canon',
         hot_folder: 'C:/Photobooth_Input',
         trigger_key: '{F8}',
         price_schedule: '[]',
@@ -202,9 +203,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
                 print_brightness: configs.print_brightness,
                 print_contrast: configs.print_contrast,
                 print_saturation: configs.print_saturation,
-                print_pink: configs.print_pink,
-                print_skin_whitening: configs.print_skin_whitening,
                 print_warmth: configs.print_warmth,
+                print_red: configs.print_red,
+                print_green: configs.print_green,
+                print_blue: configs.print_blue,
             });
             setMessage({ type: 'success', text: 'Đã gửi lệnh in thử sang máy in.' });
             fetchHardwareStatus();
@@ -277,9 +279,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
         { name: 'print_brightness', label: 'Độ sáng', min: -30, max: 30, step: 1 },
         { name: 'print_contrast', label: 'Tương phản', min: -30, max: 30, step: 1 },
         { name: 'print_saturation', label: 'Bão hòa màu', min: -30, max: 30, step: 1 },
-        { name: 'print_pink', label: 'Độ hồng da', min: 0, max: 30, step: 1 },
-        { name: 'print_skin_whitening', label: 'Làm trắng da', min: 0, max: 30, step: 1 },
         { name: 'print_warmth', label: 'Độ ấm màu', min: -20, max: 20, step: 1 },
+        { name: 'print_red', label: 'Đỏ (R)', min: -50, max: 50, step: 1 },
+        { name: 'print_green', label: 'Xanh lá (G)', min: -50, max: 50, step: 1 },
+        { name: 'print_blue', label: 'Xanh dương (B)', min: -50, max: 50, step: 1 },
     ];
 
     const renderPrintColorControls = () => (
@@ -298,13 +301,14 @@ const Settings = ({ forceLocalAdmin = false }) => {
                         print_brightness: '0',
                         print_contrast: '0',
                         print_saturation: '0',
-                        print_pink: '8',
-                        print_skin_whitening: '6',
-                        print_warmth: '2',
+                        print_warmth: '0',
+                        print_red: '0',
+                        print_green: '0',
+                        print_blue: '0',
                     }))}
                     className="rounded-xl border border-[#d8c0a0] bg-white px-4 py-2 text-sm font-bold text-[#7B5E43]"
                 >
-                    Về trắng hồng vừa
+                    Về mặc định (0)
                 </button>
             </div>
 
@@ -673,7 +677,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                     onChange={handleChange}
                                     className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
                                 >
-                                    <option value="webcam">Webcam USB / laptop</option>
                                     <option value="canon">Canon middleware</option>
                                     <option value="hotfolder">Hot folder / EOS Utility</option>
                                 </select>
@@ -1137,7 +1140,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     onChange={handleChange}
                                                     className="block w-full rounded-xl border-gray-200 pl-4 pr-10 py-3 focus:border-[#e63946] focus:ring-[#e63946] bg-white"
                                                 >
-                                                    <option value="webcam">Webcam (USB / Laptop)</option>
                                                     <option value="canon">Canon Direct (Middleware)</option>
                                                     <option value="hotfolder">Máy ảnh chuyên nghiệp (EOS Utility / Hot Folder)</option>
                                                 </select>

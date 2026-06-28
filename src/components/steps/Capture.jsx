@@ -75,14 +75,14 @@ const Capture = () => {
     const [stream, setStream] = useState(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState(null);
-    const cameraMode = configs?.camera_mode || 'webcam';
+    // Booth dùng máy ảnh Canon (không có webcam). Mặc định 'canon' để khi configs CHƯA load
+    // kịp KHÔNG rơi vào webcam -> getUserMedia 'Requested device not found' trên máy không webcam.
+    const cameraMode = configs?.camera_mode || 'canon';
 
     // Motion Photo Refs
     const videoChunksRef = useRef([]);
     const mediaRecorderRef = useRef(null);
     const shutterAudioRef = useRef(null);
-    // Canon motion: vẽ frame liveview (MJPEG) lên canvas ẩn rồi quay bằng captureStream
-    const liveViewImgRef = useRef(null);
     // Cờ: đã vẽ được ít nhất 1 frame live view THẬT vào canvas chưa (để bỏ video rỗng ảnh đầu).
     const canonHasFramesRef = useRef(false);
     const canonDrawTimerRef = useRef(null);
@@ -112,7 +112,6 @@ const Capture = () => {
                 if (r && r.state !== 'inactive') r.stop();
             } catch (e) { /* ignore */ }
             try { if (liveViewVisibleRef.current) liveViewVisibleRef.current.src = BLANK; } catch (e) { /* ignore */ }
-            try { if (liveViewImgRef.current) liveViewImgRef.current.src = BLANK; } catch (e) { /* ignore */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -142,9 +141,10 @@ const Capture = () => {
             const ctx = canvas.getContext('2d');
 
             const drawFrame = () => {
-                // Chỉ vẽ khi live view THỰC SỰ có hình; chưa ra hình thì bỏ qua (tránh quay frame
-                // trống -> video motion ảnh đầu bị rỗng/đè lên ảnh).
-                if (!img.complete || !img.naturalWidth) return;
+                // Vẽ frame ĐANG HIỂN THỊ (luôn là frame đã decode) mỗi nhịp -> motion đều hơn.
+                // Bỏ check !img.complete vì với WebSocket img liên tục nạp blob mới; chỉ cần đã có
+                // ít nhất 1 frame (naturalWidth > 0) để tránh quay khung trống lúc đầu.
+                if (!img.naturalWidth) return;
                 try {
                     // Quay RAW (KHÔNG lật). Việc lật gương để khớp ảnh chụp được làm thống nhất ở
                     // khâu hiển thị (CSS scaleX(-1)) và khâu xuất video -> tránh lật 2 lần (ảnh ngược).

@@ -25,15 +25,16 @@ const DEFAULT_CONFIGS = {
     countdown: 5,
     hotfolder_capture_timeout: 30,
     canon_capture_timeout: 30,
-    camera_mode: 'webcam',
+    camera_mode: 'canon',
     hot_folder: 'C:/Photobooth_Input',
     staff_pin: '8888',
     print_brightness: 0,
     print_contrast: 0,
     print_saturation: 0,
-    print_pink: 8,
-    print_skin_whitening: 6,
-    print_warmth: 2,
+    print_warmth: 0,
+    print_red: 0,
+    print_green: 0,
+    print_blue: 0,
     price_schedule: '[]',
 };
 
@@ -55,9 +56,10 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     print_brightness: parseInt(nextConfigs.print_brightness ?? fallback.print_brightness) || 0,
     print_contrast: parseInt(nextConfigs.print_contrast ?? fallback.print_contrast) || 0,
     print_saturation: parseInt(nextConfigs.print_saturation ?? fallback.print_saturation) || 0,
-    print_pink: parseInt(nextConfigs.print_pink ?? fallback.print_pink) || 0,
-    print_skin_whitening: parseInt(nextConfigs.print_skin_whitening ?? fallback.print_skin_whitening) || 0,
     print_warmth: parseInt(nextConfigs.print_warmth ?? fallback.print_warmth) || 0,
+    print_red: parseInt(nextConfigs.print_red ?? fallback.print_red) || 0,
+    print_green: parseInt(nextConfigs.print_green ?? fallback.print_green) || 0,
+    print_blue: parseInt(nextConfigs.print_blue ?? fallback.print_blue) || 0,
     price_schedule: nextConfigs.price_schedule ?? fallback.price_schedule ?? DEFAULT_CONFIGS.price_schedule,
 });
 

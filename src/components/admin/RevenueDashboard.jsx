@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2, Pencil, X } from 'lucide-react';
 import { io } from "socket.io-client";
@@ -88,16 +88,23 @@ const RevenueDashboard = () => {
         }
     };
 
+    // Map device_id -> device để tra cứu O(1) (tránh devices.find lặp lại trên mỗi hàng/lần render)
+    const devicesMap = useMemo(() => {
+        const map = new Map();
+        devices.forEach((dv) => map.set(dv.device_id, dv));
+        return map;
+    }, [devices]);
+
     const boothName = (id) => {
         if (!id) return 'Không rõ máy';
-        const d = devices.find((dv) => dv.device_id === id);
+        const d = devicesMap.get(id);
         return d?.name || `Máy ${String(id).slice(-6).toUpperCase()}`;
     };
 
-    const boothReport = (id) => devices.find((dv) => dv.device_id === id)?.report || null;
+    const boothReport = (id) => devicesMap.get(id)?.report || null;
 
     // Gộp doanh thu theo từng booth + tách phương thức (tiền mặt / QR / voucher)
-    const revenueByBooth = (() => {
+    const revenueByBooth = useMemo(() => {
         const map = new Map();
         (stats.transactions || []).forEach((tx) => {
             const id = tx.device_id || 'unknown';
@@ -112,7 +119,7 @@ const RevenueDashboard = () => {
             else b.cash += amount;
         });
         return Array.from(map.values()).sort((a, b) => b.total - a.total);
-    })();
+    }, [stats.transactions]);
 
     const PAYMENT_METHODS = [
         { value: '', label: 'Tất cả phương thức', icon: <DollarSign size={18} /> },
@@ -271,7 +278,7 @@ const RevenueDashboard = () => {
         }
     };
 
-    const periodStats = (() => {
+    const periodStats = useMemo(() => {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const startOfWeek = new Date(now);
@@ -295,10 +302,10 @@ const RevenueDashboard = () => {
         });
 
         return { today, week, month };
-    })();
+    }, [stats.transactions]);
 
     // Build chart data: group transactions by day for bar chart
-    const chartData = (() => {
+    const chartData = useMemo(() => {
         const txs = stats.transactions || [];
         if (txs.length === 0) return [];
 
@@ -339,7 +346,8 @@ const RevenueDashboard = () => {
         });
 
         return days;
-    })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stats.transactions, dateRange]);
 
     return (
         <div className="space-y-6 md:space-y-8 animate-fadeIn pb-20 md:pb-0">

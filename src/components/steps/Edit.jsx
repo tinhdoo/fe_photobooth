@@ -682,72 +682,8 @@ const Edit = () => {
         return canvas;
     };
 
-    const applyPrintColorSettings = (canvas) => {
-        const settings = {
-            brightness: Number(configs?.print_brightness || 0),
-            contrast: Number(configs?.print_contrast || 0),
-            saturation: Number(configs?.print_saturation || 0),
-            pink: Number(configs?.print_pink || 0),
-            whitening: Number(configs?.print_skin_whitening || 0),
-            warmth: Number(configs?.print_warmth || 0),
-        };
-
-        if (Object.values(settings).every((value) => !Number.isFinite(value) || value === 0)) return canvas;
-
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        const clamp = (value) => Math.max(0, Math.min(255, value));
-        const contrastValue = Math.max(-80, Math.min(80, settings.contrast * 2));
-        const contrastFactor = (259 * (contrastValue + 255)) / (255 * (259 - contrastValue));
-        const saturationFactor = 1 + (settings.saturation / 100);
-        const whiteningAmount = Math.max(0, Math.min(0.3, settings.whitening / 100));
-        const pinkAmount = Math.max(0, Math.min(30, settings.pink));
-
-        for (let i = 0; i < data.length; i += 4) {
-            let r = data[i];
-            let g = data[i + 1];
-            let b = data[i + 2];
-
-            const originalR = r;
-            const originalG = g;
-            const originalB = b;
-            const max = Math.max(originalR, originalG, originalB);
-            const min = Math.min(originalR, originalG, originalB);
-            const isSkinTone = originalR > 70
-                && originalG > 40
-                && originalB > 30
-                && originalR > originalB
-                && max - min > 12
-                && originalR - originalG < 95;
-
-            r += settings.brightness + settings.warmth;
-            g += settings.brightness + (settings.warmth * 0.25);
-            b += settings.brightness - settings.warmth;
-
-            r = contrastFactor * (r - 128) + 128;
-            g = contrastFactor * (g - 128) + 128;
-            b = contrastFactor * (b - 128) + 128;
-
-            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            r = gray + (r - gray) * saturationFactor;
-            g = gray + (g - gray) * saturationFactor;
-            b = gray + (b - gray) * saturationFactor;
-
-            if (isSkinTone) {
-                r = r + (255 - r) * whiteningAmount + pinkAmount * 0.9;
-                g = g + (255 - g) * whiteningAmount * 0.8 + pinkAmount * 0.15;
-                b = b + (255 - b) * whiteningAmount * 0.7 + pinkAmount * 0.55;
-            }
-
-            data[i] = clamp(r);
-            data[i + 1] = clamp(g);
-            data[i + 2] = clamp(b);
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-        return canvas;
-    };
+    // Chỉnh màu in ĐÃ chuyển sang backend (áp lúc gửi máy in, đọc config mới nhất mỗi lần) ->
+    // in lại cũng theo slider hiện tại. Frontend không còn nung màu vào file in nữa.
 
     const handlePrint = async () => {
         if (isUploading) return;
@@ -995,7 +931,9 @@ const Edit = () => {
             const printCanvas = printOutput.canvas;
             const cutMode = printOutput.cutMode;
             const compositeCanvas = cleanCanvas;
-            // Bỏ xử lý màu khi in -> file gửi máy in GIỮ NGUYÊN MÀU GỐC (chỉ áp filter người chọn).
+            // Màu in giờ được áp ở BACKEND lúc gửi máy in (đọc config mới nhất mỗi lần) -> in
+            // lại cũng theo slider hiện tại, màu KHÔNG bị đóng băng vào file. Ở đây gửi ảnh in
+            // GIỮ MÀU GỐC.
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
 
             // === IN TRƯỚC, UPLOAD CLOUD SAU ===
