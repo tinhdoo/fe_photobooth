@@ -50,6 +50,7 @@ const CodeManager = () => {
     const [rows, setRows] = useState([{ value: 70000, quantity: 1 }]);
     const [expiresAt, setExpiresAt] = useState('');
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+    const [exportPrompt, setExportPrompt] = useState({ show: false, codes: [] });
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
 
@@ -127,14 +128,13 @@ const CodeManager = () => {
             const createdRaw = Array.isArray(res.data) ? res.data : [];
             const created = createdRaw.map(normalizeCode);
 
-            // Tự xuất Excel cho đúng lô vừa tạo.
-            if (created.length > 0) {
-                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-                exportCodesToExcel(created, `ma-thanh-toan-${stamp}.xlsx`);
-            }
-
             fetchCodes();
-            setNotification({ show: true, message: `Đã tạo ${created.length} mã và xuất file Excel!`, type: 'success' });
+            // Hỏi xác nhận trước khi xuất Excel cho đúng lô vừa tạo.
+            if (created.length > 0) {
+                setExportPrompt({ show: true, codes: created });
+            } else {
+                setNotification({ show: true, message: 'Không có mã nào được tạo.', type: 'error' });
+            }
         } catch (error) {
             console.error("Error generating codes:", error);
             const msg = error?.response?.data?.error || "Tạo mã thất bại";
@@ -142,6 +142,20 @@ const CodeManager = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const confirmExport = () => {
+        const list = exportPrompt.codes;
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        exportCodesToExcel(list, `ma-thanh-toan-${stamp}.xlsx`);
+        setExportPrompt({ show: false, codes: [] });
+        setNotification({ show: true, message: `Đã tạo ${list.length} mã và xuất file Excel!`, type: 'success' });
+    };
+
+    const skipExport = () => {
+        const count = exportPrompt.codes.length;
+        setExportPrompt({ show: false, codes: [] });
+        setNotification({ show: true, message: `Đã tạo ${count} mã.`, type: 'success' });
     };
 
     const copyToClipboard = (text) => {
@@ -372,6 +386,58 @@ const CodeManager = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Export Confirmation Modal */}
+            {exportPrompt.show && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 p-4 rounded-full bg-emerald-50 text-emerald-500">
+                                <FileSpreadsheet size={40} strokeWidth={2.5} />
+                            </div>
+
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                Đã tạo {exportPrompt.codes.length} mã
+                            </h3>
+                            <p className="text-gray-500 mb-5 font-medium">
+                                Bạn có muốn xuất file Excel cho lô mã vừa tạo không?
+                            </p>
+
+                            {/* Tóm tắt theo mệnh giá */}
+                            <div className="w-full mb-6 max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-100 text-sm">
+                                {Object.entries(
+                                    exportPrompt.codes.reduce((acc, c) => {
+                                        acc[c.value] = (acc[c.value] || 0) + 1;
+                                        return acc;
+                                    }, {})
+                                )
+                                    .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                    .map(([value, count]) => (
+                                        <div key={value} className="flex justify-between items-center px-4 py-2">
+                                            <span className="font-semibold text-emerald-600">{formatCurrency(value)}</span>
+                                            <span className="text-gray-500">x{count}</span>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <div className="w-full flex gap-3">
+                                <button
+                                    onClick={skipExport}
+                                    className="flex-1 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all active:scale-[0.98]"
+                                >
+                                    Để sau
+                                </button>
+                                <button
+                                    onClick={confirmExport}
+                                    className="flex-1 py-3.5 rounded-xl font-bold text-white bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    <FileSpreadsheet size={18} /> Xuất Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Notification Modal */}
             {notification.show && (
