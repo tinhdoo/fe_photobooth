@@ -277,6 +277,7 @@ const ViewPage = () => {
     const [error, setError] = useState('');
     const [downloading, setDownloading] = useState(false);
     const [errorDialog, setErrorDialog] = useState(null);
+    const [motionVideo, setMotionVideo] = useState(null); // { blob, filename } sau khi tạo xong
 
     useEffect(() => {
         let cancelled = false;
@@ -582,8 +583,13 @@ const ViewPage = () => {
                 }
             }
 
-            // Lưu vào album (qua bảng chia sẻ) thay vì Downloads; máy không hỗ trợ thì tải về.
-            await saveBlob(downloadBlob, getDownloadFilename(session, ext, 'motion-trong-khung'));
+            // KHÔNG share ngay: việc quay mất 5-12s nên "user activation" đã hết hạn,
+            // navigator.share sẽ bị chặn -> rơi về Downloads. Lưu blob lại, để khách bấm
+            // nút "Lưu video" (gesture mới) thì share mới chạy -> vào album.
+            setMotionVideo({
+                blob: downloadBlob,
+                filename: getDownloadFilename(session, ext, 'motion-trong-khung'),
+            });
         } catch (error) {
             console.error('Motion frame download failed', error);
             setErrorDialog('Không thể tạo video trong khung. Vui lòng thử lại.');
@@ -591,6 +597,11 @@ const ViewPage = () => {
             objectUrls.forEach((url) => URL.revokeObjectURL(url));
             setDownloading(false);
         }
+    };
+
+    // Bấm sau khi video đã tạo xong -> chạy trong gesture mới nên share hoạt động.
+    const saveMotionVideo = () => {
+        if (motionVideo) saveBlob(motionVideo.blob, motionVideo.filename);
     };
 
     if (loading) {
@@ -712,15 +723,36 @@ const ViewPage = () => {
                                     />
                                 )}
                             </div>
-                            <button
-                                type="button"
-                                onClick={downloadVideos}
-                                disabled={downloading}
-                                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F6E6C9] px-5 py-3 text-base font-extrabold text-[#7B5E43] disabled:opacity-70"
-                            >
-                                <Download size={18} />
-                                {downloading ? 'Đang tải...' : 'Tải video'}
-                            </button>
+                            {motionVideo ? (
+                                <div className="mt-4 flex flex-col items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={saveMotionVideo}
+                                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7B5E43] px-5 py-3 text-base font-extrabold text-white shadow-md active:scale-[0.98]"
+                                    >
+                                        <Download size={18} />
+                                        Lưu video
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={downloadVideos}
+                                        disabled={downloading}
+                                        className="text-sm font-semibold text-[#7B5E43]/70 underline disabled:opacity-50"
+                                    >
+                                        {downloading ? 'Đang tạo lại...' : 'Tạo lại video'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={downloadVideos}
+                                    disabled={downloading}
+                                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F6E6C9] px-5 py-3 text-base font-extrabold text-[#7B5E43] disabled:opacity-70"
+                                >
+                                    <Film size={18} />
+                                    {downloading ? 'Đang tạo video...' : 'Tạo video'}
+                                </button>
+                            )}
                         </div>
                     </section>
                 )}
