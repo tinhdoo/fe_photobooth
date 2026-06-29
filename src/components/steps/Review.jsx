@@ -228,10 +228,11 @@ const Review = () => {
                                                 event.stopPropagation();
                                                 handleRetakePhoto(index);
                                             }}
-                                            className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#4A5D4E] shadow-md transition-none active:scale-95"
+                                            className="absolute right-2 top-2 z-20 flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-sm font-extrabold text-[#4A5D4E] shadow-md transition-none active:scale-95"
                                             title="Chụp lại tấm này"
                                         >
-                                            <RotateCcw size={16} />
+                                            <RotateCcw size={15} />
+                                            Chụp lại
                                         </button>
                                     )}
                                 </article>

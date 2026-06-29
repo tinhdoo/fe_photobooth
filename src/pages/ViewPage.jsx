@@ -339,6 +339,49 @@ const ViewPage = () => {
         }
     };
 
+    // Có hỗ trợ chia sẻ trực tiếp file (đường vào album Ảnh) không?
+    const canShareFiles = (files) => {
+        try {
+            return typeof navigator !== 'undefined'
+                && typeof navigator.canShare === 'function'
+                && navigator.canShare({ files });
+        } catch {
+            return false;
+        }
+    };
+
+    const fetchAsFile = async (url, filename) => {
+        const response = await fetch(url, { mode: 'cors' });
+        const blob = await response.blob();
+        const type = blob.type || (/\.mp4$/i.test(filename) ? 'video/mp4' : 'image/jpeg');
+        return new File([blob], filename, { type });
+    };
+
+    // Lưu ảnh: trên điện thoại ưu tiên Web Share API để ảnh vào thẳng album Ảnh/
+    // Thư viện (qua bảng chia sẻ -> "Lưu ảnh"). Máy tính / trình duyệt không hỗ trợ
+    // thì tải về như cũ (vào Downloads).
+    const saveImages = async (items) => {
+        const valid = (items || []).filter((it) => it && it.url);
+        if (valid.length === 0) return;
+
+        try {
+            const files = await Promise.all(valid.map((it) => fetchAsFile(it.url, it.filename)));
+            if (canShareFiles(files)) {
+                await navigator.share({ files });
+                return;
+            }
+        } catch (shareError) {
+            if (shareError?.name === 'AbortError') return; // khách bấm Hủy -> dừng, không tải
+            console.warn('Share failed, fallback to download', shareError);
+        }
+
+        // Fallback: tải về như cũ.
+        for (const it of valid) {
+            await downloadUrl(it.url, it.filename);
+            await new Promise((resolve) => setTimeout(resolve, 180));
+        }
+    };
+
     const downloadAll = async () => {
         if (!session || downloading) return;
 
@@ -362,10 +405,7 @@ const ViewPage = () => {
             }
         });
 
-        for (const file of files) {
-            await downloadUrl(file.url, file.filename);
-            await new Promise((resolve) => setTimeout(resolve, 180));
-        }
+        await saveImages(files);
 
         setDownloading(false);
     };
@@ -679,7 +719,7 @@ const ViewPage = () => {
 
                             <button
                                 type="button"
-                                onClick={() => downloadUrl(session.composite_url, getDownloadFilename(session, 'jpg'))}
+                                onClick={() => saveImages([{ url: session.composite_url, filename: getDownloadFilename(session, 'jpg') }])}
                                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F6E6C9] px-5 py-3 text-base font-extrabold text-[#7B5E43]"
                             >
                                 <Download size={18} />
@@ -712,7 +752,7 @@ const ViewPage = () => {
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => downloadUrl(photoUrl, getDownloadFilename(session, 'jpg', `anh-${pad2(index + 1)}`))}
+                                            onClick={() => saveImages([{ url: photoUrl, filename: getDownloadFilename(session, 'jpg', `anh-${pad2(index + 1)}`) }])}
                                             className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl bg-[#F6E6C9] px-3 py-2 text-sm font-bold text-[#7B5E43]"
                                         >
                                             <Download size={15} />
