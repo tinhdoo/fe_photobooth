@@ -2,6 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/sessions.js": { "maxDuration": 60 },
+    "api/codes.js": { "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/sessions?action=cleanup",

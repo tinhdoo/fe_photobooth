@@ -30,6 +30,7 @@ const RevenueDashboard = () => {
     const [resetError, setResetError] = useState('');
     const [notification, setNotification] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [chartHover, setChartHover] = useState(null); // { chart: 'line'|'bar', i }
     const [devices, setDevices] = useState([]);
     const [editingDevice, setEditingDevice] = useState(null);
     const [editNameValue, setEditNameValue] = useState('');
@@ -430,6 +431,22 @@ const RevenueDashboard = () => {
                 const barW = Math.max(4, Math.min(28, Math.floor(bPlotW / n) - 4));
                 const bLabelStep = Math.ceil(n / 8);
 
+                // Tooltip dùng chung cho 2 chart: hộp nổi hiển thị ngày + doanh thu.
+                const fmtVnd = v => `${new Intl.NumberFormat('vi-VN').format(v)}đ`;
+                const renderTip = (cx, anchorY, label, total, leftBound, rightBound, plotTop) => {
+                    const tw = 104, th = 40;
+                    let tx = Math.max(leftBound, Math.min(cx - tw / 2, rightBound - tw));
+                    let ty = anchorY - th - 10;
+                    if (ty < plotTop) ty = anchorY + 12; // không đủ chỗ phía trên -> lật xuống dưới
+                    return (
+                        <g pointerEvents="none">
+                            <rect x={tx} y={ty} width={tw} height={th} rx={7} fill="#1a1a2e" opacity="0.95" />
+                            <text x={tx + tw / 2} y={ty + 16} textAnchor="middle" fontSize={10} fill="#cbd5e1">{label}</text>
+                            <text x={tx + tw / 2} y={ty + 31} textAnchor="middle" fontSize={11.5} fill="#ffffff" fontWeight="700">{fmtVnd(total)}</text>
+                        </g>
+                    );
+                };
+
                 return (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
@@ -447,7 +464,7 @@ const RevenueDashboard = () => {
                                     Đường xu hướng
                                 </div>
                             </div>
-                            <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full" style={{ display: 'block', height: LH }} preserveAspectRatio="xMidYMid meet">
+                            <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full" style={{ display: 'block', height: LH }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
                                 <defs>
                                     <linearGradient id="revGrad2" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="#e63946" stopOpacity="0.28" />
@@ -475,11 +492,29 @@ const RevenueDashboard = () => {
                                             {isToday && <line x1={p.x} y1={LP_T} x2={p.x} y2={LP_T + lPlotH} stroke="#84a98c" strokeWidth="1" strokeDasharray="3 3" opacity={0.6} />}
                                             {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 7 : 5} fill="white" stroke={isToday ? '#84a98c' : '#e63946'} strokeWidth={isToday ? 2 : 1.5} />}
                                             {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 3.5 : 2.5} fill={isToday ? '#84a98c' : '#e63946'} />}
-                                            <title>{`${p.label}: ${new Intl.NumberFormat('vi-VN').format(p.total)}đ`}</title>
                                             {showLabel && <text x={p.x} y={LH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{p.label}</text>}
                                         </g>
                                     );
                                 })}
+                                {/* Vùng bắt hover (trong suốt, phủ cả chiều cao) cho từng ngày */}
+                                {lPts.map((p, i) => {
+                                    const colW = n === 1 ? lPlotW : lPlotW / (n - 1);
+                                    return (
+                                        <rect key={`h${p.key}`} x={p.x - colW / 2} y={LP_T} width={colW} height={lPlotH}
+                                            fill="transparent" onMouseEnter={() => setChartHover({ chart: 'line', i })} />
+                                    );
+                                })}
+                                {/* Tooltip */}
+                                {chartHover?.chart === 'line' && lPts[chartHover.i] && (() => {
+                                    const p = lPts[chartHover.i];
+                                    return (
+                                        <g pointerEvents="none">
+                                            <line x1={p.x} y1={LP_T} x2={p.x} y2={LP_T + lPlotH} stroke="#1a1a2e" strokeWidth="1" strokeDasharray="3 3" opacity={0.25} />
+                                            <circle cx={p.x} cy={p.y} r={4} fill="#e63946" stroke="#fff" strokeWidth={1.5} />
+                                            {renderTip(p.x, p.y, p.label, p.total, LP_L, LW - LP_R, LP_T)}
+                                        </g>
+                                    );
+                                })()}
                             </svg>
                         </div>
 
@@ -497,7 +532,7 @@ const RevenueDashboard = () => {
                                     Biểu đồ cột
                                 </div>
                             </div>
-                            <svg viewBox={`0 0 ${BW} ${BH}`} className="w-full" style={{ display: 'block', height: BH }} preserveAspectRatio="xMidYMid meet">
+                            <svg viewBox={`0 0 ${BW} ${BH}`} className="w-full" style={{ display: 'block', height: BH }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
                                 <defs>
                                     <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="#e63946" stopOpacity="0.9" />
@@ -531,11 +566,32 @@ const RevenueDashboard = () => {
                                                 rx={3}
                                                 fill={isToday ? 'url(#barGradToday)' : (d.total > 0 ? 'url(#barGrad)' : '#f3f4f6')}
                                             />
-                                            <title>{`${d.label}: ${new Intl.NumberFormat('vi-VN').format(d.total)}đ`}</title>
                                             {showLabel && <text x={bx} y={BH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{d.label}</text>}
                                         </g>
                                     );
                                 })}
+                                {/* Vùng bắt hover (trong suốt, phủ cả chiều cao) cho từng cột */}
+                                {chartData.map((d, i) => {
+                                    const bx = BP_L + (n === 1 ? bPlotW / 2 : (i / (n - 1)) * bPlotW);
+                                    const colW = n === 1 ? bPlotW : bPlotW / (n - 1);
+                                    return (
+                                        <rect key={`h${d.key}`} x={bx - colW / 2} y={BP_T} width={colW} height={bPlotH}
+                                            fill="transparent" onMouseEnter={() => setChartHover({ chart: 'bar', i })} />
+                                    );
+                                })}
+                                {/* Tooltip */}
+                                {chartHover?.chart === 'bar' && chartData[chartHover.i] && (() => {
+                                    const d = chartData[chartHover.i];
+                                    const bx = BP_L + (n === 1 ? bPlotW / 2 : (chartHover.i / (n - 1)) * bPlotW);
+                                    const barH = Math.max(d.total > 0 ? 3 : 0, (d.total / yMax) * bPlotH);
+                                    const by = BP_T + bPlotH - barH;
+                                    return (
+                                        <g pointerEvents="none">
+                                            <rect x={bx - barW / 2} y={by} width={barW} height={barH} rx={3} fill="#1a1a2e" opacity={0.18} />
+                                            {renderTip(bx, by, d.label, d.total, BP_L, BW - BP_R, BP_T)}
+                                        </g>
+                                    );
+                                })()}
                             </svg>
                         </div>
                     </div>

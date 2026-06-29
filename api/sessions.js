@@ -126,80 +126,85 @@ async function cleanupExpiredCloud(req, res, supabase) {
     const now = Date.now();
     const maxAgeMs = 72 * 60 * 60 * 1000;
     const cutoffIso = new Date(now - maxAgeMs).toISOString();
-    const pathsToDelete = new Set();
+    const SESSION_BATCH = 200; // giới hạn mỗi lần để function luôn chạy xong (tránh timeout)
+
     let expiredSessionRows = 0;
     let deletedMobileRows = 0;
+    let deletedStorageObjects = 0;
 
+    // 1) Lấy các session HẾT HẠN nhưng CHƯA được đánh dấu, ưu tiên cũ nhất trước để
+    //    cuốn chiếu backlog. Loại bỏ status='expired' để mỗi lần chạy đều tiến tới
+    //    (nếu không sẽ chọn lại đúng các row cũ và không bao giờ hết).
+    // select('*') có chủ đích: collectSessionStoragePaths đọc nhiều field (kể cả
+    // gif_public_id không có trong schema -> chỉ undefined, vô hại). Nếu liệt kê
+    // tên cột không tồn tại, PostgREST sẽ lỗi và hỏng cả truy vấn.
     const { data: sessions, error: sessionError } = await supabase
         .from('photo_sessions')
         .select('*')
+        .neq('status', 'expired')
         .or(`expires_at.lt.${new Date(now).toISOString()},created_at.lt.${cutoffIso}`)
-        .limit(500);
+        .order('created_at', { ascending: true })
+        .limit(SESSION_BATCH);
 
     if (sessionError && !isMissingTable(sessionError)) throw sessionError;
 
-    if (!sessionError && Array.isArray(sessions)) {
+    if (!sessionError && Array.isArray(sessions) && sessions.length > 0) {
+        const sessionPaths = new Set();
         for (const session of sessions) {
-            collectSessionStoragePaths(session).forEach((path) => pathsToDelete.add(path));
-            pathsToDelete.add(`sessions/${session.uuid}.json`);
+            collectSessionStoragePaths(session).forEach((path) => sessionPaths.add(path));
+            if (session.uuid) sessionPaths.add(`sessions/${session.uuid}.json`);
         }
 
-        if (sessions.length > 0) {
-            const ids = sessions.map((item) => item.id).filter(Boolean);
-            const { error } = await supabase
-                .from('photo_sessions')
-                .update({ status: 'expired' })
-                .in('id', ids);
-            if (!error) expiredSessionRows = ids.length;
-        }
+        // 2) Đánh dấu expired — GIỮ row để báo cáo doanh thu không mất lịch sử.
+        const ids = sessions.map((item) => item.id).filter(Boolean);
+        const { error } = await supabase
+            .from('photo_sessions')
+            .update({ status: 'expired' })
+            .in('id', ids);
+        if (!error) expiredSessionRows = ids.length;
+
+        // 3) Xóa ảnh của các session vừa xử lý NGAY (trước các bước quét tốn thời gian)
+        //    để mỗi lần chạy đều dọn được dữ liệu, không phụ thuộc bước sau có kịp không.
+        deletedStorageObjects += await removeStoragePaths(supabase, bucket, Array.from(sessionPaths));
     }
 
-    const sessionFiles = await listFilesRecursive(supabase, bucket, 'sessions');
-    for (const file of sessionFiles) {
-        let shouldDelete = false;
-
-        try {
-            const { data } = await supabase.storage.from(bucket).download(file.path);
-            const session = JSON.parse(await data.text());
-            const expiresAt = session.expires_at ? new Date(session.expires_at).getTime() : 0;
-            shouldDelete = expiresAt > 0 ? expiresAt < now : new Date(file.created_at || file.updated_at || 0).getTime() < now - maxAgeMs;
-        } catch {
-            shouldDelete = new Date(file.created_at || file.updated_at || 0).getTime() < now - maxAgeMs;
-        }
-
-        if (shouldDelete) pathsToDelete.add(file.path);
-    }
-
-    for (const prefix of ['booth', 'cloud', 'mobile']) {
-        const files = await listFilesRecursive(supabase, bucket, prefix);
-        files.forEach((file) => {
-            const createdAt = new Date(file.created_at || file.updated_at || 0).getTime();
-            if (createdAt && createdAt < now - maxAgeMs) pathsToDelete.add(file.path);
-        });
-    }
-
+    // 4) Dọn mobile_uploads cũ: xóa row staging + ảnh tương ứng.
     const { data: mobileRows, error: mobileError } = await supabase
         .from('mobile_uploads')
-        .select('*')
+        .select('id, public_id')
         .lt('created_at', cutoffIso)
         .limit(1000);
 
     if (mobileError && !isMissingTable(mobileError)) throw mobileError;
 
-    if (!mobileError && Array.isArray(mobileRows)) {
+    if (!mobileError && Array.isArray(mobileRows) && mobileRows.length > 0) {
+        const mobilePaths = new Set();
         mobileRows.forEach((row) => {
             const parsed = parseStoragePublicId(row.public_id);
-            if (parsed?.path) pathsToDelete.add(parsed.path);
+            if (parsed?.path) mobilePaths.add(parsed.path);
         });
 
-        if (mobileRows.length > 0) {
-            const ids = mobileRows.map((row) => row.id).filter(Boolean);
-            const { error } = await supabase.from('mobile_uploads').delete().in('id', ids);
-            if (!error) deletedMobileRows = ids.length;
-        }
+        const ids = mobileRows.map((row) => row.id).filter(Boolean);
+        const { error } = await supabase.from('mobile_uploads').delete().in('id', ids);
+        if (!error) deletedMobileRows = ids.length;
+        deletedStorageObjects += await removeStoragePaths(supabase, bucket, Array.from(mobilePaths));
     }
 
-    const deletedStorageObjects = await removeStoragePaths(supabase, bucket, Array.from(pathsToDelete));
+    // 5) Quét file mồ côi theo thời gian tạo (chỉ list, KHÔNG tải từng file) — dọn nốt
+    //    ảnh của các row đã 'expired' từ trước (backlog) hoặc file không còn row tham chiếu.
+    //    Xóa ngay sau mỗi prefix để giữ tiến độ nếu hết thời gian ở giữa.
+    for (const prefix of ['booth', 'cloud', 'mobile', 'sessions']) {
+        const files = await listFilesRecursive(supabase, bucket, prefix);
+        const oldPaths = files
+            .filter((file) => {
+                const t = new Date(file.created_at || file.updated_at || 0).getTime();
+                return t && t < now - maxAgeMs;
+            })
+            .map((file) => file.path);
+        deletedStorageObjects += await removeStoragePaths(supabase, bucket, oldPaths);
+    }
+
+    const moreLikely = Array.isArray(sessions) && sessions.length === SESSION_BATCH;
 
     return json(res, 200, {
         success: true,
@@ -208,6 +213,7 @@ async function cleanupExpiredCloud(req, res, supabase) {
         expiredSessionRows,
         deletedMobileRows,
         deletedStorageObjects,
+        moreLikely, // true => còn backlog, nên gọi cleanup lại
     });
 }
 
