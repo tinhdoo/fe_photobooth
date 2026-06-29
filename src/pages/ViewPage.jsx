@@ -107,7 +107,11 @@ const drawCoverMedia = (ctx, media, width, height, position = { x: 0.5, y: 0.5 }
 };
 
 const getMediaRecorderMimeType = () => {
+    // Ưu tiên MP4/H.264: iOS (Safari) chỉ xem & lưu được MP4 vào Photos, không hỗ trợ
+    // WebM. Chrome mới cũng ghi được MP4. Trình duyệt cũ rơi xuống WebM.
     const candidates = [
+        'video/mp4;codecs=avc1',
+        'video/mp4',
         'video/webm;codecs=vp9',
         'video/webm;codecs=vp8',
         'video/webm'
@@ -138,7 +142,10 @@ const recordCanvas = (canvas, drawFrame, durationMs = 7000, fps = 24) => new Pro
     recorder.onstop = () => {
         if (animationId) cancelAnimationFrame(animationId);
         stream.getTracks().forEach((track) => track.stop());
-        resolve(new Blob(chunks, { type: mimeType || 'video/webm' }));
+        // recorder.mimeType phản ánh ĐÚNG định dạng recorder thực dùng (kể cả khi tạo với
+        // undefined -> Safari mặc định MP4). Tránh dán nhãn nhầm MP4 thành webm.
+        const actualType = recorder.mimeType || mimeType || 'video/webm';
+        resolve(new Blob(chunks, { type: actualType }));
     };
 
     const tick = (time) => {
@@ -382,6 +389,37 @@ const ViewPage = () => {
         }
     };
 
+    // Lưu 1 blob (đã có sẵn trong bộ nhớ, vd video motion vừa ghi): ưu tiên chia sẻ
+    // vào album, không hỗ trợ thì tải về.
+    const saveBlob = async (blob, filename) => {
+        if (!blob) return;
+        // Suy type theo đuôi file cho các định dạng đã biết (iOS nhận dạng qua đây để
+        // hiện "Lưu video/ảnh"); chỉ dùng blob.type khi đuôi lạ. Bỏ ";codecs=...".
+        const fileExt = (filename.split('.').pop() || '').toLowerCase();
+        const extType = { mp4: 'video/mp4', webm: 'video/webm', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' }[fileExt];
+        const type = (extType || blob.type || 'application/octet-stream').split(';')[0];
+        const file = new File([blob], filename, { type });
+
+        try {
+            if (canShareFiles([file])) {
+                await navigator.share({ files: [file] });
+                return;
+            }
+        } catch (shareError) {
+            if (shareError?.name === 'AbortError') return;
+            console.warn('Share blob failed, fallback to download', shareError);
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    };
+
     const downloadAll = async () => {
         if (!session || downloading) return;
 
@@ -515,40 +553,37 @@ const ViewPage = () => {
 
             const maxDuration = mediaItems.reduce((duration, item) => Math.max(duration, item?.duration || 0), 0);
             const durationMs = Math.min(12000, Math.max(5000, maxDuration * 1000 || 7000));
-            const webmBlob = await recordCanvas(canvas, () => {
+            const recordedBlob = await recordCanvas(canvas, () => {
                 for (let index = 0; index < repeatCount; index += 1) {
                     if (stripHorizontal) drawOneStrip(0, index * stripHeight);
                     else drawOneStrip(index * stripWidth, 0);
                 }
             }, durationMs);
 
-            // Thử chuyển sang MP4 qua backend (CHỈ có trên booth có ffmpeg). Nếu không khả dụng
-            // (vd xem album trên cloud/Vercel -> 405) thì TẢI THẲNG WebM trình duyệt vừa ghi
-            // -> nút "Tải video" luôn ra file, không báo lỗi.
-            let downloadBlob = webmBlob;
-            let ext = 'webm';
-            try {
-                const formData = new FormData();
-                formData.append('file', webmBlob, 'motion_frame.webm');
-                const res = await fetch(`${API_URL}/api/convert-motion`, { method: 'POST', body: formData });
-                if (res.ok) {
-                    downloadBlob = await res.blob();
-                    ext = 'mp4';
-                } else {
-                    console.warn(`convert-motion không khả dụng (${res.status}) -> tải WebM trực tiếp`);
+            // Nếu trình duyệt ghi thẳng MP4 (iOS Safari / Chrome mới) -> dùng luôn, iPhone
+            // xem & lưu Photos được. Nếu là WebM -> thử nhờ backend booth (có ffmpeg) đổi
+            // sang MP4; không khả dụng (vd xem album qua cloud/Vercel) thì giữ WebM.
+            let downloadBlob = recordedBlob;
+            let ext = /mp4/i.test(recordedBlob.type) ? 'mp4' : 'webm';
+
+            if (ext !== 'mp4') {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', recordedBlob, 'motion_frame.webm');
+                    const res = await fetch(`${API_URL}/api/convert-motion`, { method: 'POST', body: formData });
+                    if (res.ok) {
+                        downloadBlob = await res.blob();
+                        ext = 'mp4';
+                    } else {
+                        console.warn(`convert-motion không khả dụng (${res.status}) -> giữ WebM`);
+                    }
+                } catch (convErr) {
+                    console.warn('convert-motion lỗi -> giữ WebM', convErr);
                 }
-            } catch (convErr) {
-                console.warn('convert-motion lỗi -> tải WebM trực tiếp', convErr);
             }
 
-            const downloadObjectUrl = URL.createObjectURL(downloadBlob);
-            const link = document.createElement('a');
-            link.href = downloadObjectUrl;
-            link.download = getDownloadFilename(session, ext, 'motion-trong-khung');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.setTimeout(() => URL.revokeObjectURL(downloadObjectUrl), 60000);
+            // Lưu vào album (qua bảng chia sẻ) thay vì Downloads; máy không hỗ trợ thì tải về.
+            await saveBlob(downloadBlob, getDownloadFilename(session, ext, 'motion-trong-khung'));
         } catch (error) {
             console.error('Motion frame download failed', error);
             setErrorDialog('Không thể tạo video trong khung. Vui lòng thử lại.');
