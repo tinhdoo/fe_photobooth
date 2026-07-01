@@ -294,8 +294,11 @@ const Capture = () => {
                 return;
             }
             // Lần đầu: CHỜ live view ra hình (onLoad set cameraReady) -> tránh đen + motion rỗng
-            // ở ảnh đầu. Fallback 3s để không kẹt nếu live view chậm lên.
-            const fb = setTimeout(() => { _cameraReadyOnce = true; setCameraReady(true); }, 3000);
+            // ở ảnh đầu. Với model bật LV theo yêu cầu, EVF Canon lúc "lạnh" có thể mất >3s ra
+            // frame đầu -> nới fallback lên 8s để đếm ngược chỉ chạy khi đã có hình thật (trong
+            // lúc chờ vẫn hiện overlay "Đang khởi động camera...", không phải đen). Bình thường
+            // live view đã pre-warm từ bước Thanh toán nên onLoad bắn <1s, fallback hiếm khi tới.
+            const fb = setTimeout(() => { _cameraReadyOnce = true; setCameraReady(true); }, 8000);
             return () => clearTimeout(fb);
         }
 

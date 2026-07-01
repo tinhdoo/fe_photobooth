@@ -107,6 +107,93 @@ async function resolveBucket(supabase) {
     return configuredBucket;
 }
 
+async function listFilesRecursive(supabase, bucket, prefix) {
+    const result = [];
+    const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+    if (error) return result;
+
+    const items = Array.isArray(data) ? data : [];
+    for (const item of items) {
+        const path = `${prefix}/${item.name}`;
+        if (item.id) {
+            result.push({ ...item, path });
+        } else {
+            result.push(...await listFilesRecursive(supabase, bucket, path));
+        }
+    }
+    return result;
+}
+
+async function removeStoragePaths(supabase, bucket, paths) {
+    const uniquePaths = Array.from(new Set(paths.filter(Boolean)));
+    let deleted = 0;
+
+    for (let i = 0; i < uniquePaths.length; i += 100) {
+        const batch = uniquePaths.slice(i, i + 100);
+        const { error } = await supabase.storage.from(bucket).remove(batch);
+        if (!error) deleted += batch.length;
+    }
+
+    return deleted;
+}
+
+// Xóa sạch mọi file dưới 1 prefix. Lặp nhiều lượt (list giới hạn 1000) cho tới khi rỗng,
+// vì mỗi lượt đã xóa sẽ giải phóng chỗ cho lượt sau — an toàn cả khi thư mục có > 1000 file.
+async function wipeStoragePrefix(supabase, bucket, prefix, maxPasses = 25) {
+    let removed = 0;
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+        const files = await listFilesRecursive(supabase, bucket, prefix);
+        if (files.length === 0) break;
+        removed += await removeStoragePaths(supabase, bucket, files.map((file) => file.path));
+    }
+    return removed;
+}
+
+// Xóa toàn bộ bản ghi 1 bảng theo từng trang (delete .in('id', ...)) — không phụ thuộc
+// kiểu id (uuid/bigint). Bỏ qua nếu bảng không tồn tại.
+async function deleteAllRows(supabase, table, maxPages = 100) {
+    let total = 0;
+    for (let page = 0; page < maxPages; page += 1) {
+        const { data, error } = await supabase.from(table).select('id').limit(1000);
+        if (error && isMissingTable(error)) return total;
+        if (error) throw error;
+
+        const ids = (data || []).map((row) => row.id).filter((id) => id !== null && id !== undefined);
+        if (ids.length === 0) break;
+
+        const { error: deleteError } = await supabase.from(table).delete().in('id', ids);
+        if (deleteError) throw deleteError;
+        total += ids.length;
+        if (ids.length < 1000) break;
+    }
+    return total;
+}
+
+// Hard reset: xóa THẬT mọi dữ liệu liên quan doanh thu khỏi database + storage.
+// KHÔNG THỂ KHÔI PHỤC. Gồm: mã thanh toán, session, giao dịch QR, upload mobile,
+// và toàn bộ file ảnh/motion/session-json trong storage.
+async function hardResetRevenueData(supabase) {
+    const bucket = await resolveBucket(supabase);
+
+    const deletedCodes = await deleteAllRows(supabase, 'payment_codes');
+    const deletedSessions = await deleteAllRows(supabase, 'photo_sessions');
+    const deletedPayments = await deleteAllRows(supabase, 'payments');
+    const deletedMobileUploads = await deleteAllRows(supabase, 'mobile_uploads');
+
+    let deletedStorageObjects = 0;
+    for (const prefix of ['booth', 'cloud', 'mobile', 'sessions']) {
+        deletedStorageObjects += await wipeStoragePrefix(supabase, bucket, prefix);
+    }
+
+    return {
+        deletedCodes,
+        deletedSessions,
+        deletedPayments,
+        deletedMobileUploads,
+        deletedStorageObjects,
+    };
+}
+
 async function listStorageSessions(supabase) {
     const bucket = await resolveBucket(supabase);
     const { data, error } = await supabase.storage
@@ -340,9 +427,12 @@ export default async function handler(req, res) {
                 return json(res, 200, { success: true, hidden_booths: hidden });
             }
 
+            // Hard reset: xóa THẬT toàn bộ dữ liệu liên quan (mã thanh toán, session,
+            // giao dịch QR, upload mobile, ảnh/motion trong storage). Không thể khôi phục.
+            const deleted = await hardResetRevenueData(supabase);
             const resetAt = await writeRevenueResetAt(supabase);
             await clearBoothReports(supabase);
-            return json(res, 200, { success: true, reset_at: resetAt });
+            return json(res, 200, { success: true, reset_at: resetAt, deleted });
         }
 
         if (req.method !== 'GET') return methodNotAllowed(res);

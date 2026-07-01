@@ -46,7 +46,7 @@ const AdminLayout = () => {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden">
+        <div className="flex h-[100dvh] bg-gray-50 overflow-hidden">
             {/* Desktop Sidebar */}
             <div className="hidden lg:flex w-64 flex-col border-r border-gray-100 bg-white">
                 <div className="border-b border-gray-100 p-6">
@@ -120,8 +120,11 @@ const AdminLayout = () => {
                     </button>
                 </div>
 
-                {/* Content Area */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">
+                {/* Content Area — đệm dưới đủ để nút cuối (vd Lưu) vượt qua thanh nav fixed + safe-area */}
+                <div
+                    className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+6.5rem)] lg:pb-0"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                     <main className="p-4 md:p-8 w-full max-w-full overflow-x-hidden box-border">
                         <Outlet />
                     </main>

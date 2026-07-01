@@ -6,6 +6,17 @@ const WorkflowContext = createContext();
 const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
+
+// Canon middleware chạy ngay trên máy booth (cùng máy với trình duyệt kiosk).
+const CANON_MIDDLEWARE_URL = 'http://localhost:5001';
+// Bật/tắt Live View qua middleware. Không phải máy booth (vd cloud) -> fetch lỗi, bỏ qua.
+const controlCanonLiveView = (action) => {
+    try {
+        fetch(`${CANON_MIDDLEWARE_URL}/${action}`, { cache: 'no-store' }).catch(() => {});
+    } catch {
+        // ignore
+    }
+};
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
     'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
@@ -403,7 +414,36 @@ export const WorkflowProvider = ({ children }) => {
         }
     }, [timeLeft, isSessionActive]);
 
+    // --- Điều khiển Live View Canon theo bước ---
+    // Bật từ bước Thanh toán (step 3) để khi vào Chụp (step 4) có hình ngay; tắt khi ở
+    // Welcome/Source/Layout để máy ảnh nghỉ (đỡ nóng, đỡ hao). Bỏ qua trang album/upload
+    // và các chế độ camera khác 'canon'.
+    useEffect(() => {
+        const path = typeof window !== 'undefined' ? window.location.pathname : '';
+        if (['/album/', '/m/upload/'].some((p) => path.startsWith(p))) return;
+        if ((configs.camera_mode || 'canon') !== 'canon') return;
+
+        // Nguồn 'upload' (ảnh từ điện thoại) KHÔNG dùng máy ảnh booth -> luôn tắt LV.
+        if (sessionData.source === 'upload') {
+            controlCanonLiveView('stop-liveview');
+            return;
+        }
+
+        // Bật LV ở các bước CẦN camera: Thanh toán (pre-warm) + Chụp. Event mode không có
+        // Thanh toán nên pre-warm từ Layout. Welcome/Source/Layout/Quantity (<3): tắt.
+        // Review/Edit/Result (5,6,7): KHÔNG can thiệp -> LV "trôi" tiếp từ bước Chụp rồi tự
+        // tắt khi không còn ai xem (middleware idle auto-off) -> đỡ nóng, chụp lại vẫn nhanh.
+        const startSteps = isEventMode ? [2, 4] : [3, 4];
+        if (startSteps.includes(currentStep)) {
+            controlCanonLiveView('start-liveview');
+        } else if (currentStep < 3) {
+            controlCanonLiveView('stop-liveview');
+        }
+    }, [currentStep, isEventMode, configs.camera_mode, sessionData.source]);
+
     const resetSession = () => {
+        // Tắt live view trước khi reload để máy ảnh về trạng thái chờ (kết thúc phiên).
+        controlCanonLiveView('stop-liveview');
         // Tự động tải lại trang để làm mới toàn bộ cài đặt (giá tiền, khung ảnh) và dọn dẹp bộ nhớ
         window.location.reload();
     };

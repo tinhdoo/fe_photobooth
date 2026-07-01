@@ -975,10 +975,11 @@ const RevenueDashboard = () => {
                         </h3>
 
                         <p className="text-gray-500 text-sm mb-5">
-                            Nhập mã xác nhận để xóa toàn bộ lịch sử doanh thu.
+                            Nhập mã xác nhận để <span className="font-semibold text-[#1a1a2e]">XÓA VĨNH VIỄN</span> toàn bộ dữ liệu:
+                            mã thanh toán (kể cả voucher chưa dùng), session, ảnh, motion và giao dịch QR — khỏi database và storage.
                             <br />
                             <span className="text-red-500 font-semibold">
-                                Hành động này không thể hoàn tác.
+                                Hành động này không thể hoàn tác. Album đã chia sẻ cho khách sẽ ngừng hoạt động.
                             </span>
                         </p>
 
