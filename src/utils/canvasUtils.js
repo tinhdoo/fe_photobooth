@@ -40,6 +40,52 @@ export const drawImageCover = (ctx, img, x, y, w, h, anchorX = 0.5, anchorY = 0.
         sy = 0;
     }
 
-    // 3. Draw using 9-parameter drawImage
+    // 3. Draw
+    const targetW = Math.max(1, Math.round(w));
+    const targetH = Math.max(1, Math.round(h));
+
+    // Thu nhỏ MẠNH (>2x mỗi chiều) trong 1 bước bằng drawImage sẽ undersampling -> răng cưa/
+    // rỗ pixel ("vỡ nét"), rõ nhất với ảnh máy ảnh lớn (R100 6000x4000) nhét vào ô vài trăm px.
+    // Giải pháp: hạ dần theo bước halving, mỗi bước dùng nội suy chất lượng cao -> mượt như
+    // bộ lọc nhiều tap. Không đổi kết quả vị trí/kích thước, chỉ cải thiện độ nét.
+    if (sWidth > targetW * 2 || sHeight > targetH * 2) {
+        // Bước 1: vừa trích vùng crop vừa hạ 2x ngay (tránh canvas tạm full-size 6000x4000 ~96MB
+        // trên máy kiosk). Hạ 2x/bước với nội suy cao vẫn nét như bộ lọc nhiều tap.
+        let curW = Math.max(targetW, Math.round(sWidth / 2));
+        let curH = Math.max(targetH, Math.round(sHeight / 2));
+        let tmp = document.createElement('canvas');
+        tmp.width = curW;
+        tmp.height = curH;
+        let tctx = tmp.getContext('2d');
+        tctx.imageSmoothingEnabled = true;
+        tctx.imageSmoothingQuality = 'high';
+        tctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, curW, curH);
+
+        // Bước 2: tiếp tục halving cho tới khi còn <= 2x đích.
+        while (curW > targetW * 2 && curH > targetH * 2) {
+            const nextW = Math.max(targetW, Math.floor(curW / 2));
+            const nextH = Math.max(targetH, Math.floor(curH / 2));
+            const next = document.createElement('canvas');
+            next.width = nextW;
+            next.height = nextH;
+            const nctx = next.getContext('2d');
+            nctx.imageSmoothingEnabled = true;
+            nctx.imageSmoothingQuality = 'high';
+            nctx.drawImage(tmp, 0, 0, curW, curH, 0, 0, nextW, nextH);
+            tmp = next;
+            curW = nextW;
+            curH = nextH;
+        }
+
+        // Bước 3: vẽ bản đã hạ vào ĐÍCH (tôn trọng transform/clip đang đặt trên ctx).
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(tmp, 0, 0, curW, curH, x, y, w, h);
+        return;
+    }
+
+    // Đường thường: thu nhỏ nhẹ hoặc phóng to -> vẽ thẳng với nội suy chất lượng cao.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, sx, sy, sWidth, sHeight, x, y, w, h);
 };

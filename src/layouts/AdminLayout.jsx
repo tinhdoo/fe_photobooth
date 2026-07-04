@@ -27,7 +27,7 @@ const AdminLayout = () => {
 
     const menuItems = [
         { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán', short: 'Mã TT' },
-        { to: '/admin', icon: <Layout size={22} />, label: 'Frame', short: 'Frame' },
+        { to: '/admin/frames', icon: <Layout size={22} />, label: 'Frame', short: 'Frame' },
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu', short: 'Doanh thu' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện', short: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt', short: 'Cài đặt' },

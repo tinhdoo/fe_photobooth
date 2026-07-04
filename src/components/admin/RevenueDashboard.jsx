@@ -6,6 +6,20 @@ import { io } from "socket.io-client";
 import { CLOUD_API_URL } from '../../config/api';
 const apiPath = (path) => `${CLOUD_API_URL}${path}`;
 
+// --- Voucher (mã thanh toán) KHÔNG tính vào doanh thu ---
+// payment_code_applied = số tiền voucher đã che cho giao dịch (backend cloud trả về).
+const txValue = (tx) => Number(tx.value ?? tx.amount ?? 0) || 0;
+const voucherApplied = (tx) => {
+    const applied = Number(tx.payment_code_applied || 0);
+    const value = txValue(tx);
+    if (applied > 0) return Math.min(applied, value);
+    // Session cũ thiếu payment_code_applied: nếu trả 100% bằng mã -> coi cả giá trị là voucher.
+    return String(tx.payment_method || '').toLowerCase() === 'code' ? value : 0;
+};
+// Doanh thu THẬT = tiền thu được (tiền mặt + QR) = tổng giá trị trừ phần voucher che.
+// Mã một phần (code+cash / code+qr): phần tiền mặt/QR VẪN tính, chỉ trừ phần voucher.
+const realRevenue = (tx) => Math.max(0, txValue(tx) - voucherApplied(tx));
+
 const RevenueDashboard = () => {
     const [stats, setStats] = useState({ totalRevenue: 0, transactions: [] });
     const [loading, setLoading] = useState(false);
@@ -104,20 +118,22 @@ const RevenueDashboard = () => {
 
     const boothReport = (id) => devicesMap.get(id)?.report || null;
 
-    // Gộp doanh thu theo từng booth + tách phương thức (tiền mặt / QR / voucher)
+    // Gộp theo từng booth. total = DOANH THU THẬT (tiền mặt + QR), voucher tách riêng KHÔNG cộng
+    // vào total. Mã một phần: phần voucher vào cột voucher, phần còn lại vào tiền mặt/QR.
     const revenueByBooth = useMemo(() => {
         const map = new Map();
         (stats.transactions || []).forEach((tx) => {
             const id = tx.device_id || 'unknown';
             if (!map.has(id)) map.set(id, { device_id: id, total: 0, count: 0, cash: 0, qr: 0, code: 0 });
             const b = map.get(id);
-            const amount = Number(tx.value ?? tx.amount ?? 0) || 0;
             const m = String(tx.payment_method || '').toLowerCase();
-            b.total += amount;
+            const applied = voucherApplied(tx);
+            const real = realRevenue(tx);
+            b.code += applied;                                   // voucher (không tính doanh thu)
+            if (m.includes('qr') || m.includes('sepay')) b.qr += real;
+            else if (!m.includes('code') || m.includes('cash')) b.cash += real; // pure 'code' -> real=0
+            b.total += real;                                     // doanh thu thật = cash + qr
             b.count += 1;
-            if (m.includes('qr') || m.includes('sepay')) b.qr += amount;
-            else if (m.includes('code')) b.code += amount;
-            else b.cash += amount;
         });
         return Array.from(map.values()).sort((a, b) => b.total - a.total);
     }, [stats.transactions]);
@@ -297,12 +313,27 @@ const RevenueDashboard = () => {
         stats.transactions?.forEach(tx => {
             if (!tx.used_at) return;
             const txTime = new Date(tx.used_at).getTime();
-            if (txTime >= startOfDay) today += tx.value;
-            if (txTime >= startOfWeekTime) week += tx.value;
-            if (txTime >= startOfMonth) month += tx.value;
+            const val = realRevenue(tx); // voucher đã bị loại khỏi doanh thu
+            if (txTime >= startOfDay) today += val;
+            if (txTime >= startOfWeekTime) week += val;
+            if (txTime >= startOfMonth) month += val;
         });
 
         return { today, week, month };
+    }, [stats.transactions]);
+
+    // Tổng thu THẬT (đã loại voucher) + thống kê voucher đã dùng cho ô riêng.
+    const realTotalRevenue = useMemo(
+        () => (stats.transactions || []).reduce((s, tx) => s + realRevenue(tx), 0),
+        [stats.transactions]
+    );
+    const voucherStats = useMemo(() => {
+        let total = 0, count = 0;
+        (stats.transactions || []).forEach((tx) => {
+            const a = voucherApplied(tx);
+            if (a > 0) { total += a; count += 1; }
+        });
+        return { total, count };
     }, [stats.transactions]);
 
     // Build chart data: group transactions by day for bar chart
@@ -343,7 +374,7 @@ const RevenueDashboard = () => {
             const d = new Date(tx.used_at);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             const found = days.find(day => day.key === key);
-            if (found) found.total += tx.value;
+            if (found) found.total += realRevenue(tx);
         });
 
         return days;
@@ -373,7 +404,7 @@ const RevenueDashboard = () => {
                     { label: 'Hôm nay', value: periodStats.today, icon: <Calendar size={20} />, color: 'emerald', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
                     { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={20} />, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
                     { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={20} />, color: 'purple', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
-                    { label: 'Tổng thu', value: stats.totalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
+                    { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
                 ].map((item, idx) => (
                     // SỬA: p-4 -> p-3 (giảm lề) để tăng diện tích hiển thị
                     <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
@@ -390,6 +421,26 @@ const RevenueDashboard = () => {
                         </h2>
                     </div>
                 ))}
+            </div>
+
+            {/* Ô Voucher riêng — mã thanh toán KHÔNG tính vào doanh thu */}
+            <div className="rounded-2xl md:rounded-3xl border border-amber-200 bg-amber-50/60 p-4 md:p-5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                        <Hash size={20} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-amber-700 text-[10px] md:text-xs uppercase tracking-wider font-bold">
+                            Voucher đã dùng · KHÔNG tính doanh thu
+                        </p>
+                        <p className="text-amber-600/70 text-[11px] md:text-xs mt-0.5 font-semibold">
+                            {voucherStats.count} lượt dùng mã thanh toán
+                        </p>
+                    </div>
+                </div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-black text-amber-700 break-words leading-tight text-right shrink-0">
+                    {formatCurrency(voucherStats.total)}
+                </h2>
             </div>
 
             {/* Charts — 2 col grid */}
@@ -769,6 +820,59 @@ const RevenueDashboard = () => {
                                 {revenueByBooth.length} booth · tách theo tiền mặt / QR / voucher
                             </p>
                         </div>
+
+                        {/* Biểu đồ tròn: so sánh LƯỢT CHỤP (số giao dịch) giữa các booth */}
+                        {(() => {
+                            const items = revenueByBooth.filter((b) => b.count > 0);
+                            if (items.length === 0) return null;
+                            const totalCount = items.reduce((s, b) => s + b.count, 0);
+                            const COLORS = ['#e63946', '#f4a261', '#2a9d8f', '#457b9d', '#8338ec', '#ffb703', '#84a98c', '#c1121f', '#606c38', '#bc6c25'];
+                            const cx = 100, cy = 100, R = 82, r = 50;
+                            let a0 = -Math.PI / 2;
+                            const slices = items.map((b, i) => {
+                                const frac = b.count / totalCount;
+                                const a1 = a0 + frac * Math.PI * 2;
+                                const large = (a1 - a0) > Math.PI ? 1 : 0;
+                                const p = (ang, rad) => `${(cx + rad * Math.cos(ang)).toFixed(2)} ${(cy + rad * Math.sin(ang)).toFixed(2)}`;
+                                const path = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
+                                const slice = { path, color: COLORS[i % COLORS.length], b, frac };
+                                a0 = a1;
+                                return slice;
+                            });
+                            return (
+                                <div className="p-5 md:p-6 border-b border-gray-100">
+                                    <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-gray-500">So sánh lượt chụp giữa các booth</h4>
+                                    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
+                                        <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0">
+                                            {items.length === 1 ? (
+                                                <>
+                                                    <circle cx={cx} cy={cy} r={R} fill={slices[0].color} />
+                                                    <circle cx={cx} cy={cy} r={r} fill="#fff" />
+                                                </>
+                                            ) : (
+                                                slices.map((s) => (
+                                                    <path key={s.b.device_id} d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
+                                                        <title>{`${boothName(s.b.device_id)}: ${s.b.count} lượt (${Math.round(s.frac * 100)}%)`}</title>
+                                                    </path>
+                                                ))
+                                            )}
+                                            <text x={cx} y={cy - 2} textAnchor="middle" fontSize="20" fontWeight="800" fill="#1a1a2e">{totalCount}</text>
+                                            <text x={cx} y={cy + 15} textAnchor="middle" fontSize="10" fill="#9ca3af">lượt chụp</text>
+                                        </svg>
+                                        <div className="grid w-full flex-1 grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                                            {slices.map((s) => (
+                                                <div key={s.b.device_id} className="flex items-center gap-2 text-sm">
+                                                    <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: s.color }} />
+                                                    <span className="truncate font-semibold text-[#1a1a2e]">{boothName(s.b.device_id)}</span>
+                                                    <span className="ml-auto whitespace-nowrap font-bold text-gray-500">{s.b.count} · {Math.round(s.frac * 100)}%</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {revenueByBooth.length > 0 ? (
                             <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 md:gap-4 md:p-6">
                                 {revenueByBooth.map((b) => (

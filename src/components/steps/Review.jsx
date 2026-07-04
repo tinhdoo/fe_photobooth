@@ -91,8 +91,22 @@ const Review = () => {
     }, [timedOut]);
 
     const handleRetakeAll = () => {
+        // Giải phóng blob URL (ảnh + video) của TẤT CẢ ảnh cũ trước khi chụp lại từ đầu,
+        // tránh rò rỉ bộ nhớ trong phiên (chụp lại 1 tấm đã revoke qua releaseReplacedPhoto).
+        const collectUrls = (arr) => (Array.isArray(arr) ? arr : []).flatMap((p) => {
+            if (!p) return [];
+            return typeof p === 'string' ? [p] : [p.url, p.videoUrl];
+        });
+        const urls = new Set([...collectUrls(sessionData.photos), ...collectUrls(sessionData.capturedPhotos)]);
+        urls.forEach((u) => {
+            if (typeof u === 'string' && u.startsWith('blob:')) {
+                try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+            }
+        });
+
         updateSessionData('photos', []);
-        goToStep(4);
+        updateSessionData('capturedPhotos', []); // dọn nguồn để không giữ tham chiếu ảnh đã revoke
+        goToStep(3.5); // qua màn "Chuẩn bị" (warm camera + không hiện overlay) rồi vào Chụp
     };
 
     const handleContinue = () => {
@@ -139,7 +153,7 @@ const Review = () => {
 
     const handleRetakePhoto = (photoIndex) => {
         updateSessionData('retakeIndex', photoIndex);
-        goToStep(4);
+        goToStep(3.5); // qua màn "Chuẩn bị" (warm camera + không hiện overlay) rồi vào Chụp
     };
 
     return (

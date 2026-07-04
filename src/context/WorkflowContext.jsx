@@ -7,6 +7,12 @@ const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0
 const apiPath = (path) => `${API_URL}${path}`;
 const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 
+// Promise upload ảnh gốc/video ở NỀN (Edit đặt sau khi hiện QR). resetSession sẽ CHỜ promise
+// này xong (có trần thời gian) trước khi reload -> không mất ảnh lẻ/video nếu khách bấm "Về
+// trang chủ" hoặc hết giờ trước khi upload nền hoàn tất.
+let pendingMediaUpload = null;
+export const setPendingMediaUpload = (promise) => { pendingMediaUpload = promise; };
+
 // Canon middleware chạy ngay trên máy booth (cùng máy với trình duyệt kiosk).
 const CANON_MIDDLEWARE_URL = 'http://localhost:5001';
 // Bật/tắt Live View qua middleware. Không phải máy booth (vd cloud) -> fetch lỗi, bỏ qua.
@@ -343,8 +349,13 @@ export const WorkflowProvider = ({ children }) => {
             if (!isEventMode && prev === 2) return 2.5; // Go to Quantity
             if (!isEventMode && prev === 2.5) return 3; // Go to Payment
 
-            // Event Mode: Skip both Quantity and Payment
-            if (isEventMode && prev === 2) return 4; // Skip directly to Capture
+            // Sau Thanh toán (3): chèn màn "Chuẩn bị" (3.5) để camera ấm rồi mới vào Chụp.
+            // Nguồn 'upload' không dùng camera booth -> vào thẳng bước 4.
+            if (prev === 3) return sessionData.source === 'upload' ? 4 : 3.5;
+            if (prev === 3.5) return 4; // Chuẩn bị -> Chụp
+
+            // Event Mode: Skip Quantity + Payment. Camera -> qua màn Chuẩn bị (3.5); upload -> thẳng 4.
+            if (isEventMode && prev === 2) return sessionData.source === 'upload' ? 4 : 3.5;
 
             // Upload flow: Skip Review (step 5), go directly to Edit (step 6)
             if (prev === 4 && sessionData.source === 'upload') return 6;
@@ -382,6 +393,8 @@ export const WorkflowProvider = ({ children }) => {
     // Cờ BỀN VỮNG: phiên đã hết giờ. Giữ true tới hết flow để CHUỖI auto-chuyển-bước + auto-in
     // không bị đứt (isSessionActive tắt ngay khi hết giờ, không dùng để gate các bước được).
     const [timedOut, setTimedOut] = useState(false);
+    // Đang chờ upload ảnh nền hoàn tất trước khi reset -> hiện overlay "Đang lưu ảnh...".
+    const [savingBeforeReset, setSavingBeforeReset] = useState(false);
 
     // Start timer when payment is completed — read configs fresh at this moment
     useEffect(() => {
@@ -433,7 +446,7 @@ export const WorkflowProvider = ({ children }) => {
         // Thanh toán nên pre-warm từ Layout. Welcome/Source/Layout/Quantity (<3): tắt.
         // Review/Edit/Result (5,6,7): KHÔNG can thiệp -> LV "trôi" tiếp từ bước Chụp rồi tự
         // tắt khi không còn ai xem (middleware idle auto-off) -> đỡ nóng, chụp lại vẫn nhanh.
-        const startSteps = isEventMode ? [2, 4] : [3, 4];
+        const startSteps = isEventMode ? [2, 3.5, 4] : [3, 3.5, 4];
         if (startSteps.includes(currentStep)) {
             controlCanonLiveView('start-liveview');
         } else if (currentStep < 3) {
@@ -441,9 +454,23 @@ export const WorkflowProvider = ({ children }) => {
         }
     }, [currentStep, isEventMode, configs.camera_mode, sessionData.source]);
 
-    const resetSession = () => {
+    const resetSession = async () => {
         // Tắt live view trước khi reload để máy ảnh về trạng thái chờ (kết thúc phiên).
         controlCanonLiveView('stop-liveview');
+        // Chờ upload ảnh gốc/video ở nền xong (tối đa 15s) để KHÔNG mất ảnh khi reload. Reload
+        // sẽ hủy mọi request đang chạy -> nếu bỏ qua bước chờ này, ảnh lẻ/video có thể mất.
+        if (pendingMediaUpload) {
+            // Chỉ hiện overlay "Đang lưu ảnh..." nếu phải chờ thật (>250ms). Upload đã xong thì
+            // reload luôn, không chớp overlay.
+            const showTimer = setTimeout(() => setSavingBeforeReset(true), 250);
+            try {
+                await Promise.race([pendingMediaUpload, new Promise((resolve) => setTimeout(resolve, 15000))]);
+            } catch {
+                // ignore -> vẫn reload
+            }
+            clearTimeout(showTimer);
+            pendingMediaUpload = null;
+        }
         // Tự động tải lại trang để làm mới toàn bộ cài đặt (giá tiền, khung ảnh) và dọn dẹp bộ nhớ
         window.location.reload();
     };
@@ -475,6 +502,7 @@ export const WorkflowProvider = ({ children }) => {
                 timeLeft, // Expose timer
                 isSessionActive,
                 timedOut,
+                savingBeforeReset,
                 SESSION_DURATION,
                 configs, // Expose generic configs
                 applyConfigs,

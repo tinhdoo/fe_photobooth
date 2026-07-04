@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
-import { useWorkflow } from '../../context/WorkflowContext';
+import { useWorkflow, setPendingMediaUpload } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
 import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2 } from 'lucide-react';
@@ -620,10 +620,14 @@ const Edit = () => {
         ctx.drawImage(imgCanvas, drawX, drawY, drawW, drawH);
     };
 
-    const buildPrintCanvas = (sourceCanvas, printMode = 'grid_4x6') => {
+    // scale: hệ số phóng so với cỡ in native 1200x1800 (300 DPI). Nguồn (baseCanvas) render ở
+    // cùng hệ số nên mọi drawImage là 1:1 (không nội suy thừa); backend sẽ LANCZOS thu nhỏ về
+    // đúng pixel máy in -> supersampling, nét hơn. Truyền scale=1 giữ nguyên hành vi cũ.
+    const buildPrintCanvas = (sourceCanvas, printMode = 'grid_4x6', scale = 1) => {
+        const S = scale;
         const canvas = document.createElement('canvas');
-        canvas.width = 1200;
-        canvas.height = 1800;
+        canvas.width = 1200 * S;
+        canvas.height = 1800 * S;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -633,14 +637,14 @@ const Edit = () => {
         if (printMode === 'double_strip') {
             // Strip gốc là 600x1800 (tỉ lệ 1:3), đúng bằng mỗi nửa của giấy 4x6 (600x1800).
             // Vẽ tràn lề để GIỮ NGUYÊN tỉ lệ 1:3 và bỏ viền trắng thừa.
-            ctx.drawImage(sourceCanvas, 0, 0, 600, 1800);
-            ctx.drawImage(sourceCanvas, 600, 0, 600, 1800);
+            ctx.drawImage(sourceCanvas, 0, 0, 600 * S, 1800 * S);
+            ctx.drawImage(sourceCanvas, 600 * S, 0, 600 * S, 1800 * S);
             return { canvas, cutMode: '2x6' };
         }
 
         if (printMode === 'single_strip') {
             // Căn giữa 1 strip 600x1800 trên giấy 1200x1800, giữ nguyên tỉ lệ 1:3.
-            ctx.drawImage(sourceCanvas, 300, 0, 600, 1800);
+            ctx.drawImage(sourceCanvas, 300 * S, 0, 600 * S, 1800 * S);
             return { canvas, cutMode: 'none' };
         }
 
@@ -648,14 +652,14 @@ const Edit = () => {
             // Strip ngang gốc 1800x600 (6"x2", 3 ô). In 2 BẢN GIỐNG HỆT chồng dọc trên giấy 4x6
             // NẰM NGANG (1800x1200). Backend xoay 90° cho khớp giấy -> đường chia ngang giữa 2
             // strip thành đường dọc chính giữa tờ, đúng vị trí dao 2-inch cắt -> ra 2 strip y hệt.
-            canvas.width = 1800;
-            canvas.height = 1200;
+            canvas.width = 1800 * S;
+            canvas.height = 1200 * S;
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(sourceCanvas, 0, 0, 1800, 600);
-            ctx.drawImage(sourceCanvas, 0, 600, 1800, 600);
+            ctx.drawImage(sourceCanvas, 0, 0, 1800 * S, 600 * S);
+            ctx.drawImage(sourceCanvas, 0, 600 * S, 1800 * S, 600 * S);
             return { canvas, cutMode: '2x6' };
         }
 
@@ -663,8 +667,8 @@ const Edit = () => {
         // phải in landscape lấp đầy 4x6, không letterbox vào khung dọc -> hết viền trắng to.
         // (Backend tự xoay 90° cho khớp hướng giấy của máy in.)
         if (sourceCanvas.width > sourceCanvas.height) {
-            canvas.width = 1800;
-            canvas.height = 1200;
+            canvas.width = 1800 * S;
+            canvas.height = 1200 * S;
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = true;
@@ -672,14 +676,6 @@ const Edit = () => {
         }
         drawImageContain(ctx, sourceCanvas, 0, 0, canvas.width, canvas.height);
         return { canvas, cutMode: 'none' };
-    };
-
-    const cloneCanvas = (sourceCanvas) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = sourceCanvas.width;
-        canvas.height = sourceCanvas.height;
-        canvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
-        return canvas;
     };
 
     // Chỉnh màu in ĐÃ chuyển sang backend (áp lúc gửi máy in, đọc config mới nhất mỗi lần) ->
@@ -709,16 +705,23 @@ const Edit = () => {
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
             // 2. Setup Canvas
+            // RENDER_SCALE: render composite ở ĐỘ PHÂN GIẢI CAO hơn cỡ in native (1200x1800 = 300
+            // DPI của máy DNP). Gửi bản phóng xuống backend -> backend LANCZOS thu nhỏ (supersampling)
+            // về đúng pixel máy in -> nét & mịn hơn, bù độ mềm cố hữu của máy dye-sub. Ảnh album QR
+            // dùng chung baseCanvas này nên nét cao theo. Đổi 1 chỗ, áp cho cả in lẫn album.
+            // 1.5 = cân bằng chất lượng/RAM cho máy yếu (i3, 8GB, GPU tích hợp). Máy mạnh (16GB+)
+            // có thể nâng lên 2 để nét tối đa; >2 gần như không cải thiện thêm mà tốn RAM.
+            const RENDER_SCALE = 1.5;
             const baseCanvas = document.createElement('canvas');
-            const TARGET_HEIGHT = 1800;
+            const TARGET_HEIGHT = 1800 * RENDER_SCALE;
             const isStrip = layout.type === 'strip';
             const isStripHorizontal = layout.type === 'strip_horizontal';
             const isHorizontal = layout.type && layout.type.includes('horizontal');
             if (isStripHorizontal) {
                 // 1 strip NGANG = 6"x2" -> 1800x600 (3 ô hàng ngang). Sẽ in 2 bản chồng nhau
                 // ở buildPrintCanvas -> cắt ngang ra 2 strip GIỐNG HỆT.
-                baseCanvas.width = 1800;
-                baseCanvas.height = 600;
+                baseCanvas.width = 1800 * RENDER_SCALE;
+                baseCanvas.height = 600 * RENDER_SCALE;
             } else {
                 const ratio = isStrip ? 1 / 3 : (isHorizontal ? 3 / 2 : 2 / 3);
                 baseCanvas.height = TARGET_HEIGHT;
@@ -726,6 +729,11 @@ const Edit = () => {
             }
 
             const baseCtx = baseCanvas.getContext('2d');
+            // Ảnh R100 rất lớn (6000x4000) bị thu nhỏ ~10x vào ô -> BẮT BUỘC dùng nội suy chất
+            // lượng cao, nếu không trình duyệt mặc định 'low' (bilinear 1 bước) gây răng cưa/rỗ
+            // pixel ("vỡ nét") dính vào cả ảnh QR album lẫn ảnh in (đều lấy từ baseCanvas này).
+            baseCtx.imageSmoothingEnabled = true;
+            baseCtx.imageSmoothingQuality = 'high';
 
             // 3. Background
             if (selectedFrame.color && !selectedFrame.url && !selectedFrame.image) {
@@ -869,8 +877,19 @@ const Edit = () => {
             // Draw photos + frame (clean version, no QR/date)
             await drawComposite(baseCanvas, baseCtx);
 
-            // Clone clean canvas for composite upload (no QR, no date)
-            const cleanCanvas = cloneCanvas(baseCanvas);
+            // Ảnh album QR = bản composite SẠCH (chưa QR/date). baseCanvas đã render ở độ phân
+            // giải cao (RENDER_SCALE) nên album nét cao theo. TÔ NỀN TRẮNG trước rồi vẽ baseCanvas
+            // lên: với frame ảnh PNG, nền baseCanvas trong suốt -> xuất JPEG sẽ thành ĐEN nếu không
+            // tô trắng. Tô trắng cho khớp bản in (buildPrintCanvas cũng nền trắng).
+            const cleanCanvas = document.createElement('canvas');
+            cleanCanvas.width = baseCanvas.width;
+            cleanCanvas.height = baseCanvas.height;
+            const cleanCtx = cleanCanvas.getContext('2d');
+            cleanCtx.imageSmoothingEnabled = true;
+            cleanCtx.imageSmoothingQuality = 'high';
+            cleanCtx.fillStyle = '#ffffff';
+            cleanCtx.fillRect(0, 0, cleanCanvas.width, cleanCanvas.height);
+            cleanCtx.drawImage(baseCanvas, 0, 0);
 
             // Now draw QR and Date on baseCanvas for print only
             const drawQrAndDate = (targetCanvas, targetCtx) => {
@@ -903,8 +922,8 @@ const Edit = () => {
 
                 try {
                     const qrCode = new QRCodeStyling({
-                        width: 500,
-                        height: 500,
+                        width: 1000,
+                        height: 1000,
                         data: downloadUrl,
                         margin: 25,
                         qrOptions: { errorCorrectionLevel: 'L' },
@@ -927,7 +946,7 @@ const Edit = () => {
             drawQrAndDate(baseCanvas, baseCtx);
 
             const printMode = layout.printMode || (layout.type === 'strip' ? 'double_strip' : 'grid_4x6');
-            const printOutput = buildPrintCanvas(baseCanvas, printMode);
+            const printOutput = buildPrintCanvas(baseCanvas, printMode, RENDER_SCALE);
             const printCanvas = printOutput.canvas;
             const cutMode = printOutput.cutMode;
             const compositeCanvas = cleanCanvas;
@@ -963,10 +982,48 @@ const Edit = () => {
                     const compositeUrl = compositeData.url;
                     const compositePublicId = compositeData.public_id;
 
-                    // Upload originals and videos
-                    // Upload originals and videos
+                    // Session phải được tạo ở cùng nơi mà QR album và trang doanh thu đọc
+                    // (CLOUD_API_URL). Nếu chỉ lưu local thì quét QR / xem doanh thu sẽ không thấy.
+                    const sessionBaseUrl = CLOUD_API_URL || API_URL;
+                    const metaData = {
+                        device_id: getDeviceId(),
+                        frame_url: selectedFrame.url || selectedFrame.image,
+                        frame_config: frameConfig,
+                        photo_positions: photoPositions,
+                        print_mode: printMode,
+                        cut_mode: cutMode,
+                        print_quantity: selectedPrintQuantity,
+                        printer_copies: printerCopies,
+                        payment_code: sessionData.paymentCode || null,
+                        payment_code_value: sessionData.paymentCodeValue || null,
+                        payment_code_applied: sessionData.paymentCodeApplied || null,
+                        sepay_order_code: sessionData.sepayOrderCode || null,
+                    };
+                    const buildSessionPayload = (photosArr) => ({
+                        layout_id: layout.id || 'strip_4',
+                        composite_url: compositeUrl,
+                        composite_public_id: compositePublicId,
+                        photos: photosArr,
+                        payment_method: sessionData.paymentMethod || 'cash',
+                        amount: sessionData.printPrice || 60000,
+                        session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
+                        meta_data: metaData,
+                    });
+
+                    // 1) Tạo session NGAY với ảnh ghép (composite) -> album có ảnh để quét QR LIỀN,
+                    //    KHÔNG phải chờ upload ảnh gốc + video motion (webm nặng) ở nền.
+                    await axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload([]));
+
+                    updateSessionData('finalImage', compositeUrl);
+                    // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
+                    updateSessionData('sessionId', sessionId);
+                    nextStep(); // -> Result hiện QR ngay, không chờ video
+
+                    // 2) Upload ảnh gốc + video motion Ở NỀN rồi cập nhật lại session (upsert cùng
+                    //    uuid) -> album bổ sung ảnh lẻ + motion khi tải xong. KHÔNG chặn QR.
+                    //    Đăng ký promise để resetSession chờ nó xong trước khi reload (không mất ảnh).
                     const rawSource = sessionData.photos || [];
-                    const uploadedPhotos = await mapWithConcurrency(photos, 2, async (photoUrl, index) => {
+                    const bgUpload = mapWithConcurrency(photos, 2, async (photoUrl, index) => {
                         let finalPhotoUrl = photoUrl;
                         let finalPhotoPublicId = null;
                         let finalVideoUrl = null;
@@ -1021,44 +1078,10 @@ const Edit = () => {
                                 type: 'raw'
                             };
                         }
-                    });
-
-                    // Session phải được tạo ở cùng nơi mà QR album và trang doanh thu đọc
-                    // (CLOUD_API_URL). Nếu chỉ lưu local thì quét QR / xem doanh thu sẽ không thấy.
-                    const sessionBaseUrl = CLOUD_API_URL || API_URL;
-
-                    const sessionRes = await axios.post(`${sessionBaseUrl}/api/sessions`, {
-                        layout_id: layout.id || 'strip_4',
-                        composite_url: compositeUrl,
-                        composite_public_id: compositePublicId, // Send Public ID
-                        photos: uploadedPhotos.filter(Boolean),
-                        payment_method: sessionData.paymentMethod || 'cash',
-                        amount: sessionData.printPrice || 60000,
-                        session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
-                        meta_data: {
-                            device_id: getDeviceId(),
-                            frame_url: selectedFrame.url || selectedFrame.image,
-                            frame_config: frameConfig,
-                            photo_positions: photoPositions,
-                            print_mode: printMode,
-                            cut_mode: cutMode,
-                            print_quantity: selectedPrintQuantity,
-                            printer_copies: printerCopies,
-                            payment_code: sessionData.paymentCode || null,
-                            payment_code_value: sessionData.paymentCodeValue || null,
-                            payment_code_applied: sessionData.paymentCodeApplied || null,
-                            sepay_order_code: sessionData.sepayOrderCode || null,
-                        }
-                    });
-
-                    updateSessionData('finalImage', compositeUrl);
-                    // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
-                    // KHÔNG ghi đè bằng uuid cloud trả về: nếu cloud tạo uuid khác thì QR đã in
-                    // và PrintJob local sẽ lệch với Session cloud. Backend đã honor session_id gửi lên.
-                    updateSessionData('sessionId', sessionId);
-
-                    // (Đã gửi lệnh in ở trên, trước khi upload — không in lại ở đây.)
-                    nextStep();
+                    })
+                        .then((uploadedPhotos) => axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload(uploadedPhotos.filter(Boolean))))
+                        .catch((bgErr) => console.error('Cập nhật ảnh gốc/video ở nền thất bại:', bgErr));
+                    setPendingMediaUpload(bgUpload);
                 } catch (err) {
                     console.error("Upload process failed:", err);
                     setErrorDialog({
@@ -1069,7 +1092,7 @@ const Edit = () => {
                 } finally {
                     setIsUploading(false);
                 }
-            }, 'image/png');
+            }, 'image/jpeg', 0.95); // JPEG 95%: ảnh album 2400x3600 vẫn nhẹ hơn PNG cũ -> QR hiện nhanh
 
         } catch (error) {
             console.error("Print logic failed:", error);

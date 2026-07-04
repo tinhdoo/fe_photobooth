@@ -9,6 +9,7 @@ import SourceSelection from './components/steps/SourceSelection';
 import LayoutSelection from './components/steps/LayoutSelection';
 import PrintQuantity from './components/steps/PrintQuantity';
 import Payment from './components/steps/Payment';
+import GetReady from './components/steps/GetReady';
 
 const Capture = lazy(() => import('./components/steps/Capture'));
 const Edit = lazy(() => import('./components/steps/Edit'));
@@ -90,6 +91,8 @@ const StepContent = () => {
             return <PrintQuantity />;
         case 3:
             return <Payment />;
+        case 3.5:
+            return <GetReady />;
         case 4:
             return (
                 <StepSuspense>
@@ -121,12 +124,13 @@ const StepContent = () => {
 
 const AdminIndex = () => {
     if (isLocalHost()) return <Navigate to="/admin/settings" replace />;
-    // Trên mobile, mở thẳng trang "Mã thanh toán" (nhẹ + dùng nhiều nhất trên điện thoại).
-    // Desktop vẫn vào trang quản lý khung hình như cũ.
+    // Trang mặc định: mobile mở thẳng "Mã thanh toán" (nhẹ + dùng nhiều nhất trên điện thoại),
+    // desktop vào trang quản lý khung hình. Frame có route riêng (/admin/frames) để nút Frame
+    // không bị điều hướng lại về trang thanh toán trên mobile.
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
         return <Navigate to="/admin/codes" replace />;
     }
-    return <FrameManager />;
+    return <Navigate to="/admin/frames" replace />;
 };
 
 const CloudAdminRoute = ({ children }) => {
@@ -169,6 +173,7 @@ const App = () => {
                             }
                         >
                             <Route index element={<AdminIndex />} />
+                            <Route path="frames" element={<CloudAdminRoute><FrameManager /></CloudAdminRoute>} />
                             <Route path="codes" element={<CloudAdminRoute><CodeManager /></CloudAdminRoute>} />
                             <Route path="revenue" element={<CloudAdminRoute><RevenueDashboard /></CloudAdminRoute>} />
                             <Route path="settings" element={<Settings />} />

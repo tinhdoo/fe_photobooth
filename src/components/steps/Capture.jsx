@@ -73,7 +73,9 @@ const Capture = () => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [stream, setStream] = useState(null);
-    const [cameraReady, setCameraReady] = useState(false);
+    // Khởi tạo sẵn sàng từ cờ cameraWarm (do màn "Chuẩn bị"/GetReady đặt khi live view đã ra
+    // hình) -> vào Chụp KHÔNG chớp overlay "Đang khởi động camera" ngay từ khung hình đầu.
+    const [cameraReady, setCameraReady] = useState(!!sessionData.cameraWarm);
     const [cameraError, setCameraError] = useState(null);
     // Booth dùng máy ảnh Canon (không có webcam). Mặc định 'canon' để khi configs CHƯA load
     // kịp KHÔNG rơi vào webcam -> getUserMedia 'Requested device not found' trên máy không webcam.
@@ -287,18 +289,16 @@ const Capture = () => {
         }
 
         if (cameraMode === 'canon') {
-            // Đã sẵn sàng ít nhất 1 lần trong phiên (live view server chạy liên tục) -> KHÔNG
-            // hiện lại overlay "Đang khởi động camera" mỗi lần chụp lại; coi như sẵn sàng ngay.
-            if (_cameraReadyOnce) {
+            // Vừa qua màn "Chuẩn bị" (GetReady) đã xác nhận camera RA HÌNH (cameraWarm) -> vào là
+            // sẵn sàng NGAY, KHÔNG hiện overlay "Đang khởi động camera" (live view đang chạy nên
+            // có hình liền). Vì MỌI đường vào Chụp đều qua GetReady nên cờ này luôn chuẩn.
+            if (sessionData.cameraWarm) {
                 setCameraReady(true);
                 return;
             }
-            // Lần đầu: CHỜ live view ra hình (onLoad set cameraReady) -> tránh đen + motion rỗng
-            // ở ảnh đầu. Với model bật LV theo yêu cầu, EVF Canon lúc "lạnh" có thể mất >3s ra
-            // frame đầu -> nới fallback lên 8s để đếm ngược chỉ chạy khi đã có hình thật (trong
-            // lúc chờ vẫn hiện overlay "Đang khởi động camera...", không phải đen). Bình thường
-            // live view đã pre-warm từ bước Thanh toán nên onLoad bắn <1s, fallback hiếm khi tới.
-            const fb = setTimeout(() => { _cameraReadyOnce = true; setCameraReady(true); }, 8000);
+            // Trường hợp hiếm (camera chưa kịp ấm ở GetReady): CHỜ frame thật (onLoad) mới cho đếm
+            // ngược, tránh đen. Fallback 8s để không kẹt nếu camera thật sự không lên hình.
+            const fb = setTimeout(() => { setCameraReady(true); }, 8000);
             return () => clearTimeout(fb);
         }
 

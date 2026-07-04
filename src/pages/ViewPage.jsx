@@ -281,10 +281,13 @@ const ViewPage = () => {
 
     useEffect(() => {
         let cancelled = false;
+        let pollTimer = null;
+        let attempts = 0;
+        const MAX_POLLS = 12; // ~30s (2.5s/lần) chờ ảnh lẻ + video upload nền ở booth xong
 
-        const fetchSession = async () => {
-            setLoading(true);
-            setError('');
+        // isPoll = true: lần gọi lại nền -> KHÔNG bật loading / không báo lỗi phá album đang hiện.
+        const fetchSession = async (isPoll = false) => {
+            if (!isPoll) { setLoading(true); setError(''); }
             try {
                 const res = await axios.get(`${CLOUD_API_URL}/api/sessions`, {
                     params: { id }
@@ -297,24 +300,32 @@ const ViewPage = () => {
                 const hasPhotos = Array.isArray(data.photos) && data.photos.some((photo) => getPhotoUrl(photo));
 
                 if (data.status === 'expired' || (!hasComposite && !hasPhotos)) {
-                    setError('Liên kết đã hết hạn. Cảm ơn bạn đã sử dụng dịch vụ Photobooth.');
+                    if (!isPoll) setError('Liên kết đã hết hạn. Cảm ơn bạn đã sử dụng dịch vụ Photobooth.');
                     return;
                 }
 
                 setSession(data);
+
+                // Album đã có ảnh ghép nhưng ảnh lẻ/video CHƯA về (booth đang upload nền) -> poll
+                // bổ sung tới khi có, hoặc hết MAX_POLLS thì thôi (giữ ảnh ghép đang hiện).
+                if (hasComposite && !hasPhotos && attempts < MAX_POLLS) {
+                    attempts += 1;
+                    pollTimer = setTimeout(() => fetchSession(true), 2500);
+                }
             } catch (err) {
                 console.error('Failed to load album', err);
-                if (!cancelled) {
+                if (!cancelled && !isPoll) {
                     setError('Không thể tải album. Vui lòng thử lại hoặc quay lại booth để được hỗ trợ.');
                 }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled && !isPoll) setLoading(false);
             }
         };
 
         if (id) fetchSession();
         return () => {
             cancelled = true;
+            if (pollTimer) clearTimeout(pollTimer);
         };
     }, [id]);
 
