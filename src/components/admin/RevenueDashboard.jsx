@@ -399,12 +399,13 @@ const RevenueDashboard = () => {
             )}
 
             {/* Stats Cards - Đã sửa lỗi bị khuất số */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6">
                 {[
                     { label: 'Hôm nay', value: periodStats.today, icon: <Calendar size={20} />, color: 'emerald', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
                     { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={20} />, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
                     { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={20} />, color: 'purple', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
                     { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
+                    { label: 'Voucher', value: voucherStats.total, note: `${voucherStats.count} lượt · không tính DT`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100' },
                 ].map((item, idx) => (
                     // SỬA: p-4 -> p-3 (giảm lề) để tăng diện tích hiển thị
                     <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
@@ -416,31 +417,18 @@ const RevenueDashboard = () => {
                         </div>
 
                         {/* SỬA: Bỏ 'truncate', thêm 'break-words', chỉnh font size mobile xuống text-base */}
-                        <h2 className="text-base sm:text-lg md:text-2xl font-black text-[#1a1a2e] break-words leading-tight">
-                            {formatCurrency(item.value)}
-                        </h2>
+                        <div>
+                            <h2 className="text-base sm:text-lg md:text-2xl font-black text-[#1a1a2e] break-words leading-tight">
+                                {formatCurrency(item.value)}
+                            </h2>
+                            {item.note && (
+                                <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-wide text-gray-400 mt-1 truncate">
+                                    {item.note}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 ))}
-            </div>
-
-            {/* Ô Voucher riêng — mã thanh toán KHÔNG tính vào doanh thu */}
-            <div className="rounded-2xl md:rounded-3xl border border-amber-200 bg-amber-50/60 p-4 md:p-5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
-                        <Hash size={20} />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-amber-700 text-[10px] md:text-xs uppercase tracking-wider font-bold">
-                            Voucher đã dùng · KHÔNG tính doanh thu
-                        </p>
-                        <p className="text-amber-600/70 text-[11px] md:text-xs mt-0.5 font-semibold">
-                            {voucherStats.count} lượt dùng mã thanh toán
-                        </p>
-                    </div>
-                </div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-black text-amber-700 break-words leading-tight text-right shrink-0">
-                    {formatCurrency(voucherStats.total)}
-                </h2>
             </div>
 
             {/* Charts — 2 col grid */}
