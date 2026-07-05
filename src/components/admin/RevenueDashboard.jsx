@@ -405,10 +405,10 @@ const RevenueDashboard = () => {
                     { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={20} />, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
                     { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={20} />, color: 'purple', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
                     { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-                    { label: 'Voucher', value: voucherStats.total, note: `${voucherStats.count} lượt · không tính DT`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100' },
+                    { label: 'Voucher', value: voucherStats.total, note: `${voucherStats.count} lượt · không tính DT`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100', span: 'col-span-2 lg:col-span-1' },
                 ].map((item, idx) => (
                     // SỬA: p-4 -> p-3 (giảm lề) để tăng diện tích hiển thị
-                    <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
+                    <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} ${item.span || ''} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
                         <div className="flex items-center gap-2 md:gap-3">
                             <div className={`w-8 h-8 md:w-10 md:h-10 shrink-0 ${item.bg} ${item.text} rounded-xl flex items-center justify-center`}>
                                 {item.icon}
