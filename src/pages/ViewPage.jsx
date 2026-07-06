@@ -278,6 +278,7 @@ const ViewPage = () => {
     const [downloading, setDownloading] = useState(false);
     const [errorDialog, setErrorDialog] = useState(null);
     const [motionVideo, setMotionVideo] = useState(null); // { blob, filename } sau khi tạo xong
+    const [combined, setCombined] = useState(null); // { url, blob } — 2 strip GHÉP thành 1 ảnh (chỉ layout strip)
 
     useEffect(() => {
         let cancelled = false;
@@ -337,6 +338,47 @@ const ViewPage = () => {
     const frameConfig = session?.meta_data?.frame_config || null;
     const photoPositions = session?.meta_data?.photo_positions || [];
     const canRenderMotionFrame = hasVideos && frameUrl && Array.isArray(frameConfig?.boxes) && frameConfig.boxes.length > 0;
+
+    // GHÉP 2 strip thành 1 ẢNH DUY NHẤT (nguyên tờ 4x6) để hiển thị + tải về.
+    // composite_url là 1 strip đơn (1:3). Layout strip in ra 2 strip/tờ nên bản digital cũng
+    // ghép 2 bản: strip dọc -> cạnh nhau; strip ngang -> chồng dọc. Layout khác giữ nguyên.
+    useEffect(() => {
+        const src = session?.composite_url;
+        if (!src || !strip) { setCombined(null); return undefined; }
+        let cancelled = false;
+        let createdUrl = null;
+        (async () => {
+            try {
+                const objUrl = await fetchAsObjectUrl(src);
+                const img = await waitForImage(objUrl);
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const canvas = document.createElement('canvas');
+                canvas.width = stripHorizontal ? w : w * 2;
+                canvas.height = stripHorizontal ? h * 2 : h;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, w, h);
+                if (stripHorizontal) ctx.drawImage(img, 0, h, w, h);
+                else ctx.drawImage(img, w, 0, w, h);
+                URL.revokeObjectURL(objUrl);
+                const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.95));
+                if (cancelled || !blob) return;
+                createdUrl = URL.createObjectURL(blob);
+                setCombined({ url: createdUrl, blob });
+            } catch (e) {
+                console.warn('Ghép 2 strip thất bại, dùng ảnh gốc:', e);
+                if (!cancelled) setCombined(null);
+            }
+        })();
+        return () => { cancelled = true; if (createdUrl) URL.revokeObjectURL(createdUrl); };
+    }, [session?.composite_url, strip, stripHorizontal]);
+
+    // Ảnh ghép dùng để HIỂN THỊ + TẢI: strip -> bản đã ghép 2 strip; layout khác -> composite gốc.
+    const displayCompositeUrl = combined?.url || session?.composite_url;
 
     const downloadUrl = async (url, filename) => {
         if (!url) return;
@@ -439,8 +481,9 @@ const ViewPage = () => {
         const files = [];
 
         if (session.composite_url) {
+            // strip -> ảnh đã ghép 2 strip (nguyên tờ 4x6); layout khác -> composite gốc.
             files.push({
-                url: session.composite_url,
+                url: displayCompositeUrl,
                 filename: getDownloadFilename(session, 'jpg')
             });
         }
@@ -499,6 +542,7 @@ const ViewPage = () => {
                 return null;
             }));
 
+            // Motion = 2 strip cạnh nhau (nguyên tờ 4x6), khớp với ảnh ghép tải về.
             const repeatCount = strip ? 2 : 1;
             const frameWidth = frameImage.naturalWidth || frameImage.width;
             const frameHeight = frameImage.naturalHeight || frameImage.height;
@@ -776,28 +820,23 @@ const ViewPage = () => {
                         </div>
 
                         <div className="rounded-3xl border border-[#EFE0C8] bg-[#FFFDF7] p-3 shadow-sm sm:p-4">
-                            <div className={`mx-auto grid w-full gap-0 ${strip && !stripHorizontal ? 'grid-cols-2' : 'grid-cols-1'} ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
+                            {/* 1 ẢNH DUY NHẤT: strip -> đã ghép 2 strip thành nguyên tờ 4x6 (giữ ảnh/
+                                tải về ra 1 ảnh, không còn 2 nửa rời). Layout khác -> composite gốc. */}
+                            <div className={`mx-auto w-full ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
                                 <img
-                                    src={session.composite_url}
+                                    src={displayCompositeUrl}
                                     alt="Ảnh đã ghép"
                                     className="h-auto w-full object-contain"
                                     loading="eager"
                                     decoding="async"
                                 />
-                                {strip && (
-                                    <img
-                                        src={session.composite_url}
-                                        alt="Ảnh đã ghép bản thứ hai"
-                                        className="h-auto w-full object-contain"
-                                        loading="eager"
-                                        decoding="async"
-                                    />
-                                )}
                             </div>
 
                             <button
                                 type="button"
-                                onClick={() => saveImages([{ url: session.composite_url, filename: getDownloadFilename(session, 'jpg') }])}
+                                onClick={() => (combined?.blob
+                                    ? saveBlob(combined.blob, getDownloadFilename(session, 'jpg'))
+                                    : saveImages([{ url: session.composite_url, filename: getDownloadFilename(session, 'jpg') }]))}
                                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F6E6C9] px-5 py-3 text-base font-extrabold text-[#7B5E43]"
                             >
                                 <Download size={18} />
