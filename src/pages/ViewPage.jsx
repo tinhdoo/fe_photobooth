@@ -164,7 +164,9 @@ const recordCanvas = (canvas, drawFrame, durationMs = 7000, fps = 24) => new Pro
 
 const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions, sizerUrl }) => {
     const boxes = Array.isArray(frameConfig?.boxes) ? frameConfig.boxes : [];
-    if (!frameUrl || boxes.length === 0 || photos.length === 0) return null;
+    // Cho phép motion KHÔNG cần frame overlay: chỉ cần có ô (boxes) + ảnh/video. Frame chỉ là
+    // lớp trang trí phủ lên; layout không có ảnh khung (frame_url null) vẫn phát motion trong ô.
+    if (boxes.length === 0 || photos.length === 0) return null;
 
     let implicitPhotoIndex = 0;
 
@@ -248,13 +250,15 @@ const FrameMotionPreview = ({ frameUrl, frameConfig, photos, positions, sizerUrl
                 })}
             </div>
 
-            <img
-                src={frameUrl}
-                alt="Motion trong khung"
-                className="pointer-events-none absolute inset-0 z-10 h-full w-full object-fill"
-                loading="eager"
-                decoding="async"
-            />
+            {frameUrl && (
+                <img
+                    src={frameUrl}
+                    alt="Motion trong khung"
+                    className="pointer-events-none absolute inset-0 z-10 h-full w-full object-fill"
+                    loading="eager"
+                    decoding="async"
+                />
+            )}
         </div>
     );
 };
@@ -279,6 +283,9 @@ const ViewPage = () => {
     const [errorDialog, setErrorDialog] = useState(null);
     const [motionVideo, setMotionVideo] = useState(null); // { blob, filename } sau khi tạo xong
     const [combined, setCombined] = useState(null); // { url, blob } — 2 strip GHÉP thành 1 ảnh (chỉ layout strip)
+    // Album đã có ảnh ghép nhưng ảnh lẻ/video CHƯA về (booth đang upload nền) -> báo cho khách biết
+    // "đang tải thêm" để KHÔNG tưởng chỉ có mỗi ảnh ghép rồi bỏ đi.
+    const [loadingMore, setLoadingMore] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -310,8 +317,11 @@ const ViewPage = () => {
                 // Album đã có ảnh ghép nhưng ảnh lẻ/video CHƯA về (booth đang upload nền) -> poll
                 // bổ sung tới khi có, hoặc hết MAX_POLLS thì thôi (giữ ảnh ghép đang hiện).
                 if (hasComposite && !hasPhotos && attempts < MAX_POLLS) {
+                    setLoadingMore(true); // báo cho khách: còn ảnh lẻ + video đang tải
                     attempts += 1;
                     pollTimer = setTimeout(() => fetchSession(true), 2500);
+                } else {
+                    setLoadingMore(false); // đã có ảnh lẻ, hoặc đã chờ hết -> tắt báo
                 }
             } catch (err) {
                 console.error('Failed to load album', err);
@@ -337,7 +347,9 @@ const ViewPage = () => {
     const frameUrl = session?.meta_data?.frame_url || '';
     const frameConfig = session?.meta_data?.frame_config || null;
     const photoPositions = session?.meta_data?.photo_positions || [];
-    const canRenderMotionFrame = hasVideos && frameUrl && Array.isArray(frameConfig?.boxes) && frameConfig.boxes.length > 0;
+    // Motion chỉ CẦN có video + ô (boxes) — KHÔNG bắt buộc frame overlay. Nhờ vậy session cũ lỡ
+    // mất frame_url vẫn phát được motion trong ô (frame chỉ là lớp trang trí phủ lên nếu có).
+    const canRenderMotionFrame = hasVideos && Array.isArray(frameConfig?.boxes) && frameConfig.boxes.length > 0;
 
     // GHÉP 2 strip thành 1 ẢNH DUY NHẤT (nguyên tờ 4x6) để hiển thị + tải về.
     // composite_url là 1 strip đơn (1:3). Layout strip in ra 2 strip/tờ nên bản digital cũng
@@ -512,9 +524,13 @@ const ViewPage = () => {
         try {
             if (!canRenderMotionFrame) return;
 
-            const frameObjectUrl = await fetchAsObjectUrl(frameUrl);
-            objectUrls.push(frameObjectUrl);
-            const frameImage = await waitForImage(frameObjectUrl);
+            // Ảnh để LẤY KÍCH THƯỚC (tỉ lệ strip): ưu tiên frame overlay; nếu layout không có frame
+            // thì dùng ảnh ghép (composite) để canh đúng tỉ lệ. frameImage (overlay) chỉ có khi có frame.
+            const sizerSrc = frameUrl || session.composite_url;
+            const sizerObjectUrl = await fetchAsObjectUrl(sizerSrc);
+            objectUrls.push(sizerObjectUrl);
+            const sizerImage = await waitForImage(sizerObjectUrl);
+            const frameImage = frameUrl ? sizerImage : null;
 
             const mediaItems = await Promise.all(photos.map(async (photo) => {
                 const videoUrl = getVideoUrl(photo);
@@ -544,8 +560,8 @@ const ViewPage = () => {
 
             // Motion = 2 strip cạnh nhau (nguyên tờ 4x6), khớp với ảnh ghép tải về.
             const repeatCount = strip ? 2 : 1;
-            const frameWidth = frameImage.naturalWidth || frameImage.width;
-            const frameHeight = frameImage.naturalHeight || frameImage.height;
+            const frameWidth = sizerImage.naturalWidth || sizerImage.width;
+            const frameHeight = sizerImage.naturalHeight || sizerImage.height;
             // Strip ngang -> nhân đôi theo CHIỀU CAO (chồng dọc); strip dọc -> theo chiều rộng.
             const scale = stripHorizontal
                 ? Math.min(1, 1080 / Math.max(frameWidth, frameHeight * repeatCount))
@@ -604,7 +620,7 @@ const ViewPage = () => {
                     ctx.restore();
                 });
 
-                ctx.drawImage(frameImage, offsetX, offsetY, stripWidth, stripHeight);
+                if (frameImage) ctx.drawImage(frameImage, offsetX, offsetY, stripWidth, stripHeight);
             };
 
             const maxDuration = mediaItems.reduce((duration, item) => Math.max(duration, item?.duration || 0), 0);
@@ -743,11 +759,14 @@ const ViewPage = () => {
                 <button
                     type="button"
                     onClick={downloadAll}
-                    disabled={downloading}
-                    className="mx-auto flex min-h-12 w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-[#D9BE92] bg-[#E6D0A8] px-5 py-3 text-base font-extrabold text-[#6B5234] shadow-sm disabled:opacity-70 sm:w-auto sm:min-w-64"
+                    disabled={downloading || loadingMore}
+                    className="mx-auto flex min-h-12 w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-[#D9BE92] bg-[#E6D0A8] px-5 py-3 text-base font-extrabold text-[#6B5234] shadow-sm disabled:opacity-60 disabled:cursor-not-allowed sm:w-auto sm:min-w-64"
                 >
-                    <Download size={20} />
-                    {downloading ? 'Đang tải...' : 'Tải xuống tất cả'}
+                    {loadingMore ? (
+                        <><span className="h-5 w-5 shrink-0 rounded-full border-[3px] border-[#6B5234]/30 border-t-[#6B5234] animate-spin" /> Đang tải thêm ảnh…</>
+                    ) : (
+                        <><Download size={20} /> {downloading ? 'Đang tải...' : 'Tải xuống tất cả'}</>
+                    )}
                 </button>
             </header>
 
@@ -812,6 +831,19 @@ const ViewPage = () => {
                     </section>
                 )}
 
+                {loadingMore && !canRenderMotionFrame && Array.isArray(frameConfig?.boxes) && frameConfig.boxes.length > 0 && (
+                    <section className="mb-8">
+                        <div className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#7B5E43]">
+                            <Film size={20} />
+                            Motion trong khung
+                        </div>
+                        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-[#EFE0C8] bg-[#FFFDF7] p-10 shadow-sm">
+                            <div className="h-9 w-9 rounded-full border-4 border-[#D5B895]/30 border-t-[#7B5E43] animate-spin" />
+                            <p className="text-sm font-bold text-[#7B5E43]/80">Đang tải video chuyển động…</p>
+                        </div>
+                    </section>
+                )}
+
                 {session?.composite_url && (
                     <section className="mb-8">
                         <div className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#7B5E43]">
@@ -842,6 +874,24 @@ const ViewPage = () => {
                                 <Download size={18} />
                                 Tải ảnh này
                             </button>
+                        </div>
+                    </section>
+                )}
+
+                {loadingMore && photos.length === 0 && (
+                    <section className="mb-8">
+                        <div className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#7B5E43]">
+                            <ImageIcon size={20} />
+                            Ảnh gốc
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="aspect-[3/4] animate-pulse rounded-2xl border border-[#EFE0C8] bg-[#F3E7CF]" />
+                            ))}
+                        </div>
+                        <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#7B5E43]/80">
+                            <span className="h-4 w-4 rounded-full border-[3px] border-[#D5B895]/30 border-t-[#7B5E43] animate-spin" />
+                            Đang tải ảnh gốc…
                         </div>
                     </section>
                 )}

@@ -227,6 +227,9 @@ const Edit = () => {
         window.addEventListener('pointerup', onStickerUp);
     };
     const [frames, setFrames] = useState([]);
+    // Đã tải xong danh sách frame + áp frame mặc định chưa? Dùng để CHẶN nút In cho tới lúc đó,
+    // tránh race "chụp xong ấn in luôn" khi selectedFrame còn = 'none' -> in/album mất frame.
+    const [framesLoaded, setFramesLoaded] = useState(false);
     const [selectedFrame, setSelectedFrame] = useState({ id: 'none', name: 'None', color: '#ffffff', image: null });
     const selectedFrameRef = useRef(selectedFrame);
     // Cache config (boxes) theo frameId để đổi frame không phải fetch lại mỗi lần -> hết delay
@@ -313,11 +316,15 @@ const Edit = () => {
                 });
 
                 if (allFrames.length > 0) {
-                    handleSelectFrame(allFrames[0]);
+                    // CHỜ áp xong frame mặc định (gồm cả config ô) rồi mới cho phép In -> ảnh in
+                    // luôn có frame dù khách bấm in ngay.
+                    await handleSelectFrame(allFrames[0]);
                 }
             } catch (error) {
                 console.error("Error fetching frames:", error);
                 setFrames([]);
+            } finally {
+                setFramesLoaded(true); // cho phép In (có frame hoặc layout không có frame nào)
             }
         };
         fetchFrames();
@@ -1444,8 +1451,8 @@ const Edit = () => {
 
                     <motion.button
                         onClick={handlePrint}
-                        disabled={isUploading}
-                        className={`bg-[#D5B895] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest transition-none ${isUploading ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
+                        disabled={isUploading || !framesLoaded}
+                        className={`bg-[#D5B895] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest transition-opacity duration-300 ${isUploading ? 'opacity-70 cursor-not-allowed' : (!framesLoaded ? 'opacity-40 cursor-not-allowed' : 'active:scale-95')}`}
                     >
                         {isUploading ? "Đang xử lý..." : "In Ảnh"}
                     </motion.button>
