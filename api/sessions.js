@@ -15,11 +15,13 @@ function isMissingTable(error) {
     return /Could not find the table|schema cache|does not exist/i.test(error?.message || '');
 }
 
-const SESSION_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+// Thời hạn album/QR = 48 giờ. Đổi 1 chỗ này là áp cho: đặt expires_at khi tạo, kiểm tra truy
+// cập, và cron dọn ảnh -> luôn nhất quán.
+const SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
 // Hết hạn nếu BẤT KỲ: đã bị cron đánh dấu 'expired'; HOẶC có expires_at và đã quá; HOẶC (DỰ PHÒNG
-// khi expires_at null - session bản cũ) created_at đã quá 72h. Khớp đúng logic cron cleanup ->
-// chặn truy cập NGAY tại mốc 72h, không chờ cron, không lọt session thiếu expires_at.
+// khi expires_at null - session bản cũ) created_at đã quá 48h. Khớp đúng logic cron cleanup ->
+// chặn truy cập NGAY tại mốc 48h, không chờ cron, không lọt session thiếu expires_at.
 function isSessionExpired(row) {
     if (!row) return false;
     if (row.status === 'expired') return true;
@@ -62,7 +64,7 @@ function buildSession(body) {
         meta_data: body.meta_data || {},
         status: 'active',
         created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(Date.now() + SESSION_MAX_AGE_MS).toISOString(),
     };
 }
 
@@ -154,7 +156,7 @@ async function cleanupExpiredCloud(req, res, supabase) {
 
     const bucket = await resolveBucket(supabase);
     const now = Date.now();
-    const maxAgeMs = 72 * 60 * 60 * 1000;
+    const maxAgeMs = SESSION_MAX_AGE_MS;
     const cutoffIso = new Date(now - maxAgeMs).toISOString();
     const SESSION_BATCH = 200; // giới hạn mỗi lần để function luôn chạy xong (tránh timeout)
 

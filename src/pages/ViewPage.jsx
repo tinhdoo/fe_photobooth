@@ -736,7 +736,7 @@ const ViewPage = () => {
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                     <p className="text-sm font-semibold text-[#7B5E43] sm:text-base">
-                        Lưu ý: link sẽ hết hạn sau 72 giờ
+                        Lưu ý: link sẽ hết hạn sau 48 giờ
                     </p>
                 </div>
 
