@@ -268,25 +268,23 @@ const RevenueDashboard = () => {
         return details.join(' • ');
     };
 
-    // Mỗi loại thanh toán 1 màu: tiền mặt=xanh lá, QR=xanh dương, mã=cam, mã+tiền=teal, mã+QR=tím.
+    // Mỗi loại thanh toán 1 màu -> tô NỀN CẢ DÒNG: tiền mặt=xanh lá, QR=xanh dương, mã=cam,
+    // mã+tiền=teal, mã+QR=tím. `row` là nền dòng, `left` là vạch màu bên trái, `dot` là chấm nhỏ.
     const getMethodStyle = (tx) => {
         const m = String(tx.payment_method || '').toLowerCase();
-        if (m.includes('code') && m.includes('cash')) return { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500' };
-        if (m.includes('code') && m.includes('qr')) return { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' };
-        if (m.includes('code')) return { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' };
-        if (m.includes('qr') || m.includes('sepay')) return { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        if (m.includes('cash') || m === '') return { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        return { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' };
+        if (m.includes('code') && m.includes('cash')) return { row: 'bg-teal-50/60', left: 'border-l-4 border-teal-400', dot: 'bg-teal-500' };
+        if (m.includes('code') && m.includes('qr')) return { row: 'bg-purple-50/60', left: 'border-l-4 border-purple-400', dot: 'bg-purple-500' };
+        if (m.includes('code')) return { row: 'bg-orange-50/60', left: 'border-l-4 border-orange-400', dot: 'bg-orange-500' };
+        if (m.includes('qr') || m.includes('sepay')) return { row: 'bg-blue-50/60', left: 'border-l-4 border-blue-400', dot: 'bg-blue-500' };
+        if (m.includes('cash') || m === '') return { row: 'bg-emerald-50/60', left: 'border-l-4 border-emerald-400', dot: 'bg-emerald-500' };
+        return { row: 'bg-gray-50', left: 'border-l-4 border-gray-300', dot: 'bg-gray-400' };
     };
-    const methodBadge = (tx) => {
-        const s = getMethodStyle(tx);
-        return (
-            <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-bold ${s.bg} ${s.text}`}>
-                <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
-                {getMethodLabel(tx)}
-            </span>
-        );
-    };
+    const methodBadge = (tx) => (
+        <span className="inline-flex items-center gap-2 font-bold text-[#1a1a2e]">
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getMethodStyle(tx).dot}`} />
+            {getMethodLabel(tx)}
+        </span>
+    );
 
     const handleResetRevenue = async () => {
         if (resetCode !== '8686') {
@@ -912,7 +910,7 @@ const RevenueDashboard = () => {
                         <div className="md:hidden flex flex-col divide-y divide-gray-100">
                             {stats.transactions?.length > 0 ? (
                                 stats.transactions.map((tx) => (
-                                    <div key={tx.id} className="p-5 flex flex-col gap-3 hover:bg-gray-50 transition-colors">
+                                    <div key={tx.id} className={`p-5 pl-4 flex flex-col gap-3 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 {methodBadge(tx)}
@@ -964,7 +962,7 @@ const RevenueDashboard = () => {
                                 <tbody className="divide-y divide-gray-50">
                                     {stats.transactions?.length > 0 ? (
                                         stats.transactions.map((tx) => (
-                                            <tr key={tx.id} className="hover:bg-[#e63946]/5 transition-colors group">
+                                            <tr key={tx.id} className={`transition-colors group ${getMethodStyle(tx).row}`}>
                                                 <td className="pl-8 pr-4 py-6">
                                                     {methodBadge(tx)}
                                                     {getMethodDetail(tx) && (
