@@ -15,10 +15,24 @@ function isMissingTable(error) {
     return /Could not find the table|schema cache|does not exist/i.test(error?.message || '');
 }
 
+const SESSION_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+
+// Hết hạn nếu BẤT KỲ: đã bị cron đánh dấu 'expired'; HOẶC có expires_at và đã quá; HOẶC (DỰ PHÒNG
+// khi expires_at null - session bản cũ) created_at đã quá 72h. Khớp đúng logic cron cleanup ->
+// chặn truy cập NGAY tại mốc 72h, không chờ cron, không lọt session thiếu expires_at.
+function isSessionExpired(row) {
+    if (!row) return false;
+    if (row.status === 'expired') return true;
+    const now = Date.now();
+    if (row.expires_at && new Date(row.expires_at).getTime() < now) return true;
+    if (row.created_at && (new Date(row.created_at).getTime() + SESSION_MAX_AGE_MS) < now) return true;
+    return false;
+}
+
 function normalizeSession(row) {
     if (!row) return null;
 
-    const expired = row.expires_at && new Date(row.expires_at).getTime() < Date.now();
+    const expired = isSessionExpired(row);
     return {
         id: row.id,
         uuid: row.uuid,
@@ -113,6 +127,22 @@ async function removeStoragePaths(supabase, bucket, paths) {
     }
 
     return deleted;
+}
+
+// XOÁ-KHI-TRUY-CẬP: khi mở 1 album đã HẾT HẠN, xoá ngay ảnh của nó khỏi storage + đánh dấu
+// 'expired' (không chờ cron 3h sáng). Best-effort: mọi lỗi đều nuốt để KHÔNG làm hỏng response.
+async function purgeExpiredSession(supabase, row) {
+    try {
+        const bucket = await resolveBucket(supabase);
+        const paths = collectSessionStoragePaths(row);
+        if (row.uuid) paths.push(`sessions/${row.uuid}.json`);
+        if (paths.length) await removeStoragePaths(supabase, bucket, paths);
+    } catch { /* bỏ qua lỗi xoá storage */ }
+    try {
+        if (row.status !== 'expired' && row.id != null) {
+            await supabase.from('photo_sessions').update({ status: 'expired' }).eq('id', row.id);
+        }
+    } catch { /* bỏ qua lỗi cập nhật DB */ }
 }
 
 async function cleanupExpiredCloud(req, res, supabase) {
@@ -268,11 +298,19 @@ export default async function handler(req, res) {
                 if (error && isMissingTable(error)) {
                     const storageSession = await getSessionFromStorage(supabase, sessionId);
                     if (!storageSession) return json(res, 404, { error: 'Session not found' });
+                    if (storageSession.status !== 'expired' && isSessionExpired(storageSession)) {
+                        await purgeExpiredSession(supabase, storageSession);
+                    }
                     return json(res, 200, normalizeSession(storageSession));
                 }
 
                 if (error) throw error;
                 if (!data) return json(res, 404, { error: 'Session not found' });
+                // Đã HẾT HẠN mà chưa dọn -> xoá ảnh + đánh dấu 'expired' NGAY (không chờ cron 3h sáng).
+                // Chỉ chạy lần đầu phát hiện (status chưa 'expired'); lần sau bỏ qua để không lặp việc.
+                if (data.status !== 'expired' && isSessionExpired(data)) {
+                    await purgeExpiredSession(supabase, data);
+                }
                 return json(res, 200, normalizeSession(data));
             }
 

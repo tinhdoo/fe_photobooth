@@ -14,6 +14,8 @@ const GetReady = () => {
     const mountAtRef = useRef(0);
     const doneRef = useRef(false);
     const readyTimerRef = useRef(null);
+    // Ref tới <img> live view MJPEG -> để NGẮT kết nối khi rời màn Chuẩn bị.
+    const liveImgRef = useRef(null);
 
     const advance = () => {
         if (doneRef.current) return;
@@ -34,6 +36,11 @@ const GetReady = () => {
             clearTimeout(maxTimer);
             if (minTimer) clearTimeout(minTimer);
             if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
+            // NGẮT MJPEG /liveview khi rời màn (mỗi lần Chụp lại đều qua đây). Gán 1 ảnh GIF 1x1
+            // buộc trình duyệt HỦY ngay luồng MJPEG; chỉ gỡ <img> (React unmount) KHÔNG đủ để đóng
+            // -> kết nối sống dai tích tụ tới trần ~6/host + cạn thread middleware -> ĐƠ khi retake.
+            const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+            try { if (liveImgRef.current) liveImgRef.current.src = BLANK; } catch (e) { /* ignore */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -64,6 +71,7 @@ const GetReady = () => {
                 hình -> vào Chụp là có hình ngay. Chỉ áp dụng canon mode. */}
             {isCanon && (
                 <img
+                    ref={liveImgRef}
                     src="http://localhost:5001/liveview"
                     alt=""
                     aria-hidden="true"

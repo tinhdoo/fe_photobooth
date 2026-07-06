@@ -501,8 +501,18 @@ const Capture = () => {
                     console.warn("Canon motion capture error:", motionErr);
                 }
                 const timeout = parseInt(configs.canon_capture_timeout, 10) || 30;
-                const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`);
-                const data = await res.json();
+                // Timeout PHÍA CLIENT: nếu middleware/EDSDK treo (lệnh chụp không trả về — hay gặp
+                // ở lần chụp lại do tranh chấp thread EDSDK), fetch không có timeout sẽ ĐƠ vĩnh viễn
+                // sau đếm ngược. Tự huỷ sau (timeout server + 10s) rồi rơi xuống catch để phục hồi.
+                const ctrl = new AbortController();
+                const abortTimer = setTimeout(() => ctrl.abort(), (timeout + 10) * 1000);
+                let data;
+                try {
+                    const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`, { signal: ctrl.signal });
+                    data = await res.json();
+                } finally {
+                    clearTimeout(abortTimer);
+                }
 
                 if (data.success && data.url) {
                     console.log("📷 [Capture] Canon Photo received:", data.url);
@@ -540,8 +550,16 @@ const Capture = () => {
                 console.error("Canon Capture Failed", error);
                 setIsShooting(false);
                 setFlash(false);
-                setCameraError("Lỗi chụp ảnh Canon: " + error.message);
+                const aborted = error?.name === 'AbortError';
+                setCameraError(aborted
+                    ? "Máy ảnh không phản hồi, đang thử lại..."
+                    : ("Lỗi chụp ảnh Canon: " + error.message));
                 setTimeout(() => setCameraError(null), 3000);
+                // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh hoặc
+                // đang chụp lại). Lỗi sẽ hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý.
+                if (isRetakeMode || photosTaken.length < TOTAL_PHOTOS) {
+                    setTimeout(() => startCountdown(), 3500);
+                }
             }
             return;
         }

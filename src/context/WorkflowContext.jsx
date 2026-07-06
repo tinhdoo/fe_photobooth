@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 import { isSupabaseBrowserConfigured, supabase } from '../services/supabaseClient';
 import { API_URL, CLOUD_API_URL } from '../config/api';
@@ -223,6 +223,8 @@ export const WorkflowProvider = ({ children }) => {
 
     // Initialize mode from localStorage (fallback)
     const [isEventMode, setIsEventMode] = useState(false);
+    // Lưu id (numeric) bản ghi thiết bị trên CLOUD -> để nút gạt Event/Payment ghi bền lên cloud.
+    const cloudDeviceIdRef = useRef(null);
 
     // Device Management
     useEffect(() => {
@@ -292,6 +294,7 @@ export const WorkflowProvider = ({ children }) => {
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();
+                        if (data.id) cloudDeviceIdRef.current = data.id;
                         applyDeviceMode(data.mode);
                     }
                 } catch (error) {
@@ -330,11 +333,30 @@ export const WorkflowProvider = ({ children }) => {
     }, []);
 
     const toggleEventMode = () => {
-        // This is now just a local optimistic update, 
-        // ideally real toggle happens via Admin API
         const newMode = !isEventMode;
+        const modeStr = newMode ? 'event' : 'payment';
         setIsEventMode(newMode);
-        localStorage.setItem('BOOTH_MODE', newMode ? 'event' : 'payment');
+        localStorage.setItem('BOOTH_MODE', modeStr);
+
+        // GHI BỀN vào DB (local + cloud). Trước đây chỉ set localStorage -> mỗi 60s heartbeat đọc
+        // mode cũ trong DB rồi applyDeviceMode() ghi đè ngược -> nút gạt "không ăn", máy tưởng
+        // payment nhưng thực tế vẫn event -> bỏ qua thanh toán. Gửi kèm mode để lưu vào DB.
+        const deviceId = getDeviceId();
+        const deviceName = getDeviceName() || 'Máy Chụp 1';
+        if (API_URL || isLocalApp()) {
+            fetch(apiPath('/api/devices/heartbeat'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId, name: deviceName, mode: modeStr }),
+            }).catch((error) => console.warn('Persist local mode failed:', error));
+        }
+        if (CLOUD_API_URL && cloudDeviceIdRef.current) {
+            fetch(cloudApiPath('/api/devices'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: cloudDeviceIdRef.current, mode: modeStr }),
+            }).catch((error) => console.warn('Persist cloud mode failed:', error));
+        }
     };
 
     const nextStep = () => {
@@ -442,14 +464,15 @@ export const WorkflowProvider = ({ children }) => {
             return;
         }
 
-        // Bật LV ở các bước CẦN camera: Thanh toán (pre-warm) + Chụp. Event mode không có
-        // Thanh toán nên pre-warm từ Layout. Welcome/Source/Layout/Quantity (<3): tắt.
-        // Review/Edit/Result (5,6,7): KHÔNG can thiệp -> LV "trôi" tiếp từ bước Chụp rồi tự
-        // tắt khi không còn ai xem (middleware idle auto-off) -> đỡ nóng, chụp lại vẫn nhanh.
-        const startSteps = isEventMode ? [2, 3.5, 4] : [3, 3.5, 4];
+        // Giữ live view SỐNG LIÊN TỤC trong VÙNG CHỤP: Thanh toán(3) -> Chuẩn bị(3.5) -> Chụp(4)
+        // -> Review(5). Nhờ vậy chụp lại từ Review là TỨC THÌ (camera luôn ấm, không warm lại, và
+        // Review có thể bỏ qua màn Chuẩn bị). Sang Edit(6)/Result(7) và các bước <3 -> TẮT hẳn cho
+        // máy NGHỈ suốt lúc chỉnh/in/hiện QR (phần dài nhất) -> đỡ nóng hơn cả cách cũ (vốn để LV
+        // trôi tới khi idle-off 2 phút). Event mode không có Thanh toán nên pre-warm từ Layout(2).
+        const startSteps = isEventMode ? [2, 3.5, 4, 5] : [3, 3.5, 4, 5];
         if (startSteps.includes(currentStep)) {
             controlCanonLiveView('start-liveview');
-        } else if (currentStep < 3) {
+        } else {
             controlCanonLiveView('stop-liveview');
         }
     }, [currentStep, isEventMode, configs.camera_mode, sessionData.source]);

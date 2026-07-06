@@ -106,7 +106,9 @@ const Review = () => {
 
         updateSessionData('photos', []);
         updateSessionData('capturedPhotos', []); // dọn nguồn để không giữ tham chiếu ảnh đã revoke
-        goToStep(3.5); // qua màn "Chuẩn bị" (warm camera + không hiện overlay) rồi vào Chụp
+        // Camera Canon đang ẤM (live view chạy suốt vùng chụp) -> vào THẲNG bước Chụp, BỎ màn
+        // Chuẩn bị cho mượt. Chưa ấm (hoặc webcam) -> qua Chuẩn bị để warm + tránh đen màn.
+        goToStep(((configs?.camera_mode || 'canon') === 'canon' && sessionData.cameraWarm) ? 4 : 3.5);
     };
 
     const handleContinue = () => {
@@ -153,7 +155,9 @@ const Review = () => {
 
     const handleRetakePhoto = (photoIndex) => {
         updateSessionData('retakeIndex', photoIndex);
-        goToStep(3.5); // qua màn "Chuẩn bị" (warm camera + không hiện overlay) rồi vào Chụp
+        // Camera Canon đang ẤM (live view chạy suốt vùng chụp) -> vào THẲNG bước Chụp, BỎ màn
+        // Chuẩn bị cho mượt. Chưa ấm (hoặc webcam) -> qua Chuẩn bị để warm + tránh đen màn.
+        goToStep(((configs?.camera_mode || 'canon') === 'canon' && sessionData.cameraWarm) ? 4 : 3.5);
     };
 
     return (

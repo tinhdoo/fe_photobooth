@@ -23,6 +23,17 @@ const Payment = () => {
     const [qrError, setQrError] = useState('');
     const [errorModal, setErrorModal] = useState({ show: false, message: '' });
     const qrRequestRef = useRef(0);
+    // Refs giữ GIÁ TRỊ MỚI NHẤT cho socket handler. Socket chỉ tạo 1 lần (deps []), nếu đọc
+    // trực tiếp method/qrOrder/handlePaymentSuccess trong closure sẽ phải tạo lại socket mỗi lần
+    // cộng tiền -> disconnect/reconnect liên tục -> có thể MẤT tờ tiền nhét đúng lúc reconnect.
+    const methodRef = useRef(method);
+    const qrOrderCodeRef = useRef(qrOrder?.code);
+    const handlePaymentSuccessRef = useRef(null);
+    // Chốt CHỐNG GỌI TRÙNG handlePaymentSuccess. Một giao dịch có thể bị kích hoạt nhiều lần từ
+    // nhiều nguồn (QR: Supabase realtime + poll 2.5s + socket SePay; tiền mặt: nhiều tờ dồn dập)
+    // -> nếu không chặn sẽ gọi nextStep() nhiều lần / lặp API voucher lỗi. Chỉ mở lại khi khách
+    // ĐÓNG modal lỗi (thử lại có chủ đích), còn khi thành công thì giữ khoá tới lúc rời bước.
+    const processingRef = useRef(false);
 
     const price = sessionData.printPrice || 60000;
     const printQuantity = sessionData.printQuantity || 1;
@@ -38,6 +49,9 @@ const Payment = () => {
     }, [voucher]);
 
     const handlePaymentSuccess = useCallback((baseMethod, extraData = {}) => {
+        // Đã có một lượt xử lý đang chạy (hoặc lỗi chưa được khách bấm Đóng) -> bỏ qua lời gọi trùng.
+        if (processingRef.current) return;
+        processingRef.current = true;
         const activeVoucher = extraData.voucher || voucher;
         const activeVoucherValue = Math.min(activeVoucher?.value || 0, price);
         setLoading(true);
@@ -71,6 +85,11 @@ const Payment = () => {
             nextStep();
         }, 500);
     }, [cashInserted, finalPaymentMethod, method, nextStep, price, updateSessionData, voucher]);
+
+    // Cập nhật ref mỗi render để socket handler (tạo 1 lần) luôn thấy giá trị hiện tại.
+    methodRef.current = method;
+    qrOrderCodeRef.current = qrOrder?.code;
+    handlePaymentSuccessRef.current = handlePaymentSuccess;
 
     const applyCode = async () => {
         if (code.length !== 6 || voucher || loading) return;
@@ -126,25 +145,31 @@ const Payment = () => {
         socket.on('money_inserted', (data) => {
             // CHỈ ghi nhận tiền khi đang ở đúng màn nhận tiền mặt (đã chọn 'cash').
             // Không tự nhảy sang 'cash' từ màn khác -> tránh nhận tiền ngoài bước này.
-            if (method === 'cash') {
+            if (methodRef.current === 'cash') {
                 setCashInserted((prev) => prev + data.amount);
             }
         });
 
         socket.on('sepay_payment_success', (data) => {
-            if (data.order_code && data.order_code === qrOrder?.code) {
-                handlePaymentSuccess('qr', { orderCode: data.order_code });
+            if (data.order_code && data.order_code === qrOrderCodeRef.current) {
+                handlePaymentSuccessRef.current?.('qr', { orderCode: data.order_code });
             }
         });
 
+        // Tạo socket 1 LẦN cho suốt vòng đời bước Thanh toán (deps []): handler đọc qua ref nên
+        // luôn thấy method/qrOrder/handlePaymentSuccess mới nhất mà KHÔNG cần dựng lại socket.
         return () => socket.disconnect();
-    }, [handlePaymentSuccess, method, qrOrder?.code]);
+    }, []);
 
     useEffect(() => {
-        if (method === 'cash' && remainingAmount > 0 && cashInserted >= remainingAmount) {
+        // Đủ tiền mặt -> tự hoàn tất. Chống gọi trùng đã do processingRef trong handlePaymentSuccess
+        // lo (nhét nhiều tờ dồn dập cũng chỉ chạy 1 lần). !loading + !errorModal.show: không tự chạy
+        // khi đang xử lý hoặc đang hiện modal lỗi; khi khách bấm Đóng (errorModal.show -> false) effect
+        // chạy lại -> thử lại có chủ đích, không lặp vô hạn.
+        if (method === 'cash' && !loading && !errorModal.show && remainingAmount > 0 && cashInserted >= remainingAmount) {
             handlePaymentSuccess('cash');
         }
-    }, [cashInserted, handlePaymentSuccess, method, remainingAmount]);
+    }, [cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
 
     // Máy đọc tiền (LED + cho nhét tiền) CHỈ bật khi đang Ở MÀN "Đưa tiền vào khe":
     // đã chọn tiền mặt, còn phải trả, và không đang xử lý. Mọi trạng thái khác (mới vào
@@ -278,6 +303,7 @@ const Payment = () => {
     const goBack = () => {
         if (method) {
             qrRequestRef.current += 1;
+            processingRef.current = false;
             setLoading(false);
             setMethod(null);
             setCashInserted(0);
@@ -537,6 +563,8 @@ const Payment = () => {
                             <button
                                 type="button"
                                 onClick={() => {
+                                    // Mở lại khoá để lượt thanh toán sau (thử lại) được phép chạy.
+                                    processingRef.current = false;
                                     setErrorModal({ show: false, message: '' });
                                     setCode('');
                                 }}

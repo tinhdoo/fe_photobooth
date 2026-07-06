@@ -11,11 +11,29 @@ import PrintQuantity from './components/steps/PrintQuantity';
 import Payment from './components/steps/Payment';
 import GetReady from './components/steps/GetReady';
 
-const Capture = lazy(() => import('./components/steps/Capture'));
-const Edit = lazy(() => import('./components/steps/Edit'));
-const Review = lazy(() => import('./components/steps/Review'));
-const Result = lazy(() => import('./components/steps/Result'));
-const MobileUploadCapture = lazy(() => import('./components/steps/MobileUploadCapture'));
+// Lazy-import CÓ TỰ PHỤC HỒI: khi chunk lỗi (thường do đã build/deploy bản mới nhưng tab cũ
+// còn trỏ tên chunk hash cũ -> 404), tải lại trang 1 LẦN để lấy index.html + chunk mới, thay
+// vì để Suspense treo "ba chấm" vĩnh viễn (không vào được bước Chụp/Edit...).
+const lazyWithReload = (importer) => lazy(async () => {
+    try {
+        const mod = await importer();
+        sessionStorage.removeItem('ptb_chunk_reloaded'); // tải OK -> reset cờ cho lần sau
+        return mod;
+    } catch (err) {
+        if (!sessionStorage.getItem('ptb_chunk_reloaded')) {
+            sessionStorage.setItem('ptb_chunk_reloaded', '1');
+            window.location.reload();
+            return new Promise(() => { }); // giữ Suspense đến khi trang reload xong
+        }
+        throw err; // đã reload mà vẫn lỗi -> ném ra (tránh reload lặp vô hạn)
+    }
+});
+
+const Capture = lazyWithReload(() => import('./components/steps/Capture'));
+const Edit = lazyWithReload(() => import('./components/steps/Edit'));
+const Review = lazyWithReload(() => import('./components/steps/Review'));
+const Result = lazyWithReload(() => import('./components/steps/Result'));
+const MobileUploadCapture = lazyWithReload(() => import('./components/steps/MobileUploadCapture'));
 
 const ViewPage = lazy(() => import('./pages/ViewPage'));
 const MobileUploadClient = lazy(() => import('./pages/MobileUploadClient'));
