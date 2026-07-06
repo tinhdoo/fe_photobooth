@@ -268,6 +268,26 @@ const RevenueDashboard = () => {
         return details.join(' • ');
     };
 
+    // Mỗi loại thanh toán 1 màu: tiền mặt=xanh lá, QR=xanh dương, mã=cam, mã+tiền=teal, mã+QR=tím.
+    const getMethodStyle = (tx) => {
+        const m = String(tx.payment_method || '').toLowerCase();
+        if (m.includes('code') && m.includes('cash')) return { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500' };
+        if (m.includes('code') && m.includes('qr')) return { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' };
+        if (m.includes('code')) return { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' };
+        if (m.includes('qr') || m.includes('sepay')) return { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
+        if (m.includes('cash') || m === '') return { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
+        return { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' };
+    };
+    const methodBadge = (tx) => {
+        const s = getMethodStyle(tx);
+        return (
+            <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-bold ${s.bg} ${s.text}`}>
+                <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
+                {getMethodLabel(tx)}
+            </span>
+        );
+    };
+
     const handleResetRevenue = async () => {
         if (resetCode !== '8686') {
             setResetError('Mã xác nhận không đúng');
@@ -328,12 +348,16 @@ const RevenueDashboard = () => {
         [stats.transactions]
     );
     const voucherStats = useMemo(() => {
-        let total = 0, count = 0;
+        const startOfDay = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
+        let total = 0, count = 0, today = 0, todayCount = 0;
         (stats.transactions || []).forEach((tx) => {
             const a = voucherApplied(tx);
-            if (a > 0) { total += a; count += 1; }
+            if (a > 0) {
+                total += a; count += 1;
+                if (tx.used_at && new Date(tx.used_at).getTime() >= startOfDay) { today += a; todayCount += 1; }
+            }
         });
-        return { total, count };
+        return { total, count, today, todayCount };
     }, [stats.transactions]);
 
     // Build chart data: group transactions by day for bar chart
@@ -405,7 +429,7 @@ const RevenueDashboard = () => {
                     { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={20} />, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
                     { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={20} />, color: 'purple', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
                     { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-                    { label: 'Voucher', value: voucherStats.total, note: `${voucherStats.count} lượt · không tính DT`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100', span: 'col-span-2 lg:col-span-1' },
+                    { label: 'Voucher', value: voucherStats.total, note: `Hôm nay ${voucherStats.today.toLocaleString('vi-VN')}đ · ${voucherStats.count} lượt`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100', span: 'col-span-2 lg:col-span-1' },
                 ].map((item, idx) => (
                     // SỬA: p-4 -> p-3 (giảm lề) để tăng diện tích hiển thị
                     <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} ${item.span || ''} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
@@ -891,7 +915,7 @@ const RevenueDashboard = () => {
                                     <div key={tx.id} className="p-5 flex flex-col gap-3 hover:bg-gray-50 transition-colors">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <span className="font-bold text-[#1a1a2e] text-lg block">{getMethodLabel(tx)}</span>
+                                                {methodBadge(tx)}
                                                 {getMethodDetail(tx) && (
                                                     <span className="font-mono text-xs font-bold text-[#e63946] block mt-0.5">{getMethodDetail(tx)}</span>
                                                 )}
@@ -942,7 +966,7 @@ const RevenueDashboard = () => {
                                         stats.transactions.map((tx) => (
                                             <tr key={tx.id} className="hover:bg-[#e63946]/5 transition-colors group">
                                                 <td className="pl-8 pr-4 py-6">
-                                                    <span className="block font-black text-sm text-[#1a1a2e]">{getMethodLabel(tx)}</span>
+                                                    {methodBadge(tx)}
                                                     {getMethodDetail(tx) && (
                                                         <span className="mt-1 block font-mono text-xs font-bold text-[#e63946]">{getMethodDetail(tx)}</span>
                                                     )}

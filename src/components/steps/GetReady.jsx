@@ -32,6 +32,8 @@ const GetReady = () => {
         const maxTimer = setTimeout(advance, MAX_MS);
         // Không phải canon (webcam/hotfolder): không có /liveview để dò -> chỉ chờ MIN rồi vào Chụp.
         const minTimer = isCanon ? null : setTimeout(advance, MIN_MS);
+        // Giữ tham chiếu <img> ngay trong effect (img cố định suốt vòng đời màn) để dùng ở cleanup.
+        const liveImg = liveImgRef.current;
         return () => {
             clearTimeout(maxTimer);
             if (minTimer) clearTimeout(minTimer);
@@ -40,7 +42,7 @@ const GetReady = () => {
             // buộc trình duyệt HỦY ngay luồng MJPEG; chỉ gỡ <img> (React unmount) KHÔNG đủ để đóng
             // -> kết nối sống dai tích tụ tới trần ~6/host + cạn thread middleware -> ĐƠ khi retake.
             const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
-            try { if (liveImgRef.current) liveImgRef.current.src = BLANK; } catch (e) { /* ignore */ }
+            try { if (liveImg) liveImg.src = BLANK; } catch (e) { /* ignore */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
