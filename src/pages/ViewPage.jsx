@@ -278,7 +278,7 @@ const ViewPage = () => {
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [error, setError] = useState(null); // { title, message } | null
     const [downloading, setDownloading] = useState(false);
     const [errorDialog, setErrorDialog] = useState(null);
     const [motionVideo, setMotionVideo] = useState(null); // { blob, filename } sau khi tạo xong
@@ -295,7 +295,7 @@ const ViewPage = () => {
 
         // isPoll = true: lần gọi lại nền -> KHÔNG bật loading / không báo lỗi phá album đang hiện.
         const fetchSession = async (isPoll = false) => {
-            if (!isPoll) { setLoading(true); setError(''); }
+            if (!isPoll) { setLoading(true); setError(null); }
             try {
                 const res = await axios.get(`${CLOUD_API_URL}/api/sessions`, {
                     params: { id }
@@ -308,7 +308,7 @@ const ViewPage = () => {
                 const hasPhotos = Array.isArray(data.photos) && data.photos.some((photo) => getPhotoUrl(photo));
 
                 if (data.status === 'expired' || (!hasComposite && !hasPhotos)) {
-                    if (!isPoll) setError('Liên kết đã hết hạn. Cảm ơn bạn đã sử dụng dịch vụ Photobooth.');
+                    if (!isPoll) setError({ title: 'Oops! Liên kết đã hết hạn 😿', message: 'Hy vọng sẽ sớm gặp lại bạn tại Tomato Photobooth! ❤️' });
                     return;
                 }
 
@@ -326,7 +326,7 @@ const ViewPage = () => {
             } catch (err) {
                 console.error('Failed to load album', err);
                 if (!cancelled && !isPoll) {
-                    setError('Không thể tải album. Vui lòng thử lại hoặc quay lại booth để được hỗ trợ.');
+                    setError({ title: 'Rất tiếc', message: 'Không thể tải album. Vui lòng thử lại hoặc quay lại booth để được hỗ trợ.' });
                 }
             } finally {
                 if (!cancelled && !isPoll) setLoading(false);
@@ -700,15 +700,15 @@ const ViewPage = () => {
     if (error) {
         return (
             <div className="flex min-h-dvh items-center justify-center px-5 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
-                <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-md">
+                <div className="flex w-full max-w-md flex-col items-center rounded-3xl bg-white px-8 py-12 text-center shadow-md">
                     <img
                         src={logoUrl}
                         onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
-                        className="mx-auto mb-5 h-20 w-20 rounded-full object-contain"
+                        className="mb-7 h-28 w-28 object-contain"
                     />
-                    <h1 className="mb-3 text-2xl font-extrabold text-[#7B5E43]">Rất tiếc</h1>
-                    <p className="text-base leading-relaxed text-[#7B5E43]">{error}</p>
+                    <h1 className="mb-4 text-2xl font-extrabold leading-snug text-[#7B5E43]">{error.title}</h1>
+                    <p className="max-w-xs text-base leading-relaxed text-[#7B5E43]/80">{error.message}</p>
                 </div>
             </div>
         );
