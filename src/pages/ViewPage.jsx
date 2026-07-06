@@ -699,7 +699,20 @@ const ViewPage = () => {
 
     if (error) {
         return (
-            <div className="flex min-h-dvh items-center justify-center px-5 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
+            <div className="flex min-h-dvh flex-col items-center justify-center gap-6 px-5 py-10 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
+                {/* Tiêu đề wordmark "tomato" phía trên. Ưu tiên /tomato.png; nếu chưa có file thì
+                    tự fallback về /tomato_memories.png; nếu cả 2 không có thì ẩn. */}
+                <img
+                    src="/tomato.png"
+                    alt="Tomato"
+                    className="block h-auto w-full max-w-[220px] object-contain sm:max-w-[280px]"
+                    loading="eager"
+                    decoding="async"
+                    onError={(e) => {
+                        if (e.currentTarget.src.endsWith('/tomato.png')) e.currentTarget.src = '/tomato_memories.png';
+                        else e.currentTarget.style.display = 'none';
+                    }}
+                />
                 <div className="flex w-full max-w-md flex-col items-center rounded-3xl bg-white px-8 py-12 text-center shadow-md">
                     <img
                         src={logoUrl}
