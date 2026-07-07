@@ -821,33 +821,22 @@ const RevenueDashboard = () => {
                         <div className="md:hidden flex flex-col divide-y divide-gray-100">
                             {stats.transactions?.length > 0 ? (
                                 stats.transactions.map((tx) => (
-                                    <div key={tx.id} className={`p-5 pl-4 flex flex-col gap-3 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
-                                        <div className="flex justify-between items-start">
-                                            <div>
+                                    <div key={tx.id} className={`px-3 py-2.5 pl-3 flex items-center gap-3 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {methodBadge(tx)}
-                                                {getMethodDetail(tx) && (
-                                                    <span className="font-mono text-xs font-bold text-[#e63946] block mt-0.5">{getMethodDetail(tx)}</span>
-                                                )}
-                                                {tx.device_id && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-xs font-bold bg-gray-100 text-gray-500">
-                                                        {boothName(tx.device_id)}
-                                                    </span>
-                                                )}
-                                                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                                                    <Clock size={12} />
-                                                    {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
-                                                </div>
+                                                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide">{tx.status}</span>
                                             </div>
-                                            <div className="text-right">
-                                                <span className="font-black text-[#e63946] text-lg block">{formatCurrency(tx.value)}</span>
-                                                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide inline-block mt-1">
-                                                    {tx.status}
-                                                </span>
+                                            <div className="mt-1 flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[11px] font-medium text-gray-400">
+                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946]">{getMethodDetail(tx)}</span>}
+                                                {tx.device_id && <span className="text-gray-500">{boothName(tx.device_id)}</span>}
+                                                <span className="flex items-center gap-0.5"><Clock size={11} />{tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}</span>
                                             </div>
                                         </div>
-                                        <div className="pt-2 border-t border-gray-50 flex justify-end">
-                                            <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-bold text-[#e63946] bg-[#e63946]/10 px-4 py-2 rounded-xl">
-                                                <Eye size={16} /> Xem chi tiết
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            <span className="font-black text-[#e63946] text-base whitespace-nowrap">{formatCurrency(tx.value)}</span>
+                                            <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" aria-label="Xem chi tiết" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#e63946]/10 text-[#e63946] active:scale-90">
+                                                <Eye size={16} />
                                             </a>
                                         </div>
                                     </div>
