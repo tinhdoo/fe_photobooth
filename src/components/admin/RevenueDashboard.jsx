@@ -838,12 +838,11 @@ const RevenueDashboard = () => {
                                             </div>
                                             <span className="shrink-0 font-black text-[#e63946] text-base whitespace-nowrap">{formatCurrency(tx.value)}</span>
                                         </div>
-                                        {/* Hàng 2: mã · phòng · giờ + trạng thái + nút xem */}
+                                        {/* Hàng 2: mã · phòng + trạng thái + nút xem (status/nút luôn shrink-0 -> không bị cắt) */}
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-gray-400">
-                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946]">{getMethodDetail(tx)}</span>}
-                                                {tx.device_id && <span>{boothName(tx.device_id)}</span>}
-                                                <span className="flex shrink-0 items-center gap-0.5"><Clock size={11} />{tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}</span>
+                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946] truncate">{getMethodDetail(tx)}</span>}
+                                                {tx.device_id && <span className="shrink-0">{boothName(tx.device_id)}</span>}
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
                                                 {statusInfo(tx) && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${statusInfo(tx).cls}`}>{statusInfo(tx).label}</span>}
@@ -851,6 +850,11 @@ const RevenueDashboard = () => {
                                                     <Eye size={15} />
                                                 </a>
                                             </div>
+                                        </div>
+                                        {/* Hàng 3: ngày giờ (dòng riêng để không đẩy cắt trạng thái) */}
+                                        <div className="flex items-center gap-0.5 text-[11px] text-gray-400">
+                                            <Clock size={11} />
+                                            {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                         </div>
                                     </div>
                                 ))
