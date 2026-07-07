@@ -264,8 +264,16 @@ const RevenueDashboard = () => {
         if (tx.detail_label) return tx.detail_label;
         const details = [];
         if (tx.payment_code) details.push(`Mã: ${tx.payment_code}`);
-        if (tx.sepay_order_code) details.push(`QR: ${tx.sepay_order_code}`);
+        if (tx.sepay_order_code) details.push(tx.sepay_order_code);
         return details.join(' • ');
+    };
+
+    // Chỉ hiển thị trạng thái vòng đời album: ACTIVE (còn hạn) / EXPIRED (hết hạn).
+    // Các trạng thái khác (paid, used...) không hiển thị. Trả về null nếu không cần hiện.
+    const statusInfo = (tx) => {
+        const s = String(tx.status || '').toLowerCase();
+        if (s !== 'active' && s !== 'expired') return null;
+        return { label: tx.status, cls: s === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500' };
     };
 
     // Mỗi loại thanh toán 1 màu -> tô NỀN CẢ DÒNG: tiền mặt=xanh lá, QR=xanh dương, mã=cam,
@@ -825,7 +833,7 @@ const RevenueDashboard = () => {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 {methodBadge(tx)}
-                                                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide">{tx.status}</span>
+                                                {statusInfo(tx) && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${statusInfo(tx).cls}`}>{statusInfo(tx).label}</span>}
                                             </div>
                                             <div className="mt-1 flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[11px] font-medium text-gray-400">
                                                 {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946]">{getMethodDetail(tx)}</span>}
@@ -883,9 +891,11 @@ const RevenueDashboard = () => {
                                                     {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                                 </td>
                                                 <td className="px-4 py-6">
-                                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
-                                                        {tx.status}
-                                                    </span>
+                                                    {statusInfo(tx) && (
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${statusInfo(tx).cls}`}>
+                                                            {statusInfo(tx).label}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="pl-4 pr-8 py-6 text-right">
                                                     <a
