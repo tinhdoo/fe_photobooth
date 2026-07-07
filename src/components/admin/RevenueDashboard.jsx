@@ -253,7 +253,7 @@ const RevenueDashboard = () => {
         if (tx.method_label) return tx.method_label;
         const method = String(tx.payment_method || '').toLowerCase();
         if (method === 'cash') return 'Tiền mặt';
-        if (method === 'qr' || method === 'sepay') return 'Chuyển khoản QR';
+        if (method === 'qr' || method === 'sepay') return 'Chuyển khoản';
         if (method === 'code') return 'Mã thanh toán';
         if (method === 'code+cash') return 'Mã + tiền mặt';
         if (method === 'code+qr') return 'Mã + QR';
@@ -829,36 +829,28 @@ const RevenueDashboard = () => {
                         <div className="md:hidden flex flex-col divide-y divide-gray-100">
                             {stats.transactions?.length > 0 ? (
                                 stats.transactions.map((tx) => (
-                                    <div key={tx.id} className={`p-5 pl-4 flex flex-col gap-3 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                {methodBadge(tx)}
-                                                {getMethodDetail(tx) && (
-                                                    <span className="font-mono text-xs font-bold text-[#e63946] block mt-0.5">{getMethodDetail(tx)}</span>
-                                                )}
-                                                {tx.device_id && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-xs font-bold bg-gray-100 text-gray-500">
-                                                        {boothName(tx.device_id)}
-                                                    </span>
-                                                )}
-                                                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                                                    <Clock size={12} />
-                                                    {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
-                                                </div>
+                                    <div key={tx.id} className={`px-4 py-3 flex flex-col gap-1.5 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
+                                        {/* Hàng 1: phương thức + giá trị */}
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="min-w-0 flex items-center gap-2 font-bold text-[#1a1a2e]">
+                                                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getMethodStyle(tx).dot}`} />
+                                                <span className="truncate">{getMethodLabel(tx)}</span>
                                             </div>
-                                            <div className="text-right">
-                                                <span className="font-black text-[#e63946] text-lg block">{formatCurrency(tx.value)}</span>
-                                                {statusInfo(tx) && (
-                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide inline-block mt-1 ${statusInfo(tx).cls}`}>
-                                                        {statusInfo(tx).label}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <span className="shrink-0 font-black text-[#e63946] text-base whitespace-nowrap">{formatCurrency(tx.value)}</span>
                                         </div>
-                                        <div className="pt-2 border-t border-gray-50 flex justify-end">
-                                            <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-bold text-[#e63946] bg-[#e63946]/10 px-4 py-2 rounded-xl">
-                                                <Eye size={16} /> Xem chi tiết
-                                            </a>
+                                        {/* Hàng 2: mã · phòng · giờ + trạng thái + nút xem */}
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-gray-400">
+                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946]">{getMethodDetail(tx)}</span>}
+                                                {tx.device_id && <span>{boothName(tx.device_id)}</span>}
+                                                <span className="flex shrink-0 items-center gap-0.5"><Clock size={11} />{tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}</span>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                {statusInfo(tx) && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${statusInfo(tx).cls}`}>{statusInfo(tx).label}</span>}
+                                                <a href={`/album/${tx.id}`} target="_blank" rel="noopener noreferrer" aria-label="Xem chi tiết" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#e63946]/10 text-[#e63946] active:scale-90">
+                                                    <Eye size={15} />
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 ))
