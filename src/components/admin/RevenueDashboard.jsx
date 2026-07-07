@@ -959,7 +959,7 @@ const RevenueDashboard = () => {
                                         <th className="pl-4 pr-8 py-5 text-right text-xs font-black text-gray-400 uppercase tracking-widest">Hành động</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-200">
                                     {stats.transactions?.length > 0 ? (
                                         stats.transactions.map((tx) => (
                                             <tr key={tx.id} className={`transition-colors group ${getMethodStyle(tx).row}`}>

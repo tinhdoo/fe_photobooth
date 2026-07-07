@@ -713,15 +713,15 @@ const ViewPage = () => {
                         else e.currentTarget.style.display = 'none';
                     }}
                 />
-                <div className="flex w-full max-w-md flex-col items-center rounded-3xl bg-white px-8 py-12 text-center shadow-md">
+                <div className="flex w-full max-w-sm flex-col items-center rounded-[2rem] bg-white px-8 py-10 text-center shadow-md">
                     <img
                         src={logoUrl}
                         onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
-                        className="mb-7 h-28 w-28 object-contain"
+                        className="mb-5 h-20 w-20 object-contain"
                     />
-                    <h1 className="mb-4 text-2xl font-extrabold leading-snug text-[#7B5E43]">{error.title}</h1>
-                    <p className="max-w-xs text-base leading-relaxed text-[#7B5E43]/80">{error.message}</p>
+                    <h1 className="mb-2.5 text-[22px] font-extrabold leading-snug text-[#7B5E43]">{error.title}</h1>
+                    <p className="text-[15px] leading-relaxed text-[#7B5E43]/75">{error.message}</p>
                 </div>
             </div>
         );
