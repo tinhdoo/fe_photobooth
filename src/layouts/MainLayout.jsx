@@ -1,5 +1,6 @@
 import { useWorkflow } from '../context/WorkflowContext';
 import SessionTimer from '../components/common/SessionTimer';
+import StaffEscape from '../components/staff/StaffEscape';
 
 const MainLayout = ({ children }) => {
     const { currentStep, savingBeforeReset } = useWorkflow();
@@ -8,6 +9,9 @@ const MainLayout = ({ children }) => {
     return (
         <div className="relative w-screen h-screen bg-[#FFF8E7] overflow-hidden flex flex-col font-serif text-[#3F3127]">
             <SessionTimer />
+            {/* Cổng thoát nhân viên: nhấn giữ 3s góc phải trên -> PIN -> Quản lý máy / Về màn chủ.
+                Khả dụng ở mọi bước để gỡ khi phiên kẹt giữa lúc chụp. */}
+            <StaffEscape />
             <main className="flex-1 w-full h-full relative">
                 {children}
             </main>

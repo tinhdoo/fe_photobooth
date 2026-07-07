@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
-import { Printer, Settings, X, Banknote, Zap, DollarSign, LogOut } from 'lucide-react';
+import { Printer, Settings, X, Banknote, Zap, DollarSign, LogOut, Home } from 'lucide-react';
 import StaffPanel from './StaffPanel';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { API_URL } from '../../config/api';
@@ -16,7 +16,8 @@ const tabs = [
 const ManagementPanel = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('prints');
     const [confirmExit, setConfirmExit] = useState(false);
-    const { isEventMode, toggleEventMode } = useWorkflow();
+    const [confirmHome, setConfirmHome] = useState(false);
+    const { isEventMode, toggleEventMode, currentStep, resetSession } = useWorkflow();
 
     // Thoát kiosk: đóng trình duyệt kiosk (backend chạy taskkill chrome/edge) để staff về màn hình
     // Windows. Xác nhận 2 bước (bấm lần 1 -> "Xác nhận thoát?", lần 2 mới thoát).
@@ -27,6 +28,17 @@ const ManagementPanel = ({ onClose }) => {
             return;
         }
         fetch(`${API_URL}/api/kiosk/exit`, { method: 'POST' }).catch(() => {});
+    };
+
+    // Về màn chủ: HỦY phiên đang chạy (kể cả khi kẹt/lỗi giữa lúc chụp) -> reset + reload về Welcome.
+    // Chỉ hiện khi KHÔNG ở màn chủ (currentStep > 1). Xác nhận 2 bước để tránh mất phiên do lỡ tay.
+    const handleGoHome = () => {
+        if (!confirmHome) {
+            setConfirmHome(true);
+            setTimeout(() => setConfirmHome(false), 4000);
+            return;
+        }
+        resetSession();
     };
 
     return (
@@ -79,6 +91,17 @@ const ManagementPanel = ({ onClose }) => {
                                 );
                             })}
                         </div>
+
+                        {currentStep > 1 && (
+                            <button
+                                type="button"
+                                onClick={handleGoHome}
+                                className={`flex items-center gap-2 rounded-full px-4 py-2 font-black text-white shadow-sm transition-colors ${confirmHome ? 'bg-[#b45309] animate-pulse' : 'bg-[#987351] hover:bg-[#7B5E43]'}`}
+                            >
+                                <Home size={18} />
+                                {confirmHome ? 'Xác nhận huỷ phiên?' : 'Về màn chủ'}
+                            </button>
+                        )}
 
                         <button
                             type="button"
