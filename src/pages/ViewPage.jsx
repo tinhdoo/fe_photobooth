@@ -699,13 +699,13 @@ const ViewPage = () => {
 
     if (error) {
         return (
-            <div className="flex min-h-dvh flex-col items-center justify-center gap-6 px-5 py-10 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
+            <div className="flex min-h-dvh flex-col items-center justify-center gap-3 px-5 py-8 font-serif text-[#3F3127]" style={ALBUM_BG_STYLE}>
                 {/* Tiêu đề wordmark "tomato" phía trên. Ưu tiên /tomato.png; nếu chưa có file thì
                     tự fallback về /tomato_memories.png; nếu cả 2 không có thì ẩn. */}
                 <img
                     src="/tomato.png"
                     alt="Tomato"
-                    className="block h-auto w-full max-w-[220px] object-contain sm:max-w-[280px]"
+                    className="block h-auto w-full max-w-[200px] object-contain sm:max-w-[260px]"
                     loading="eager"
                     decoding="async"
                     onError={(e) => {
@@ -713,15 +713,15 @@ const ViewPage = () => {
                         else e.currentTarget.style.display = 'none';
                     }}
                 />
-                <div className="flex w-full max-w-sm flex-col items-center rounded-[2rem] bg-white px-8 py-10 text-center shadow-md">
+                <div className="flex w-full max-w-sm flex-col items-center rounded-[2rem] bg-white px-5 py-8 text-center shadow-md sm:px-8">
                     <img
                         src={logoUrl}
                         onError={(e) => { if (!e.currentTarget.src.endsWith('/logo_tomato.png')) e.currentTarget.src = '/logo_tomato.png'; }}
                         alt="Tomato Photobooth"
-                        className="mb-5 h-20 w-20 object-contain"
+                        className="mb-4 h-16 w-16 object-contain"
                     />
-                    <h1 className="mb-2.5 text-[22px] font-extrabold leading-snug text-[#7B5E43]">{error.title}</h1>
-                    <p className="text-[15px] leading-relaxed text-[#7B5E43]/75">{error.message}</p>
+                    <h1 className="mb-2 whitespace-nowrap text-lg font-extrabold text-[#7B5E43] sm:text-2xl">{error.title}</h1>
+                    <p className="text-sm leading-relaxed text-[#7B5E43]/75 sm:text-[15px]">{error.message}</p>
                 </div>
             </div>
         );
