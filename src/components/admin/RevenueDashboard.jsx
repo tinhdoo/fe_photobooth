@@ -465,27 +465,6 @@ const RevenueDashboard = () => {
                 const n = chartData.length;
                 const yTicks = [0, 0.25, 0.5, 0.75, 1];
 
-                // --- Line chart geometry ---
-                const LW = 700, LH = 200, LP_L = 72, LP_R = 16, LP_T = 20, LP_B = 36;
-                const lPlotW = LW - LP_L - LP_R, lPlotH = LH - LP_T - LP_B;
-                const lPts = chartData.map((d, i) => ({
-                    x: LP_L + (n === 1 ? lPlotW / 2 : (i / (n - 1)) * lPlotW),
-                    y: LP_T + lPlotH - (d.total / yMax) * lPlotH,
-                    ...d
-                }));
-                const smoothPath = lPts.length === 1
-                    ? `M ${lPts[0].x},${lPts[0].y}`
-                    : lPts.reduce((path, p, i) => {
-                        if (i === 0) return `M ${p.x},${p.y}`;
-                        const prev = lPts[i - 1];
-                        const cpX = (prev.x + p.x) / 2;
-                        return path + ` C ${cpX},${prev.y} ${cpX},${p.y} ${p.x},${p.y}`;
-                    }, '');
-                const fillPath = smoothPath +
-                    ` L ${lPts[lPts.length - 1].x},${LP_T + lPlotH}` +
-                    ` L ${lPts[0].x},${LP_T + lPlotH} Z`;
-                const lLabelStep = Math.ceil(n / 8);
-
                 // --- Bar chart geometry ---
                 const BW = 700, BH = 200, BP_L = 72, BP_R = 16, BP_T = 20, BP_B = 36;
                 const bPlotW = BW - BP_L - BP_R, bPlotH = BH - BP_T - BP_B;
@@ -509,78 +488,10 @@ const RevenueDashboard = () => {
                 };
 
                 return (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-                        {/* Line Chart */}
-                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-                            <div className="flex items-center justify-between mb-3">
-                                <div>
-                                    <h3 className="text-base font-black text-[#1a1a2e]">Xu hướng Doanh thu</h3>
-                                    <p className="text-gray-400 text-xs mt-0.5">
-                                        {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="w-5 h-0.5 rounded-full bg-[#e63946] inline-block" />
-                                    Đường xu hướng
-                                </div>
-                            </div>
-                            <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full" style={{ display: 'block', height: LH }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
-                                <defs>
-                                    <linearGradient id="revGrad2" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#e63946" stopOpacity="0.28" />
-                                        <stop offset="80%" stopColor="#e63946" stopOpacity="0.04" />
-                                        <stop offset="100%" stopColor="#e63946" stopOpacity="0" />
-                                    </linearGradient>
-                                    <clipPath id="revClip2"><rect x={LP_L} y={LP_T} width={lPlotW} height={lPlotH} /></clipPath>
-                                </defs>
-                                {yTicks.map((r, i) => {
-                                    const y = LP_T + lPlotH - r * lPlotH;
-                                    return (
-                                        <g key={i}>
-                                            <line x1={LP_L} y1={y} x2={LW - LP_R} y2={y} stroke={r === 0 ? '#e5e7eb' : '#f3f4f6'} strokeWidth={r === 0 ? 1.5 : 1} strokeDasharray={r > 0 ? '4 3' : '0'} />
-                                            <text x={LP_L - 6} y={y + 4} textAnchor="end" fontSize={9} fill="#9ca3af">{formatK(Math.round(yMax * r))}</text>
-                                        </g>
-                                    );
-                                })}
-                                <path d={fillPath} fill="url(#revGrad2)" clipPath="url(#revClip2)" />
-                                <path d={smoothPath} fill="none" stroke="#e63946" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" clipPath="url(#revClip2)" />
-                                {lPts.map((p, i) => {
-                                    const isToday = p.key === todayKey;
-                                    const showLabel = i === 0 || i === n - 1 || isToday || i % lLabelStep === 0;
-                                    return (
-                                        <g key={p.key}>
-                                            {isToday && <line x1={p.x} y1={LP_T} x2={p.x} y2={LP_T + lPlotH} stroke="#84a98c" strokeWidth="1" strokeDasharray="3 3" opacity={0.6} />}
-                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 7 : 5} fill="white" stroke={isToday ? '#84a98c' : '#e63946'} strokeWidth={isToday ? 2 : 1.5} />}
-                                            {p.total > 0 && <circle cx={p.x} cy={p.y} r={isToday ? 3.5 : 2.5} fill={isToday ? '#84a98c' : '#e63946'} />}
-                                            {showLabel && <text x={p.x} y={LH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{p.label}</text>}
-                                        </g>
-                                    );
-                                })}
-                                {/* Vùng bắt hover (trong suốt, phủ cả chiều cao) cho từng ngày */}
-                                {lPts.map((p, i) => {
-                                    const colW = n === 1 ? lPlotW : lPlotW / (n - 1);
-                                    return (
-                                        <rect key={`h${p.key}`} x={p.x - colW / 2} y={LP_T} width={colW} height={lPlotH}
-                                            fill="transparent" onMouseEnter={() => setChartHover({ chart: 'line', i })} />
-                                    );
-                                })}
-                                {/* Tooltip */}
-                                {chartHover?.chart === 'line' && lPts[chartHover.i] && (() => {
-                                    const p = lPts[chartHover.i];
-                                    return (
-                                        <g pointerEvents="none">
-                                            <line x1={p.x} y1={LP_T} x2={p.x} y2={LP_T + lPlotH} stroke="#1a1a2e" strokeWidth="1" strokeDasharray="3 3" opacity={0.25} />
-                                            <circle cx={p.x} cy={p.y} r={4} fill="#e63946" stroke="#fff" strokeWidth={1.5} />
-                                            {renderTip(p.x, p.y, p.label, p.total, LP_L, LW - LP_R, LP_T)}
-                                        </g>
-                                    );
-                                })()}
-                            </svg>
-                        </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
 
                         {/* Bar Chart */}
-                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+                        <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
                                     <h3 className="text-base font-black text-[#1a1a2e]">Doanh thu từng ngày</h3>
@@ -593,7 +504,7 @@ const RevenueDashboard = () => {
                                     Biểu đồ cột
                                 </div>
                             </div>
-                            <svg viewBox={`0 0 ${BW} ${BH}`} className="w-full" style={{ display: 'block', height: BH }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
+                            <svg viewBox={`0 0 ${BW} ${BH}`} className="block w-full" style={{ aspectRatio: `${BW} / ${BH}` }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
                                 <defs>
                                     <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="#e63946" stopOpacity="0.9" />
@@ -655,6 +566,58 @@ const RevenueDashboard = () => {
                                 })()}
                             </svg>
                         </div>
+
+                        {/* So sánh lượt chụp giữa các booth (biểu đồ tròn) — chuyển lên đây thay biểu đồ đường */}
+                        {(() => {
+                            const items = revenueByBooth.filter((b) => b.count > 0);
+                            if (items.length === 0) return null;
+                            const totalCount = items.reduce((s, b) => s + b.count, 0);
+                            const COLORS = ['#e63946', '#f4a261', '#2a9d8f', '#457b9d', '#8338ec', '#ffb703', '#84a98c', '#c1121f', '#606c38', '#bc6c25'];
+                            const cx = 100, cy = 100, R = 82, r = 50;
+                            let a0 = -Math.PI / 2;
+                            const slices = items.map((b, i) => {
+                                const frac = b.count / totalCount;
+                                const a1 = a0 + frac * Math.PI * 2;
+                                const large = (a1 - a0) > Math.PI ? 1 : 0;
+                                const p = (ang, rad) => `${(cx + rad * Math.cos(ang)).toFixed(2)} ${(cy + rad * Math.sin(ang)).toFixed(2)}`;
+                                const path = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
+                                const slice = { path, color: COLORS[i % COLORS.length], b, frac };
+                                a0 = a1;
+                                return slice;
+                            });
+                            return (
+                                <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                                    <h3 className="text-base font-black text-[#1a1a2e] mb-4">So sánh lượt chụp giữa các booth</h3>
+                                    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
+                                        <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0">
+                                            {items.length === 1 ? (
+                                                <>
+                                                    <circle cx={cx} cy={cy} r={R} fill={slices[0].color} />
+                                                    <circle cx={cx} cy={cy} r={r} fill="#fff" />
+                                                </>
+                                            ) : (
+                                                slices.map((s) => (
+                                                    <path key={s.b.device_id} d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
+                                                        <title>{`${boothName(s.b.device_id)}: ${s.b.count} lượt (${Math.round(s.frac * 100)}%)`}</title>
+                                                    </path>
+                                                ))
+                                            )}
+                                            <text x={cx} y={cy - 2} textAnchor="middle" fontSize="20" fontWeight="800" fill="#1a1a2e">{totalCount}</text>
+                                            <text x={cx} y={cy + 15} textAnchor="middle" fontSize="10" fill="#9ca3af">lượt chụp</text>
+                                        </svg>
+                                        <div className="grid w-full flex-1 grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                                            {slices.map((s) => (
+                                                <div key={s.b.device_id} className="flex items-center gap-2 text-sm">
+                                                    <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: s.color }} />
+                                                    <span className="truncate font-semibold text-[#1a1a2e]">{boothName(s.b.device_id)}</span>
+                                                    <span className="ml-auto whitespace-nowrap font-bold text-gray-500">{s.b.count} · {Math.round(s.frac * 100)}%</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 );
             })()}
@@ -756,64 +719,12 @@ const RevenueDashboard = () => {
                 {/* Doanh thu theo booth — full chiều rộng */}
                 <div>
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50/30">
+                        <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/30">
                             <h3 className="text-xl font-black text-[#1a1a2e]">Doanh thu theo booth</h3>
                             <p className="text-gray-400 text-sm font-medium mt-1">
                                 {revenueByBooth.length} booth · tách theo tiền mặt / QR / voucher
                             </p>
                         </div>
-
-                        {/* Biểu đồ tròn: so sánh LƯỢT CHỤP (số giao dịch) giữa các booth */}
-                        {(() => {
-                            const items = revenueByBooth.filter((b) => b.count > 0);
-                            if (items.length === 0) return null;
-                            const totalCount = items.reduce((s, b) => s + b.count, 0);
-                            const COLORS = ['#e63946', '#f4a261', '#2a9d8f', '#457b9d', '#8338ec', '#ffb703', '#84a98c', '#c1121f', '#606c38', '#bc6c25'];
-                            const cx = 100, cy = 100, R = 82, r = 50;
-                            let a0 = -Math.PI / 2;
-                            const slices = items.map((b, i) => {
-                                const frac = b.count / totalCount;
-                                const a1 = a0 + frac * Math.PI * 2;
-                                const large = (a1 - a0) > Math.PI ? 1 : 0;
-                                const p = (ang, rad) => `${(cx + rad * Math.cos(ang)).toFixed(2)} ${(cy + rad * Math.sin(ang)).toFixed(2)}`;
-                                const path = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
-                                const slice = { path, color: COLORS[i % COLORS.length], b, frac };
-                                a0 = a1;
-                                return slice;
-                            });
-                            return (
-                                <div className="p-5 md:p-6 border-b border-gray-100">
-                                    <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-gray-500">So sánh lượt chụp giữa các booth</h4>
-                                    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
-                                        <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0">
-                                            {items.length === 1 ? (
-                                                <>
-                                                    <circle cx={cx} cy={cy} r={R} fill={slices[0].color} />
-                                                    <circle cx={cx} cy={cy} r={r} fill="#fff" />
-                                                </>
-                                            ) : (
-                                                slices.map((s) => (
-                                                    <path key={s.b.device_id} d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
-                                                        <title>{`${boothName(s.b.device_id)}: ${s.b.count} lượt (${Math.round(s.frac * 100)}%)`}</title>
-                                                    </path>
-                                                ))
-                                            )}
-                                            <text x={cx} y={cy - 2} textAnchor="middle" fontSize="20" fontWeight="800" fill="#1a1a2e">{totalCount}</text>
-                                            <text x={cx} y={cy + 15} textAnchor="middle" fontSize="10" fill="#9ca3af">lượt chụp</text>
-                                        </svg>
-                                        <div className="grid w-full flex-1 grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
-                                            {slices.map((s) => (
-                                                <div key={s.b.device_id} className="flex items-center gap-2 text-sm">
-                                                    <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: s.color }} />
-                                                    <span className="truncate font-semibold text-[#1a1a2e]">{boothName(s.b.device_id)}</span>
-                                                    <span className="ml-auto whitespace-nowrap font-bold text-gray-500">{s.b.count} · {Math.round(s.frac * 100)}%</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
 
                         {revenueByBooth.length > 0 ? (
                             <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 md:gap-4 md:p-6">
@@ -884,7 +795,7 @@ const RevenueDashboard = () => {
                 {/* Transactions Section — full chiều rộng */}
                 <div>
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
+                        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
                             <div>
                                 <h3 className="text-xl font-black text-[#1a1a2e]">Giao dịch</h3>
                                 <p className="text-gray-400 text-sm font-medium mt-1">
