@@ -268,12 +268,17 @@ const RevenueDashboard = () => {
         return details.join(' • ');
     };
 
-    // Chỉ hiển thị trạng thái vòng đời album: ACTIVE (còn hạn) / EXPIRED (hết hạn).
-    // Các trạng thái khác (paid, used...) không hiển thị. Trả về null nếu không cần hiện.
+    // Trạng thái vòng đời album: ACTIVE (còn hạn) / EXPIRED (hết hạn 48h).
+    // Không tin tx.status trong DB (nó chỉ đổi thành 'expired' khi có người MỞ album để trigger dọn;
+    // nếu không ai mở thì vẫn 'active' dù đã quá hạn). -> TÍNH theo thời điểm tạo: created_at + 48h < nay.
+    const ALBUM_MAX_AGE_MS = 48 * 60 * 60 * 1000;
     const statusInfo = (tx) => {
-        const s = String(tx.status || '').toLowerCase();
-        if (s !== 'active' && s !== 'expired') return null;
-        return { label: tx.status, cls: s === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500' };
+        const ts = tx.created_at || tx.used_at;
+        const expiredByAge = ts ? (Date.now() - new Date(ts).getTime() > ALBUM_MAX_AGE_MS) : false;
+        const expired = String(tx.status || '').toLowerCase() === 'expired' || expiredByAge;
+        return expired
+            ? { label: 'EXPIRED', cls: 'bg-gray-200 text-gray-500' }
+            : { label: 'ACTIVE', cls: 'bg-green-100 text-green-700' };
     };
 
     // Mỗi loại thanh toán 1 màu -> tô NỀN CẢ DÒNG: tiền mặt=xanh lá, QR=xanh dương, mã=cam,

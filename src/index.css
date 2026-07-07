@@ -76,6 +76,10 @@ h3,
 input[type="datetime-local"],
 input[type="date"],
 input[type="time"] {
+  /* Tắt style native của WebKit -> ô mới chịu co theo container (không giữ chiều rộng nội tại
+     -> đây là nguyên nhân TRÀN Ô trên iOS; Android/Chrome không dựng native nên không bị). */
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -83,9 +87,28 @@ input[type="time"] {
   min-height: 2.75rem;
 }
 
-/* iOS đôi khi căn giữa/đẩy lệch giá trị -> ép căn trái cho khớp các input khác */
+/* Pseudo hiển thị giá trị trên iOS có min-width = độ rộng chuỗi ngày dài nhất + margin/padding
+   riêng -> ép về 0 và căn trái để vừa khung, khớp các input khác. */
 input[type="datetime-local"]::-webkit-date-and-time-value,
 input[type="date"]::-webkit-date-and-time-value,
 input[type="time"]::-webkit-date-and-time-value {
   text-align: left;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* Vùng chỉnh sửa ngày/giờ cũng có padding nội tại -> bỏ để không đẩy tràn. */
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0;
+}
+
+/* iOS ẩn nút lịch mặc định; giữ nút picker (Chrome desktop) gọn, không chiếm thêm bề ngang. */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
 }
