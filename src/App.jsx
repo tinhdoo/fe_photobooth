@@ -5,7 +5,6 @@ import MainLayout from './layouts/MainLayout';
 import { isLocalHost } from './utils/runtime';
 
 import Welcome from './components/steps/Welcome';
-import SourceSelection from './components/steps/SourceSelection';
 import LayoutSelection from './components/steps/LayoutSelection';
 import PrintQuantity from './components/steps/PrintQuantity';
 import Payment from './components/steps/Payment';
@@ -33,7 +32,6 @@ const Capture = lazyWithReload(() => import('./components/steps/Capture'));
 const Edit = lazyWithReload(() => import('./components/steps/Edit'));
 const Review = lazyWithReload(() => import('./components/steps/Review'));
 const Result = lazyWithReload(() => import('./components/steps/Result'));
-const MobileUploadCapture = lazyWithReload(() => import('./components/steps/MobileUploadCapture'));
 
 const ViewPage = lazy(() => import('./pages/ViewPage'));
 const MobileUploadClient = lazy(() => import('./pages/MobileUploadClient'));
@@ -96,13 +94,11 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const StepContent = () => {
-    const { currentStep, sessionData } = useWorkflow();
+    const { currentStep } = useWorkflow();
 
     switch (currentStep) {
         case 1:
             return <Welcome />;
-        case 1.5:
-            return <SourceSelection />;
         case 2:
             return <LayoutSelection />;
         case 2.5:
@@ -114,7 +110,7 @@ const StepContent = () => {
         case 4:
             return (
                 <StepSuspense>
-                    {sessionData.source === 'upload' ? <MobileUploadCapture /> : <Capture />}
+                    <Capture />
                 </StepSuspense>
             );
         case 5:

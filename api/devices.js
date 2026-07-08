@@ -51,7 +51,18 @@ export default async function handler(req, res) {
                 updated_at: now,
             };
 
-            if (name) payload.name = name;
+            // Tên chỉ đặt khi ĐĂNG KÝ LẦN ĐẦU (row chưa có tên). KHÔNG cho heartbeat ghi đè tên đã
+            // đặt từ dashboard: booth gửi heartbeat 60s/lần kèm tên mặc định "Máy Chụp 1", nếu đè
+            // thì tên vừa đổi ở dashboard sẽ bị kéo về "Máy Chụp 1" sau ≤60s. Dashboard (PUT) là nguồn
+            // đặt tên duy nhất có thẩm quyền.
+            if (name) {
+                const { data: existing } = await supabase
+                    .from('devices')
+                    .select('name')
+                    .eq('device_id', deviceId)
+                    .maybeSingle();
+                if (!existing || !existing.name) payload.name = name;
+            }
 
             const { data, error } = await supabase
                 .from('devices')

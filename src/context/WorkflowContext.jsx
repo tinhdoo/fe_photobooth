@@ -113,7 +113,7 @@ export const WorkflowProvider = ({ children }) => {
         printPrice: 60000,
         capturedPhotos: [], // Stable inventory of all taken photos
         activeSlot: null, // Track which slot is being edited
-        source: null, // 'camera' or 'upload' - Bổ sung nguồn ảnh
+        source: 'camera', // Luôn chụp tại quầy (đã bỏ tuỳ chọn tải ảnh từ điện thoại)
     });
 
 
@@ -361,26 +361,19 @@ export const WorkflowProvider = ({ children }) => {
 
     const nextStep = () => {
         setCurrentStep((prev) => {
-            // Từ Welcome (1) -> Source Selection (1.5)
-            if (prev === 1) return 1.5;
-
-            // Từ Source Selection (1.5) -> Layout Selection (2)
-            if (prev === 1.5) return 2;
+            // Từ Welcome (1) -> Layout Selection (2). (Đã bỏ bước chọn nguồn 1.5 - chỉ chụp tại quầy.)
+            if (prev === 1) return 2;
 
             // Payment Mode: Insert Quantity step between Layout (2) and Payment (3)
             if (!isEventMode && prev === 2) return 2.5; // Go to Quantity
             if (!isEventMode && prev === 2.5) return 3; // Go to Payment
 
             // Sau Thanh toán (3): chèn màn "Chuẩn bị" (3.5) để camera ấm rồi mới vào Chụp.
-            // Nguồn 'upload' không dùng camera booth -> vào thẳng bước 4.
-            if (prev === 3) return sessionData.source === 'upload' ? 4 : 3.5;
+            if (prev === 3) return 3.5;
             if (prev === 3.5) return 4; // Chuẩn bị -> Chụp
 
-            // Event Mode: Skip Quantity + Payment. Camera -> qua màn Chuẩn bị (3.5); upload -> thẳng 4.
-            if (isEventMode && prev === 2) return sessionData.source === 'upload' ? 4 : 3.5;
-
-            // Upload flow: Skip Review (step 5), go directly to Edit (step 6)
-            if (prev === 4 && sessionData.source === 'upload') return 6;
+            // Event Mode: Skip Quantity + Payment. Layout -> qua màn Chuẩn bị (3.5).
+            if (isEventMode && prev === 2) return 3.5;
 
             return Math.min(prev + 1, 7);
         });
@@ -395,10 +388,8 @@ export const WorkflowProvider = ({ children }) => {
             // Event Mode: Skip back over quantity and payment
             if (isEventMode && prev === 4) return 2; // From Capture back to Layout
 
-            // Từ Layout (2) quay lại Source Selection (1.5)
-            if (prev === 2) return 1.5;
-            // Từ Source Selection (1.5) quay lại Welcome (1)
-            if (prev === 1.5) return 1;
+            // Từ Layout (2) quay lại Welcome (1). (Đã bỏ bước chọn nguồn 1.5.)
+            if (prev === 2) return 1;
 
             return Math.max(prev - 1, 1);
         });
