@@ -196,6 +196,10 @@ async function hardResetRevenueData(supabase) {
 
 async function listStorageSessions(supabase) {
     const bucket = await resolveBucket(supabase);
+    // Session được ghi CẢ vào bảng photo_sessions (đã phân trang đầy đủ ở listDbSessions) LẪN storage
+    // JSON -> nguồn storage này chỉ là BẢN TRÙNG (dedup theo uuid trong mergeTransactions). Vì vậy KHÔNG
+    // phân trang/không tải hết ở đây (tránh tải hàng nghìn JSON mỗi lần mở dashboard -> timeout serverless);
+    // giữ trần 1000 gần nhất như cũ. Doanh thu đầy đủ đã lấy từ DB.
     const { data, error } = await supabase.storage
         .from(bucket)
         .list('sessions', {
@@ -228,32 +232,47 @@ async function listStorageSessions(supabase) {
     return rows.filter(Boolean);
 }
 
+// Nạp HẾT dòng theo trang. PostgREST mặc định chặn ~1000 dòng/req -> nếu chỉ 1 query, doanh thu bị
+// THIẾU khi vượt 1000 giao dịch. buildPage(from, to) trả 1 query đã .range(). Dừng khi trang < pageSize.
+async function fetchAllPaged(buildPage, pageSize = 1000, maxPages = 500) {
+    const all = [];
+    for (let page = 0; page < maxPages; page += 1) {
+        const from = page * pageSize;
+        const { data, error } = await buildPage(from, from + pageSize - 1);
+        if (error) {
+            if (isMissingTable(error)) return all;
+            throw error;
+        }
+        const rows = Array.isArray(data) ? data : [];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+    }
+    return all;
+}
+
 async function listDbSessions(supabase) {
-    const { data, error } = await supabase
+    const rows = await fetchAllPaged((from, to) => supabase
         .from('photo_sessions')
         .select('id, uuid, payment_method, amount, meta_data, status, created_at')
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
+        .range(from, to));
 
-    if (error && isMissingTable(error)) return [];
-    if (error) throw error;
-
-    return (Array.isArray(data) ? data : [])
+    return rows
         .map((session) => normalizeSessionTransaction(session, 'db-session'))
         .filter((session) => session.id);
 }
 
 async function listPaymentTransactions(supabase) {
-    const { data, error } = await supabase
+    const rows = await fetchAllPaged((from, to) => supabase
         .from('payments')
         .select('*')
         .eq('status', 'paid')
-        .order('paid_at', { ascending: false, nullsFirst: false });
+        .order('paid_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
+        .range(from, to));
 
-    if (error && isMissingTable(error)) return [];
-    if (error) throw error;
-
-    return (Array.isArray(data) ? data : []).map((payment) => {
+    return rows.map((payment) => {
         const payload = normalizeMeta(payment.raw_payload);
         return {
             id: payment.session_id || payment.id,

@@ -94,6 +94,10 @@ const Capture = () => {
     // Đếm số frame poll lỗi liên tiếp -> chỉ báo lỗi kết nối khi thực sự hỏng (tránh báo nhầm
     // do 1-2 frame 503 lúc mới khởi động).
     const liveFrameFailRef = useRef(0);
+    // Còn mounted không -> chặn các setTimeout sau khi chụp (advance/countdown) chạy MUỘN sau khi
+    // đã rời bước (vd hết giờ -> nextStep tự động unmount Capture) -> tránh nextStep() thừa gây
+    // NHẢY/BỎ bước (Review bị skip). Đặt false ở cleanup unmount bên dưới.
+    const mountedRef = useRef(true);
 
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
@@ -105,6 +109,7 @@ const Capture = () => {
     // giới hạn ~6 kết nối/host của trình duyệt -> đơ/màn trắng sau nhiều lần retake.
     useEffect(() => {
         return () => {
+            mountedRef.current = false; // chặn các advance/countdown hẹn giờ chạy sau khi rời bước
             // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
             // Set src='' với MJPEG nhiều khi không ngắt kết nối -> tích tụ tới trần ~6/host -> đơ.
             const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
@@ -361,12 +366,21 @@ const Capture = () => {
             const el = liveViewVisibleRef.current;
             if (el) el.src = `http://localhost:5001/frame?t=${Date.now()}`;
         };
-        const onPollDone = () => { if (alive && mode === 'poll') pollTimer = window.setTimeout(pollNext, 20); };
+        let pollFails = 0;
+        const scheduleNextPoll = (delay) => { if (alive && mode === 'poll') pollTimer = window.setTimeout(pollNext, delay); };
+        // Có frame -> poll ~30fps. LỖI (mất cam / cổng 5001 chết) -> GIÃN dần tới 1s: KHÔNG hammer
+        // /frame ~50 lần/s gây giật + spam khi không có camera. Có frame trở lại -> xóa báo lỗi.
+        const onPollLoad = () => { if (pollFails > 0) setCameraError(null); pollFails = 0; scheduleNextPoll(33); };
+        const onPollError = () => {
+            pollFails += 1;
+            if (pollFails === 12) setCameraError('Không tìm thấy máy ảnh. Kiểm tra cáp/kết nối Canon.');
+            scheduleNextPoll(Math.min(1000, 150 * pollFails));
+        };
         const startPolling = () => {
             if (mode === 'poll' || !alive) return;
             mode = 'poll';
             const el = liveViewVisibleRef.current;
-            if (el) { el.addEventListener('load', onPollDone); el.addEventListener('error', onPollDone); }
+            if (el) { el.addEventListener('load', onPollLoad); el.addEventListener('error', onPollError); }
             pollNext();
         };
 
@@ -406,7 +420,7 @@ const Capture = () => {
             if (pollTimer) clearTimeout(pollTimer);
             if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ } }
             const el = liveViewVisibleRef.current;
-            if (el) { el.removeEventListener('load', onPollDone); el.removeEventListener('error', onPollDone); }
+            if (el) { el.removeEventListener('load', onPollLoad); el.removeEventListener('error', onPollError); }
             if (lastUrl) URL.revokeObjectURL(lastUrl);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -538,9 +552,9 @@ const Capture = () => {
                         if (count < TOTAL_PHOTOS) {
                             // Poll /frame tự cập nhật lại khi live view resume sau /capture ->
                             // KHÔNG cần đóng/đổi token reconnect nữa (đó là nguồn gây tích tụ kết nối cũ).
-                            setTimeout(() => startCountdown(), 2000);
+                            setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
                         } else {
-                            setTimeout(() => nextStep(), 1500);
+                            setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
                         }
                     }, 500);
                 } else {
@@ -558,7 +572,7 @@ const Capture = () => {
                 // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh hoặc
                 // đang chụp lại). Lỗi sẽ hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý.
                 if (isRetakeMode || photosTaken.length < TOTAL_PHOTOS) {
-                    setTimeout(() => startCountdown(), 3500);
+                    setTimeout(() => { if (mountedRef.current) startCountdown(); }, 3500);
                 }
             }
             return;
@@ -566,11 +580,19 @@ const Capture = () => {
 
         // --- HOT FOLDER MODE ---
         if (cameraMode === 'hotfolder') {
+            const hfTimeout = parseInt(configs.hotfolder_capture_timeout, 10) || 30;
+            // Timeout PHÍA CLIENT (giống đường Canon): nếu backend treo/không có ảnh, fetch không có
+            // timeout sẽ ĐƠ vĩnh viễn ở màn chụp. Tự huỷ sau (timeout+10)s rồi rơi xuống catch để phục hồi.
+            const hfCtrl = new AbortController();
+            const hfAbort = setTimeout(() => hfCtrl.abort(), (hfTimeout + 10) * 1000);
             try {
-                // Call Backend to wait for photo
-                // We use a longer timeout on frontend? Or just wait for promise.
                 console.log("🔥 [Capture] Waiting for Hot Folder photo...");
-                const res = await fetch('/api/camera/capture', { method: 'POST' });
+                let res;
+                try {
+                    res = await fetch('/api/camera/capture', { method: 'POST', signal: hfCtrl.signal });
+                } finally {
+                    clearTimeout(hfAbort);
+                }
                 const data = await res.json();
 
                 if (data.success && data.url) {
@@ -592,9 +614,9 @@ const Capture = () => {
                         setFlash(false);
                         setIsShooting(false);
                         if (count < TOTAL_PHOTOS) {
-                            setTimeout(() => startCountdown(), 2000);
+                            setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
                         } else {
-                            setTimeout(() => nextStep(), 1500);
+                            setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
                         }
                     }, 500);
                 } else {
@@ -667,9 +689,9 @@ const Capture = () => {
                 setIsShooting(false);
                 // Chụp lại -> nguồn đã đầy -> quay lại Review; chụp mới chưa đủ -> chụp tiếp
                 if (count < TOTAL_PHOTOS) {
-                    setTimeout(() => startCountdown(), 2000);
+                    setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
                 } else {
-                    setTimeout(() => nextStep(), 1500);
+                    setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
                 }
             }, 500);
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { WorkflowProvider, useWorkflow } from './context/WorkflowContext';
 import MainLayout from './layouts/MainLayout';
@@ -13,9 +13,16 @@ import GetReady from './components/steps/GetReady';
 // Lazy-import CÓ TỰ PHỤC HỒI: khi chunk lỗi (thường do đã build/deploy bản mới nhưng tab cũ
 // còn trỏ tên chunk hash cũ -> 404), tải lại trang 1 LẦN để lấy index.html + chunk mới, thay
 // vì để Suspense treo "ba chấm" vĩnh viễn (không vào được bước Chụp/Edit...).
+// TIMEOUT cho import chunk: nếu fetch TREO (server phục vụ frontend "ôi" sau khi máy để idle lâu
+// -> import đứng, KHÔNG resolve cũng KHÔNG reject) thì coi như lỗi để kích hoạt reload. Bản cũ chỉ
+// bắt reject -> gặp treo là Suspense hiện "ba chấm" VĨNH VIỄN (đúng triệu chứng đơ sau idle).
+const importWithTimeout = (importer, ms = 20000) => Promise.race([
+    importer(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('chunk-timeout')), ms)),
+]);
 const lazyWithReload = (importer) => lazy(async () => {
     try {
-        const mod = await importer();
+        const mod = await importWithTimeout(importer);
         sessionStorage.removeItem('ptb_chunk_reloaded'); // tải OK -> reset cờ cho lần sau
         return mod;
     } catch (err) {
@@ -28,10 +35,24 @@ const lazyWithReload = (importer) => lazy(async () => {
     }
 });
 
-const Capture = lazyWithReload(() => import('./components/steps/Capture'));
-const Edit = lazyWithReload(() => import('./components/steps/Edit'));
-const Review = lazyWithReload(() => import('./components/steps/Review'));
-const Result = lazyWithReload(() => import('./components/steps/Result'));
+const importCapture = () => import('./components/steps/Capture');
+const importEdit = () => import('./components/steps/Edit');
+const importReview = () => import('./components/steps/Review');
+const importResult = () => import('./components/steps/Result');
+const Capture = lazyWithReload(importCapture);
+const Edit = lazyWithReload(importEdit);
+const Review = lazyWithReload(importReview);
+const Result = lazyWithReload(importResult);
+
+// Nạp sẵn (preload) chunk các bước Chụp/Edit/Review/Result NGAY lúc app rảnh sau khi mở. Chunk
+// nằm sẵn trong bộ nhớ module của tab -> tới bước Chụp là dùng LIỀN, không phải fetch từ server
+// (nguồn gây treo "3 chấm" khi khách thanh toán sau lúc máy để idle rất lâu). Idle KHÔNG xoá module
+// đã nạp nên chỉ cần nạp 1 lần. Best-effort: lỗi thì bỏ qua (lúc vào bước lazyWithReload sẽ thử lại).
+const preloadStepChunks = () => {
+    [importCapture, importEdit, importReview, importResult].forEach((imp) => {
+        try { imp().catch(() => { }); } catch { /* ignore */ }
+    });
+};
 
 const ViewPage = lazy(() => import('./pages/ViewPage'));
 const MobileUploadClient = lazy(() => import('./pages/MobileUploadClient'));
@@ -153,6 +174,19 @@ const CloudAdminRoute = ({ children }) => {
 };
 
 const App = () => {
+    // Booth: nạp sẵn chunk bước chụp khi rảnh -> tới bước Chụp không phải fetch -> tránh treo
+    // "3 chấm" khi khách thanh toán sau lúc máy để idle lâu. Chỉ chạy trên máy booth (localhost).
+    useEffect(() => {
+        if (!isLocalHost()) return undefined;
+        const run = () => preloadStepChunks();
+        if (typeof window !== 'undefined' && window.requestIdleCallback) {
+            const id = window.requestIdleCallback(run, { timeout: 4000 });
+            return () => window.cancelIdleCallback && window.cancelIdleCallback(id);
+        }
+        const t = setTimeout(run, 1500);
+        return () => clearTimeout(t);
+    }, []);
+
     return (
         <BrowserRouter>
             <WorkflowProvider>

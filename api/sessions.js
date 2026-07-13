@@ -149,8 +149,14 @@ async function purgeExpiredSession(supabase, row) {
 
 async function cleanupExpiredCloud(req, res, supabase) {
     const secret = process.env.CLEANUP_SECRET;
+    // Vercel Cron tự gửi header "Authorization: Bearer <CRON_SECRET>" -> chấp nhận cả hai, nếu không
+    // cron sẽ bị 401 và KHÔNG BAO GIỜ dọn (album quá hạn tồn mãi). Đặt CRON_SECRET trên Vercel để đóng
+    // luôn kẽ hở gọi công khai.
+    const cronSecret = process.env.CRON_SECRET;
     const auth = String(req.headers.authorization || '');
-    if (secret && auth !== `Bearer ${secret}` && req.query.secret !== secret) {
+    const okCleanup = secret && (auth === `Bearer ${secret}` || req.query.secret === secret);
+    const okCron = cronSecret && auth === `Bearer ${cronSecret}`;
+    if ((secret || cronSecret) && !okCleanup && !okCron) {
         return json(res, 401, { error: 'Unauthorized cleanup request' });
     }
 

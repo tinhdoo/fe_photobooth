@@ -104,7 +104,7 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 });
 
 const Edit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
+    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs, isEventMode } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const captureRef = useRef(null);
     // --- STATE ---
@@ -969,16 +969,25 @@ const Edit = () => {
             const printerCopies = (printMode === 'double_strip' || printMode === 'double_strip_horizontal')
                 ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
                 : selectedPrintQuantity;
+            let printOk = true;
             try {
                 const printResult = await sendToPrinter(printBlob, printerCopies, { printMode, cutMode, sessionId });
                 console.log('Print job queued:', printResult);
             } catch (printError) {
+                printOk = false;
                 const data = printError.response?.data;
                 const available = data?.available_printers?.length
                     ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
                     : '';
                 const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
                 setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+            }
+            // IN LỖI -> DỪNG: KHÔNG tạo session / KHÔNG sang Result. Trước đây catch không return nên
+            // vẫn nextStep() -> Edit unmount -> dialog lỗi biến mất -> khách ĐÃ TRẢ TIỀN bị đẩy sang màn
+            // QR mà không có ảnh in, không ai biết lỗi. Giờ mở khoá nút để nhân viên sửa máy in rồi In lại.
+            if (!printOk) {
+                setIsUploading(false);
+                return;
             }
 
             // 8. Upload & Create Session (chạy SAU khi đã gửi lệnh in)
@@ -1011,8 +1020,10 @@ const Edit = () => {
                         composite_url: compositeUrl,
                         composite_public_id: compositePublicId,
                         photos: photosArr,
-                        payment_method: sessionData.paymentMethod || 'cash',
-                        amount: sessionData.printPrice || 60000,
+                        // Sự kiện (miễn phí) KHÔNG thu tiền -> ghi amount=0, method='event' để KHÔNG bị
+                        // tính thành doanh thu tiền mặt ảo. Trả phí -> theo phương thức/giá thực.
+                        payment_method: isEventMode ? 'event' : (sessionData.paymentMethod || 'cash'),
+                        amount: isEventMode ? 0 : (sessionData.printPrice || 60000),
                         session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
                         meta_data: metaData,
                     });

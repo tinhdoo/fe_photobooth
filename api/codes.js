@@ -130,8 +130,13 @@ async function markCodeUsed(req, res, supabase) {
 
 async function cleanupPaymentCodes(req, res, supabase) {
     const secret = process.env.CLEANUP_SECRET;
+    // Vercel Cron tự gửi "Authorization: Bearer <CRON_SECRET>" -> chấp nhận cả hai (nếu không cron bị
+    // 401 và không bao giờ dọn). Đặt CRON_SECRET trên Vercel để đóng kẽ hở gọi công khai.
+    const cronSecret = process.env.CRON_SECRET;
     const auth = String(req.headers.authorization || '');
-    if (secret && auth !== `Bearer ${secret}` && req.query.secret !== secret) {
+    const okCleanup = secret && (auth === `Bearer ${secret}` || req.query.secret === secret);
+    const okCron = cronSecret && auth === `Bearer ${cronSecret}`;
+    if ((secret || cronSecret) && !okCleanup && !okCron) {
         return json(res, 401, { error: 'Unauthorized cleanup request' });
     }
 

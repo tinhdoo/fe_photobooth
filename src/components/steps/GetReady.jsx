@@ -16,19 +16,25 @@ const GetReady = () => {
     const readyTimerRef = useRef(null);
     // Ref tới <img> live view MJPEG -> để NGẮT kết nối khi rời màn Chuẩn bị.
     const liveImgRef = useRef(null);
+    // Cờ ĐỒNG BỘ (ref) đánh dấu live view đã ra hình. Dùng ref thay vì set thẳng cameraWarm=false ở
+    // mount + true ở onLoad, vì 2 lệnh setState bất đồng bộ đó ĐUA nhau: khi live view đã pre-warm
+    // (frame về gần như tức thì) onLoad có thể chạy TRƯỚC effect mount -> false đè lên true -> cờ kẹt
+    // false -> chụp lại luôn hiện màn Chuẩn bị. Giờ cameraWarm chỉ được ghi MỘT LẦN, dứt điểm, ở advance().
+    const warmRef = useRef(false);
 
     const advance = () => {
         if (doneRef.current) return;
         doneRef.current = true;
+        // Ghi cờ dứt điểm theo trạng thái thực tại thời điểm chuyển bước (không còn lệnh nào đè lên).
+        updateSessionData('cameraWarm', warmRef.current);
         goToStep(4); // vào bước Chụp
     };
 
     useEffect(() => {
         mountAtRef.current = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        // Reset cờ: chỉ bật lại khi live view thực sự ra hình (onLoad). Nếu tới đây do hết MAX_MS
-        // mà camera chưa lên hình thì cờ = false -> Capture tự chờ frame (hiện overlay như cũ).
-        updateSessionData('cameraWarm', false);
-
+        // KHÔNG reset cameraWarm ở mount nữa (tránh đua với onLoad). Trạng thái ấm giữ trong warmRef,
+        // ghi vào cameraWarm khi advance(); nếu hết MAX_MS mà chưa ra hình thì warmRef=false -> Capture
+        // tự chờ frame (hiện overlay như cũ).
         const maxTimer = setTimeout(advance, MAX_MS);
         // Không phải canon (webcam/hotfolder): không có /liveview để dò -> chỉ chờ MIN rồi vào Chụp.
         const minTimer = isCanon ? null : setTimeout(advance, MIN_MS);
@@ -50,7 +56,7 @@ const GetReady = () => {
     // Live view đã ra hình (EVF ấm) -> đánh dấu camera đã sẵn sàng để Capture vào thẳng, KHÔNG
     // hiện overlay "Đang khởi động camera". Vẫn giữ tối thiểu MIN_MS để khách kịp đọc.
     const onLiveReady = () => {
-        updateSessionData('cameraWarm', true);
+        warmRef.current = true; // đánh dấu đồng bộ; cameraWarm sẽ được ghi dứt điểm trong advance()
         if (doneRef.current || readyTimerRef.current) return;
         const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         const wait = Math.max(0, MIN_MS - (now - mountAtRef.current));

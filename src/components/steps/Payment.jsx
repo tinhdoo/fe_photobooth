@@ -34,6 +34,10 @@ const Payment = () => {
     // -> nếu không chặn sẽ gọi nextStep() nhiều lần / lặp API voucher lỗi. Chỉ mở lại khi khách
     // ĐÓNG modal lỗi (thử lại có chủ đích), còn khi thành công thì giữ khoá tới lúc rời bước.
     const processingRef = useRef(false);
+    // Ref tới <img> live view MJPEG (pre-warm) -> để NGẮT kết nối khi rời bước Thanh toán. Giống
+    // GetReady: chỉ gỡ <img> (React unmount) KHÔNG đủ đóng luồng MJPEG -> kết nối sống dai tích tụ
+    // tới trần ~6/host + cạn thread middleware -> ĐƠ (và giữ EVF nóng). Phải gán blank-GIF để đóng.
+    const liveImgRef = useRef(null);
 
     const price = sessionData.printPrice || 60000;
     const printQuantity = sessionData.printQuantity || 1;
@@ -159,6 +163,16 @@ const Payment = () => {
         // Tạo socket 1 LẦN cho suốt vòng đời bước Thanh toán (deps []): handler đọc qua ref nên
         // luôn thấy method/qrOrder/handlePaymentSuccess mới nhất mà KHÔNG cần dựng lại socket.
         return () => socket.disconnect();
+    }, []);
+
+    // NGẮT luồng MJPEG /liveview khi rời bước Thanh toán (gán blank-GIF, giống GetReady) -> tránh
+    // kết nối sống dai tích tụ gây đơ + giữ EVF nóng. Chạy 1 lần, đóng ở cleanup.
+    useEffect(() => {
+        const liveImg = liveImgRef.current;
+        return () => {
+            const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+            try { if (liveImg) liveImg.src = BLANK; } catch (e) { /* ignore */ }
+        };
     }, []);
 
     useEffect(() => {
@@ -533,6 +547,7 @@ const Payment = () => {
                 vẫn stream. Chỉ áp dụng canon mode. */}
             {configs?.camera_mode === 'canon' && (
                 <img
+                    ref={liveImgRef}
                     src="http://localhost:5001/liveview"
                     alt=""
                     aria-hidden="true"

@@ -422,6 +422,18 @@ export const WorkflowProvider = ({ children }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionData.paymentStatus]);
 
+    // Event mode KHÔNG có bước Thanh toán -> paymentStatus mãi 'pending' -> timer/timeout không bao
+    // giờ chạy -> booth KẸT vô hạn nếu khách bỏ ngang. Bật đồng hồ phiên khi vào vùng chụp (>=3.5)
+    // để có timeout tự hoàn tất/in/reset như luồng trả phí.
+    useEffect(() => {
+        if (isEventMode && !isSessionActive && currentStep >= 3.5 && currentStep <= 6) {
+            setIsSessionActive(true);
+            setTimedOut(false);
+            setTimeLeft(configs.session_timeout);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEventMode, currentStep]);
+
     // Timer Countdown
     useEffect(() => {
         if (!isSessionActive) return undefined;

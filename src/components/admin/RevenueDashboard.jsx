@@ -20,6 +20,27 @@ const voucherApplied = (tx) => {
 // Mã một phần (code+cash / code+qr): phần tiền mặt/QR VẪN tính, chỉ trừ phần voucher.
 const realRevenue = (tx) => Math.max(0, txValue(tx) - voucherApplied(tx));
 
+// --- Múi giờ VN (UTC+7, không DST) ---
+// Trước đây gom nhóm "hôm nay/tuần/tháng" + biểu đồ ngày + bộ lọc dùng GIỜ MÁY ADMIN (getFullYear...),
+// còn hiển thị lại ép VN -> lệch tới 7h nếu máy admin không ở UTC+7 (giao dịch quanh nửa đêm bị gán
+// nhầm ngày). Các helper này cho MỌI phép gom nhóm theo đúng giờ VN, dùng epoch tuyệt đối để so sánh.
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const vnDateKey = (dateLike) => {
+    const v = new Date(new Date(dateLike).getTime() + VN_OFFSET_MS);
+    return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}-${String(v.getUTCDate()).padStart(2, '0')}`;
+};
+const vnNowBounds = () => {
+    const v = new Date(Date.now() + VN_OFFSET_MS);
+    const y = v.getUTCFullYear(), m = v.getUTCMonth(), d = v.getUTCDate(), dow = v.getUTCDay();
+    const diff = d - dow + (dow === 0 ? -6 : 1); // thứ 2 đầu tuần
+    return {
+        startOfDay: Date.UTC(y, m, d) - VN_OFFSET_MS,
+        startOfWeek: Date.UTC(y, m, diff) - VN_OFFSET_MS,
+        startOfMonth: Date.UTC(y, m, 1) - VN_OFFSET_MS,
+        todayKey: `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+    };
+};
+
 const RevenueDashboard = () => {
     const [stats, setStats] = useState({ totalRevenue: 0, transactions: [] });
     const [loading, setLoading] = useState(false);
@@ -162,16 +183,19 @@ const RevenueDashboard = () => {
         const hasFilter = dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime;
         if (!hasFilter) return {};
 
-        const today = new Date();
-        const startBase = dateRange.startDate ? new Date(dateRange.startDate) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const endBase = dateRange.endDate ? new Date(dateRange.endDate) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const [startHour = 0, startMinute = 0] = (dateRange.startTime || '00:00').split(':').map(Number);
-        const [endHour = 23, endMinute = 59] = (dateRange.endTime || '23:59').split(':').map(Number);
+        // Ngày trong ô lọc là NGÀY THEO GIỜ VN (admin nghĩ theo VN) -> dựng mốc VN tuyệt đối gửi API,
+        // tránh new Date("YYYY-MM-DD") bị hiểu là nửa đêm UTC -> lệch 7h.
+        const todayKey = vnNowBounds().todayKey;
+        const startStr = dateRange.startDate || todayKey;
+        const endStr = dateRange.endDate || todayKey;
+        const [sh = 0, sm = 0] = (dateRange.startTime || '00:00').split(':').map(Number);
+        const [eh = 23, em = 59] = (dateRange.endTime || '23:59').split(':').map(Number);
+        const [sy, smo, sd] = startStr.split('-').map(Number);
+        const [ey, emo, ed] = endStr.split('-').map(Number);
 
-        startBase.setHours(startHour, startMinute, 0, 0);
-        endBase.setHours(endHour, endMinute, 59, 999);
-
-        return { start: startBase, end: endBase };
+        const start = new Date(Date.UTC(sy, smo - 1, sd, sh, sm, 0, 0) - VN_OFFSET_MS);
+        const end = new Date(Date.UTC(ey, emo - 1, ed, eh, em, 59, 999) - VN_OFFSET_MS);
+        return { start, end };
     };
 
     const fetchRevenue = async () => {
@@ -327,15 +351,7 @@ const RevenueDashboard = () => {
     };
 
     const periodStats = useMemo(() => {
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const startOfWeek = new Date(now);
-        const day = now.getDay();
-        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-        startOfWeek.setDate(diff);
-        startOfWeek.setHours(0, 0, 0, 0);
-        const startOfWeekTime = startOfWeek.getTime();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const { startOfDay, startOfWeek, startOfMonth } = vnNowBounds();
 
         let today = 0;
         let week = 0;
@@ -346,7 +362,7 @@ const RevenueDashboard = () => {
             const txTime = new Date(tx.used_at).getTime();
             const val = realRevenue(tx); // voucher đã bị loại khỏi doanh thu
             if (txTime >= startOfDay) today += val;
-            if (txTime >= startOfWeekTime) week += val;
+            if (txTime >= startOfWeek) week += val;
             if (txTime >= startOfMonth) month += val;
         });
 
@@ -359,7 +375,7 @@ const RevenueDashboard = () => {
         [stats.transactions]
     );
     const voucherStats = useMemo(() => {
-        const startOfDay = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
+        const { startOfDay } = vnNowBounds();
         let total = 0, count = 0, today = 0, todayCount = 0;
         (stats.transactions || []).forEach((tx) => {
             const a = voucherApplied(tx);
@@ -394,20 +410,26 @@ const RevenueDashboard = () => {
             rangeEnd.setHours(23, 59, 59, 999);
         }
 
-        // Generate all days in range
+        // Sinh danh sách ngày theo GIỜ VN (khớp key với phần gom giao dịch bên dưới). Dùng 1 mốc UTC
+        // đại diện cho ngày-lịch-VN để bước qua từng ngày (chỉ phục vụ tạo key/nhãn, không phải mốc thật).
+        const toVnDayUtc = (dateLike) => {
+            const [y, m, d] = vnDateKey(dateLike).split('-').map(Number);
+            return Date.UTC(y, m - 1, d);
+        };
         const days = [];
-        const cur = new Date(rangeStart);
-        while (cur <= rangeEnd) {
-            const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-            days.push({ key, label: `${String(cur.getDate()).padStart(2, '0')}/${String(cur.getMonth() + 1).padStart(2, '0')}`, total: 0 });
-            cur.setDate(cur.getDate() + 1);
+        let curU = toVnDayUtc(rangeStart);
+        const endU = toVnDayUtc(rangeEnd);
+        while (curU <= endU) {
+            const cd = new Date(curU);
+            const key = `${cd.getUTCFullYear()}-${String(cd.getUTCMonth() + 1).padStart(2, '0')}-${String(cd.getUTCDate()).padStart(2, '0')}`;
+            days.push({ key, label: `${String(cd.getUTCDate()).padStart(2, '0')}/${String(cd.getUTCMonth() + 1).padStart(2, '0')}`, total: 0 });
+            curU += 24 * 60 * 60 * 1000;
         }
 
-        // Aggregate
+        // Gom theo ngày VN
         txs.forEach(tx => {
             if (!tx.used_at) return;
-            const d = new Date(tx.used_at);
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const key = vnDateKey(tx.used_at);
             const found = days.find(day => day.key === key);
             if (found) found.total += realRevenue(tx);
         });
