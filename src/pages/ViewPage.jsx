@@ -450,6 +450,18 @@ const ViewPage = () => {
         }
     };
 
+    // Chỉ ưu tiên Web Share trên điện thoại/máy tính bảng (để ảnh vào thẳng album).
+    // Trên PC, Chrome/Edge cũng hỗ trợ navigator.share nhưng nó bung "bảng chia sẻ"
+    // của Windows thay vì tải file -> gây khó chịu. PC luôn tải thẳng về Downloads.
+    const isMobileDevice = () => {
+        if (typeof navigator === 'undefined') return false;
+        const ua = navigator.userAgent || '';
+        if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+        // iPadOS 13+ báo là "Macintosh" nhưng có cảm ứng.
+        if (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1) return true;
+        return false;
+    };
+
     // Có hỗ trợ chia sẻ trực tiếp file (đường vào album Ảnh) không?
     const canShareFiles = (files) => {
         try {
@@ -477,7 +489,7 @@ const ViewPage = () => {
 
         try {
             const files = await Promise.all(valid.map((it) => fetchAsFile(it.url, it.filename)));
-            if (canShareFiles(files)) {
+            if (isMobileDevice() && canShareFiles(files)) {
                 await navigator.share({ files });
                 return;
             }
@@ -505,7 +517,7 @@ const ViewPage = () => {
         const file = new File([blob], filename, { type });
 
         try {
-            if (canShareFiles([file])) {
+            if (isMobileDevice() && canShareFiles([file])) {
                 await navigator.share({ files: [file] });
                 return;
             }

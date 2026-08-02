@@ -70,8 +70,13 @@ const Settings = ({ forceLocalAdmin = false }) => {
         try {
             const res = await axios.get('/api/config');
             if (res.data) {
-                // Merge with defaults to ensure keys exist
-                setConfigs(prev => ({ ...prev, ...res.data }));
+                // Merge with defaults to ensure keys exist. Booth local CHỈ dùng Canon middleware ->
+                // cố định camera_mode='canon' (đã bỏ ô chọn chế độ) để không kẹt ở hotfolder khi lưu.
+                setConfigs(prev => ({
+                    ...prev,
+                    ...res.data,
+                    ...(isLocalAdmin ? { camera_mode: 'canon' } : {}),
+                }));
             }
         } catch (error) {
             console.error("Error fetching configs:", error);
@@ -86,6 +91,49 @@ const Settings = ({ forceLocalAdmin = false }) => {
             setCameraTestOk(false);
         }
     };
+
+    // Tăng/giảm 1 giá trị số theo bước, có kẹp min/max. Dùng cho nút − / + (bấm dễ trên cảm ứng).
+    const stepConfig = (name, delta, min, max) => {
+        setConfigs((prev) => {
+            const cur = parseFloat(prev[name]);
+            let next = (Number.isNaN(cur) ? 0 : cur) + delta;
+            if (min !== undefined && next < min) next = min;
+            if (max !== undefined && next > max) next = max;
+            return { ...prev, [name]: String(next) };
+        });
+    };
+
+    // Ô số kèm nút − / + hai bên -> thao tác chính xác bằng ngón tay, không cần kéo slider/gõ số.
+    const renderStepper = (name, { min, max, step = 1 } = {}) => (
+        <div className="inline-flex items-stretch overflow-hidden rounded-xl border border-[#ead8bd]">
+            <button
+                type="button"
+                onClick={() => stepConfig(name, -step, min, max)}
+                className="w-12 bg-[#fffaf0] text-2xl font-black leading-none text-[#7B5E43] active:bg-[#f3e4cf]"
+                aria-label="Giảm"
+            >
+                -
+            </button>
+            <input
+                type="number"
+                name={name}
+                min={min}
+                max={max}
+                step={step}
+                value={configs[name] ?? 0}
+                onChange={handleChange}
+                className="h-12 w-16 border-x border-[#ead8bd] bg-white text-center text-base font-bold text-[#7B5E43] focus:outline-none"
+            />
+            <button
+                type="button"
+                onClick={() => stepConfig(name, step, min, max)}
+                className="w-12 bg-[#fffaf0] text-2xl font-black leading-none text-[#7B5E43] active:bg-[#f3e4cf]"
+                aria-label="Tăng"
+            >
+                +
+            </button>
+        </div>
+    );
 
     const handleSave = async () => {
         setSaving(true);
@@ -314,19 +362,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
 
             <div className="grid gap-4 md:grid-cols-2">
                 {printColorControls.map((control) => (
-                    <label key={control.name} className="rounded-2xl border border-[#ead8bd] bg-white p-4">
+                    <div key={control.name} className="rounded-2xl border border-[#ead8bd] bg-white p-4">
                         <div className="mb-3 flex items-center justify-between gap-4">
                             <span className="text-sm font-extrabold text-[#1a1a2e]">{control.label}</span>
-                            <input
-                                type="number"
-                                name={control.name}
-                                min={control.min}
-                                max={control.max}
-                                step={control.step}
-                                value={configs[control.name]}
-                                onChange={handleChange}
-                                className="h-10 w-20 rounded-xl border border-[#ead8bd] bg-[#fffaf0] text-center text-sm font-bold text-[#7B5E43]"
-                            />
+                            {renderStepper(control.name, { min: control.min, max: control.max, step: control.step })}
                         </div>
                         <input
                             type="range"
@@ -338,7 +377,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                             onChange={handleChange}
                             className="h-2 w-full accent-[#DDBF9B]"
                         />
-                    </label>
+                    </div>
                 ))}
             </div>
         </section>
@@ -394,6 +433,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
                         {message.text}
                     </div>
                 )}
+
+                <h3 className="border-b border-[#ead8bd] pb-2 text-sm font-bold uppercase tracking-wider text-gray-400">Trạng thái thiết bị</h3>
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -531,87 +572,65 @@ const Settings = ({ forceLocalAdmin = false }) => {
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <h3 className="border-b border-[#ead8bd] pb-2 text-sm font-bold uppercase tracking-wider text-gray-400">Cấu hình thiết bị</h3>
+
+                <div className="space-y-6">
                     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-[#1a1a2e]">Máy in</h2>
+                                <h2 className="text-xl font-bold text-[#1a1a2e]">Cấu hình máy in</h2>
                                 <p className="mt-1 text-sm text-[#e63946]">Dùng cho DNP RX1HS hoặc máy in Windows tương thích.</p>
                             </div>
                             <Monitor className="text-[#e63946]" size={24} />
                         </div>
 
                         <div className="space-y-5">
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Tên máy in Windows</span>
-                                <input
-                                    type="text"
-                                    name="printer_name"
-                                    value={configs.printer_name}
-                                    onChange={handleChange}
-                                    placeholder="RX1HS hoặc DNP DS-RX1HS"
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
-                                />
-                            </label>
+                            <div className="grid gap-5 md:grid-cols-2">
+                                <label className="block">
+                                    <span className="mb-2 block text-sm font-bold text-gray-700">Tên máy in Windows</span>
+                                    <input
+                                        type="text"
+                                        name="printer_name"
+                                        value={configs.printer_name}
+                                        onChange={handleChange}
+                                        placeholder="RX1HS hoặc DNP DS-RX1HS"
+                                        className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
+                                    />
+                                </label>
 
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Số bản in mặc định</span>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    name="printer_copies"
-                                    value={configs.printer_copies}
-                                    onChange={handleChange}
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
-                                />
-                            </label>
+                                <label className="block">
+                                    <span className="mb-2 block text-sm font-bold text-gray-700">Số bản in mặc định</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        name="printer_copies"
+                                        value={configs.printer_copies}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
+                                    />
+                                </label>
+                            </div>
 
                             {/* Cân chỉnh ảnh in */}
                             <div className="border-t border-gray-100 pt-4 mt-4 space-y-4">
                                 <span className="block text-sm font-bold text-[#1a1a2e]">Cân chỉnh lệch ảnh & Tỉ lệ in</span>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <label className="block">
+                                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                    <div>
                                         <span className="mb-2 block text-xs font-bold text-gray-500">Tỉ lệ rộng (%)</span>
-                                        <input
-                                            type="number"
-                                            name="print_scale_x"
-                                            value={configs.print_scale_x ?? 100}
-                                            onChange={handleChange}
-                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
-                                            min="50" max="150"
-                                        />
-                                    </label>
-                                    <label className="block">
+                                        {renderStepper('print_scale_x', { min: 50, max: 150, step: 1 })}
+                                    </div>
+                                    <div>
                                         <span className="mb-2 block text-xs font-bold text-gray-500">Tỉ lệ cao (%)</span>
-                                        <input
-                                            type="number"
-                                            name="print_scale_y"
-                                            value={configs.print_scale_y ?? 100}
-                                            onChange={handleChange}
-                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
-                                            min="50" max="150"
-                                        />
-                                    </label>
-                                    <label className="block">
+                                        {renderStepper('print_scale_y', { min: 50, max: 150, step: 1 })}
+                                    </div>
+                                    <div>
                                         <span className="mb-2 block text-xs font-bold text-gray-500">Dịch ngang X (px)</span>
-                                        <input
-                                            type="number"
-                                            name="print_offset_x"
-                                            value={configs.print_offset_x ?? 0}
-                                            onChange={handleChange}
-                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
-                                        />
-                                    </label>
-                                    <label className="block">
+                                        {renderStepper('print_offset_x', { step: 2 })}
+                                    </div>
+                                    <div>
                                         <span className="mb-2 block text-xs font-bold text-gray-500">Dịch dọc Y (px)</span>
-                                        <input
-                                            type="number"
-                                            name="print_offset_y"
-                                            value={configs.print_offset_y ?? 0}
-                                            onChange={handleChange}
-                                            className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-xs focus:border-[#e63946]"
-                                        />
-                                    </label>
+                                        {renderStepper('print_offset_y', { step: 2 })}
+                                    </div>
                                 </div>
                                 <p className="text-[10px] text-gray-400 font-semibold leading-normal">
                                     * Tăng X / Y để dịch chuyển ảnh in sang phải / xuống dưới.
@@ -620,104 +639,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                         </div>
                     </section>
 
-                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
-                        <div className="mb-6 flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-xl font-bold text-[#1a1a2e]">Thời gian</h2>
-                                <p className="mt-1 text-sm text-[#e63946]">Cấu hình thời lượng phiên và thời gian chờ camera.</p>
-                            </div>
-                            <SettingsIcon className="text-[#e63946]" size={24} />
-                        </div>
-
-                        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Thời gian 1 phiên chụp (giây)</span>
-                                <input type="number" min="30" name="session_timeout" value={configs.session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
-                            </label>
-
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Đếm ngược mỗi ảnh (giây)</span>
-                                <input type="number" min="1" name="countdown" value={configs.countdown} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
-                            </label>
-
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Thời gian tải ảnh điện thoại (giây)</span>
-                                <input type="number" min="30" name="mobile_session_timeout" value={configs.mobile_session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
-                            </label>
-
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Chờ ảnh Hot Folder (giây)</span>
-                                <input type="number" min="5" name="hotfolder_capture_timeout" value={configs.hotfolder_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
-                            </label>
-
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Chờ ảnh Canon middleware (giây)</span>
-                                <input type="number" min="5" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]" />
-                            </label>
-                        </div>
-                    </section>
-
                     {renderPrintColorControls()}
-
-                    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                        <div className="mb-6 flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-xl font-bold text-[#1a1a2e]">Máy ảnh</h2>
-                                <p className="mt-1 text-sm text-[#e63946]">Chọn cách máy booth nhận ảnh từ camera.</p>
-                            </div>
-                            <SettingsIcon className="text-[#e63946]" size={24} />
-                        </div>
-
-                        <div className="space-y-5">
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-bold text-gray-700">Chế độ camera</span>
-                                <select
-                                    name="camera_mode"
-                                    value={configs.camera_mode}
-                                    onChange={handleChange}
-                                    className="block w-full rounded-xl border-gray-200 px-4 py-3 text-sm focus:border-[#e63946] focus:ring-[#e63946]"
-                                >
-                                    <option value="canon">Canon middleware</option>
-                                    <option value="hotfolder">Hot folder / EOS Utility</option>
-                                </select>
-                            </label>
-
-                            {configs.camera_mode === 'hotfolder' && (
-                                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
-                                    <label className="block">
-                                        <span className="mb-2 block text-sm font-bold text-gray-700">Thư mục nhận ảnh</span>
-                                        <input
-                                            type="text"
-                                            name="hot_folder"
-                                            value={configs.hot_folder}
-                                            onChange={handleChange}
-                                            placeholder="C:/Photobooth_Input"
-                                            className="block w-full rounded-xl border-orange-200 px-4 py-3 text-sm focus:border-orange-400 focus:ring-orange-400"
-                                        />
-                                    </label>
-
-                                    <label className="mt-4 block">
-                                        <span className="mb-2 block text-sm font-bold text-gray-700">Phím chụp</span>
-                                        <input
-                                            type="text"
-                                            name="trigger_key"
-                                            value={configs.trigger_key}
-                                            onChange={handleChange}
-                                            placeholder="{F8}"
-                                            className="block w-full rounded-xl border-orange-200 px-4 py-3 text-sm font-mono focus:border-orange-400 focus:ring-orange-400"
-                                        />
-                                    </label>
-                                </div>
-                            )}
-
-                            {configs.camera_mode === 'canon' && (
-                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm leading-6 text-blue-700">
-                                    Cần chạy Canon middleware trên máy local. LiveView và capture dùng cổng
-                                    <span className="font-mono font-bold"> http://localhost:5001</span>.
-                                </div>
-                            )}
-                        </div>
-                    </section>
                 </div>
 
                 <div className="flex justify-end">

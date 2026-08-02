@@ -20,6 +20,17 @@ const FrameManager = () => {
     const [selectedFrames, setSelectedFrames] = useState(new Set());
     const [isProcessing, setIsProcessing] = useState(false);
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+
+    // Tu tat moi thong bao sau vai giay. Truoc day moi cho goi setNotification phai TU dat setTimeout
+    // rieng -> cho upload icon (keo tha) bi quen -> toast "Tai len bieu tuong thanh cong" hien mai.
+    // Gom ve mot cho de khong bao gio sot nua. Moi lan message doi -> timer reset.
+    useEffect(() => {
+        if (!notification.show) return;
+        // 'info' la trang thai "dang tai...", de lau hon phong khi request cham; con lai tat nhanh.
+        const timeout = notification.type === 'info' ? 15000 : 3500;
+        const timer = setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), timeout);
+        return () => clearTimeout(timer);
+    }, [notification.show, notification.message, notification.type]);
     const [activeTab, setActiveTab] = useState('photobooth'); // 'photobooth' | 'upload'
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const [topFrames, setTopFrames] = useState([]);

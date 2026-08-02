@@ -192,6 +192,46 @@ function enhanceLips(canvas, faces, amount) {
     });
 }
 
+// Tô SON có màu: đổi TÔNG màu môi nhưng GIỮ nếp môi/độ bóng (blend 'color' giữ độ sáng-tối của môi
+// thật -> tự nhiên, không bệt). Mép mềm (feather) kiểu tint. Chừa răng khi cười hở bằng mask = viền
+// môi NGOÀI trừ viền môi TRONG. makeup.lipstick = cường độ 0..1; makeup.lipColor = "r,g,b".
+function applyLipstick(canvas, faces, makeup) {
+    const amount = makeup.lipstick ?? 0;
+    if (amount <= 0) return;
+    const rgb = makeup.lipColor || '217,139,139'; // nude pink mặc định (tự nhiên)
+    const { width: w, height: h } = canvas;
+    const ctx = canvas.getContext('2d');
+    const k = Math.min(1, amount);
+    faces.forEach((f) => {
+        const feather = Math.max(1.5, f.metrics.faceW * w * 0.012); // mép son mềm theo cỡ mặt
+        const layer = makeCanvas(w, h);
+        const lc = layer.getContext('2d');
+        lc.drawImage(canvas, 0, 0);
+        lc.globalCompositeOperation = 'color';       // giữ sáng/tối môi, chỉ đổi sắc
+        lc.globalAlpha = 0.85 * k;
+        lc.fillStyle = `rgb(${rgb})`;
+        lc.fillRect(0, 0, w, h);
+        lc.globalCompositeOperation = 'soft-light';  // thêm chút chiều sâu, lên màu tự nhiên
+        lc.globalAlpha = 0.35 * k;
+        lc.fillRect(0, 0, w, h);
+        lc.globalAlpha = 1;
+        // Cắt theo mask môi MÉP MỀM = viền ngoài trừ viền trong (chừa răng khi cười hở).
+        lc.globalCompositeOperation = 'destination-in';
+        lc.filter = `blur(${feather}px)`;
+        lc.fillStyle = '#fff';
+        pathRing(lc, f.rings.lips, w, h); lc.fill();
+        lc.filter = 'none';
+        if (f.rings.innerLips) {
+            lc.globalCompositeOperation = 'destination-out';
+            lc.filter = `blur(${feather}px)`;
+            pathRing(lc, f.rings.innerLips, w, h); lc.fill();
+            lc.filter = 'none';
+        }
+        lc.globalCompositeOperation = 'source-over';
+        ctx.drawImage(layer, 0, 0);
+    });
+}
+
 // L3: mắt long lanh — iris contrast + whiten + catchlight (KHÔNG làm to).
 function enhanceEyes(canvas, faces, amount) {
     if (amount <= 0) return;
@@ -317,7 +357,7 @@ function applyColorGrade(canvas, color, faces) {
  * Áp toàn bộ look lên canvas (tại chỗ).
  * look = {
  *   beauty: { retouch, toneRed, toneYellow, brightness, glow },
- *   makeup: { blush, lips, eye },
+ *   makeup: { blush, lips, eye, lipstick, lipColor },
  *   color:  { saturation, contrast, brightness, warmth, pinkTint, highlight }
  * }
  */
@@ -329,7 +369,8 @@ export function applyLook(canvas, faces, look = {}) {
     if (faces.length) {
         processSkin(canvas, faces, beauty);                 // L1 + L2
         applyBlush(canvas, faces, makeup.blush || 0);
-        enhanceLips(canvas, faces, makeup.lips || 0);       // L4
+        enhanceLips(canvas, faces, makeup.lips || 0);       // L4 (tăng sắc môi gốc)
+        applyLipstick(canvas, faces, makeup);               // L4b (tô son có màu, sau khi tăng sắc)
         enhanceEyes(canvas, faces, makeup.eye ?? makeup.eyeBrighten ?? 0); // L3
         applyGlow(canvas, faces, beauty.glow || 0);
     }

@@ -111,7 +111,10 @@ const Edit = () => {
     // Tối ưu: Sử dụng useMemo để tránh tạo tham chiếu mới mỗi lần render gây lặp vô tận
     const photos = useMemo(() => {
         const rawPhotos = (sessionData.photos?.length > 0 ? sessionData.photos : sessionData.selectedPhotos) || [];
-        return rawPhotos.map(p => (typeof p === 'object' && p?.url) ? p.url : p).filter(Boolean);
+        // KHÔNG filter(Boolean): GIỮ NGUYÊN vị trí ô. Trước đây dồn null làm LỆCH CHỈ SỐ -> box.photoIndex
+        // trỏ sai ô -> ô cuối RỖNG + ô giữa sai ảnh + ảnh gốc lệch theo rawSource (đúng lỗi mất ô).
+        // Ô null giờ căn đúng vị trí (draw tự bỏ qua null); filteredPhotos map 1:1 giữ null nên vẫn khớp.
+        return rawPhotos.map(p => (typeof p === 'object' && p?.url) ? p.url : p);
     }, [sessionData.photos, sessionData.selectedPhotos]);
 
     // Positions state for panning (Array of {x, y})
@@ -469,22 +472,17 @@ const Edit = () => {
     // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
     const isPrintingRef = useRef(false);
     useEffect(() => {
-        if (timedOut && !isPrintingRef.current) {
-            console.log("Timeout: Auto-printing...");
-            isPrintingRef.current = true;
-            const autoFinish = async () => {
-                const currentFrame = selectedFrameRef.current;
-                if ((!currentFrame || currentFrame.id === 'none') && frames.length > 0) {
-                    await handleSelectFrame(frames[0]);
-                    setTimeout(handlePrint, 500); // Wait for state update
-                } else {
-                    handlePrint();
-                }
-            };
-            autoFinish();
-        }
+        // CHỜ khung load + áp XONG (framesLoaded chỉ = true SAU khi mount đã await chọn frame[0] +
+        // áp config ô). In trước lúc này -> khung/ô chưa áp -> layout HỎNG/LỆCH Ô (đã gặp ở mini-special
+        // khi hết giờ). Khi framesLoaded=true thì frameConfig đã được commit -> handlePrint (closure của
+        // render này) đọc đúng khung. Gọi THẲNG handlePrint (KHÔNG dùng setTimeout(handlePrint) vì bản
+        // đó đóng băng frameConfig CŨ -> vẽ sai ô).
+        if (!timedOut || isPrintingRef.current || !framesLoaded) return;
+        console.log("Timeout: Auto-printing...");
+        isPrintingRef.current = true;
+        handlePrint();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timedOut, frames]);
+    }, [timedOut, framesLoaded]);
 
 
     // --- HANDLERS ---
@@ -598,6 +596,8 @@ const Edit = () => {
 
         const res = await axios.post(`${API_URL}/api/print`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
+            // Backend giờ XẾP HÀNG in nền và trả về NGAY (không chờ in xong) -> request nhanh; 30s là
+            // dư để lưu file + xếp hàng. Lỗi in thật hiện ở panel nhân viên (job 'failed'), không chặn khách.
             timeout: 30000,
         });
 
@@ -707,7 +707,10 @@ const Edit = () => {
                 const h = Array.from(b, (x) => x.toString(16).padStart(2, '0'));
                 return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
             };
-            const sessionId = genUuid();
+            // Dùng lại sessionId đã in ra QR (nếu đây là lần vào lại/retry sau khi in xong) -> QR trên
+            // tấm ảnh đã in vẫn trỏ đúng album; lần in đầu sinh UUID mới. Lưu ở sessionData để SỐNG
+            // QUA việc quay lại Review rồi vào lại Edit (ref của component sẽ mất khi Edit remount).
+            const sessionId = sessionData.printedSessionId || genUuid();
             const albumBaseUrl = CLOUD_API_URL || window.location.origin;
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
@@ -969,18 +972,25 @@ const Edit = () => {
             const printerCopies = (printMode === 'double_strip' || printMode === 'double_strip_horizontal')
                 ? Math.max(1, Math.ceil(selectedPrintQuantity / 2))
                 : selectedPrintQuantity;
+            // Chỉ GỬI LỆNH IN nếu phiên này CHƯA in thành công. Nếu đây là retry (đã in xong nhưng
+            // upload/tạo session lỗi) -> BỎ QUA in để KHÔNG ra tấm thứ 2, chỉ thử lại phần cloud.
             let printOk = true;
-            try {
-                const printResult = await sendToPrinter(printBlob, printerCopies, { printMode, cutMode, sessionId });
-                console.log('Print job queued:', printResult);
-            } catch (printError) {
-                printOk = false;
-                const data = printError.response?.data;
-                const available = data?.available_printers?.length
-                    ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
-                    : '';
-                const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
-                setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+            if (!sessionData.printedSessionId) {
+                try {
+                    const printResult = await sendToPrinter(printBlob, printerCopies, { printMode, cutMode, sessionId });
+                    console.log('Print job queued:', printResult);
+                    // Đánh dấu ĐÃ IN cho phiên này (sống qua remount Edit, chỉ reset khi reload) -> mọi
+                    // lần In sau KHÔNG ra tấm thứ 2; giữ luôn sessionId để QR đã in khớp album tạo sau.
+                    updateSessionData('printedSessionId', sessionId);
+                } catch (printError) {
+                    printOk = false;
+                    const data = printError.response?.data;
+                    const available = data?.available_printers?.length
+                        ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
+                        : '';
+                    const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
+                    setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+                }
             }
             // IN LỖI -> DỪNG: KHÔNG tạo session / KHÔNG sang Result. Trước đây catch không return nên
             // vẫn nextStep() -> Edit unmount -> dialog lỗi biến mất -> khách ĐÃ TRẢ TIỀN bị đẩy sang màn

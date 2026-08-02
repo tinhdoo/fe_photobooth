@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
-import { Printer, Settings, X, Banknote, Zap, DollarSign, LogOut, Home } from 'lucide-react';
+import { Printer, Settings, X, Banknote, Zap, DollarSign, Minimize2, Power, Home } from 'lucide-react';
 import StaffPanel from './StaffPanel';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { API_URL } from '../../config/api';
@@ -16,15 +16,31 @@ const tabs = [
 const ManagementPanel = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('prints');
     const [confirmExit, setConfirmExit] = useState(false);
+    const [confirmShutdown, setConfirmShutdown] = useState(false);
     const [confirmHome, setConfirmHome] = useState(false);
     const { isEventMode, toggleEventMode, currentStep, resetSession } = useWorkflow();
 
-    // Thoát kiosk: đóng trình duyệt kiosk (backend chạy taskkill chrome/edge) để staff về màn hình
-    // Windows. Xác nhận 2 bước (bấm lần 1 -> "Xác nhận thoát?", lần 2 mới thoát).
+    // Thoát kiosk: backend mở lại Chrome ở cửa sổ thường rồi thu nhỏ -> staff dùng được Windows,
+    // booth vẫn chạy nền, phục hồi cửa sổ là chụp tiếp. Xác nhận 2 bước.
     const handleExitKiosk = () => {
         if (!confirmExit) {
             setConfirmExit(true);
             setTimeout(() => setConfirmExit(false), 4000);
+            return;
+        }
+        fetch(`${API_URL}/api/kiosk/windowed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: window.location.origin }),
+        }).catch(() => {});
+    };
+
+    // Tắt phần mềm: đóng trình duyệt RỒI tắt hẳn backend + Canon middleware (backend chạy
+    // tools/stop_photobooth.ps1) cho máy sạch. Mở lại bằng TomatoPhotobooth.exe. Xác nhận 2 bước.
+    const handleShutdown = () => {
+        if (!confirmShutdown) {
+            setConfirmShutdown(true);
+            setTimeout(() => setConfirmShutdown(false), 4000);
             return;
         }
         fetch(`${API_URL}/api/kiosk/exit`, { method: 'POST' }).catch(() => {});
@@ -106,10 +122,19 @@ const ManagementPanel = ({ onClose }) => {
                         <button
                             type="button"
                             onClick={handleExitKiosk}
-                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black text-white shadow-sm transition-colors ${confirmExit ? 'bg-[#c1121f] animate-pulse' : 'bg-[#e63946] hover:bg-[#c1121f]'}`}
+                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black text-white shadow-sm transition-colors ${confirmExit ? 'bg-[#b45309] animate-pulse' : 'bg-[#987351] hover:bg-[#7B5E43]'}`}
                         >
-                            <LogOut size={18} />
-                            {confirmExit ? 'Xác nhận thoát?' : 'Thoát kiosk'}
+                            <Minimize2 size={18} />
+                            {confirmExit ? 'Thoát kiosk & thu nhỏ?' : 'Thoát kiosk'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleShutdown}
+                            className={`flex items-center gap-2 rounded-full px-4 py-2 font-black text-white shadow-sm transition-colors ${confirmShutdown ? 'bg-[#c1121f] animate-pulse' : 'bg-[#e63946] hover:bg-[#c1121f]'}`}
+                        >
+                            <Power size={18} />
+                            {confirmShutdown ? 'Tắt hẳn phần mềm?' : 'Tắt phần mềm'}
                         </button>
 
                         <button

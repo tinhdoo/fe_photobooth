@@ -85,6 +85,11 @@ const Capture = () => {
     const videoChunksRef = useRef([]);
     const mediaRecorderRef = useRef(null);
     const shutterAudioRef = useRef(null);
+    // Cờ chống TÁI NHẬP takePhoto: countdown effect phụ thuộc configs.countdown, nên nếu cấu hình
+    // countdown bị đổi (admin sửa + realtime/refetch) ĐÚNG lúc countdown===0 đang chờ /capture,
+    // effect chạy lại -> takePhoto() bắn LẦN 2 song song -> 2 lệnh Canon /capture tranh chấp thread
+    // EDSDK -> treo + ảnh nhân đôi. Guard này chỉ mở lại ở startCountdown (mỗi lượt chụp hợp lệ).
+    const shootingRef = useRef(false);
     // Cờ: đã vẽ được ít nhất 1 frame live view THẬT vào canvas chưa (để bỏ video rỗng ảnh đầu).
     const canonHasFramesRef = useRef(false);
     const canonDrawTimerRef = useRef(null);
@@ -439,6 +444,8 @@ const Capture = () => {
     const getEffectiveCountdown = () => TOTAL_PHOTOS > 4 ? 3 : (parseInt(configs.countdown) || 5);
 
     const startCountdown = () => {
+        // Mở lại guard: một lượt đếm ngược mới = một lượt chụp hợp lệ mới được phép.
+        shootingRef.current = false;
         setLatestPhoto(null);
         // getEffectiveCountdown() + 1: thêm 1s buffer để motion video có đủ thời gian quay
         setCountdown(getEffectiveCountdown() + 1);
@@ -475,7 +482,15 @@ const Capture = () => {
             const sources = [...prevSources];
             sources[ri] = newItem;
             // Ô nào đang dùng đúng ảnh cũ -> đổi sang ảnh mới; giữ nguyên ô khác (kể cả ô đã gỡ = null)
-            const slots = (sessionData.photos || []).map((p) => (p && p === oldItem ? newItem : p));
+            let slots = (sessionData.photos || []).map((p) => (p && p === oldItem ? newItem : p));
+            // ĐẢM BẢO ảnh chụp lại LUÔN vào 1 ô: nếu ô cũ đã bị gỡ/null (oldItem không còn trong ô) thì
+            // khớp theo object ở trên sẽ TRƯỢT -> ảnh mới không vào ô nào -> để lại Ô TRỐNG (null) lọt
+            // sang Edit -> filter(Boolean) lệch chỉ số -> MẤT Ô / thiếu ảnh gốc (đúng lỗi retake nhiều lần).
+            if (!slots.includes(newItem)) {
+                slots = [...slots];
+                const fillIdx = (ri < slots.length && !slots[ri]) ? ri : slots.findIndex((p) => !p);
+                if (fillIdx >= 0) slots[fillIdx] = newItem;
+            }
             releaseReplacedPhoto(oldItem, [...sources, ...slots]);
             updateSessionData('retakeIndex', null);
             setPhotosTaken(sources);
@@ -492,6 +507,9 @@ const Capture = () => {
     };
 
     const takePhoto = async () => {
+        // Chặn gọi lại khi đang chụp dở (xem shootingRef): tránh 2 lệnh /capture song song.
+        if (shootingRef.current) return;
+        shootingRef.current = true;
         setIsShooting(true);
         // Flash chỉ CHỚP nhanh (~200ms) thay vì trắng suốt thời gian chờ Canon /capture.
         // Trong lúc chờ sẽ hiện spinner + vẫn thấy live view (xem overlay isShooting).

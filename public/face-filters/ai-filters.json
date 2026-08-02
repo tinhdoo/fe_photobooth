@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "Beauty schema: beauty{retouch,toneRed,toneYellow,brightness,glow} makeup{blush,lips,eye} color{saturation,contrast,brightness,warmth,pinkTint,highlight}. warps = sculpting rất nhẹ.",
+  "_note": "Beauty schema: beauty{retouch,toneRed,toneYellow,brightness,glow} makeup{blush,lips,eye,lipstick,lipColor} color{saturation,contrast,brightness,warmth,pinkTint,highlight}. lipstick=cường độ tô son 0..1, lipColor=\"r,g,b\". warps = sculpting rất nhẹ.",
   "filters": [
     {
       "id": "natural", "name": "✨ Natural", "category": "Beauty",
@@ -10,7 +10,7 @@
         { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
       ],
       "beauty": { "retouch": 0.15, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.30 },
-      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.40 },
+      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.40, "lipstick": 0.45, "lipColor": "217,139,139" },
       "color": { "saturation": 1.02, "warmth": 0.05 }
     },
     {
@@ -21,7 +21,7 @@
         { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
       ],
       "beauty": { "retouch": 0.18, "toneRed": 0.30, "toneYellow": 0.15, "brightness": 0.30 },
-      "makeup": { "blush": 0.28, "lips": 0.45, "eye": 0.40 },
+      "makeup": { "blush": 0.28, "lips": 0.45, "eye": 0.40, "lipstick": 0.50, "lipColor": "201,122,126" },
       "color": { "saturation": 1.04, "warmth": 0.10, "pinkTint": 0.06 }
     },
     {
@@ -32,7 +32,7 @@
         { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
       ],
       "beauty": { "retouch": 0.22, "toneRed": 0.35, "toneYellow": 0.25, "brightness": 0.28, "glow": 0.3 },
-      "makeup": { "blush": 0.15, "lips": 0.40, "eye": 0.45 },
+      "makeup": { "blush": 0.15, "lips": 0.40, "eye": 0.45, "lipstick": 0.50, "lipColor": "216,138,115" },
       "color": { "saturation": 1.0, "contrast": 0.98, "warmth": 0.03, "highlight": 0.06 }
     },
     {
@@ -43,7 +43,7 @@
         { "anchor": "chin", "radius": 0.50, "strength": -0.025, "axis": "y" }
       ],
       "beauty": { "retouch": 0.20, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.30, "glow": 0.4 },
-      "makeup": { "blush": 0.20, "lips": 0.50, "eye": 0.70 },
+      "makeup": { "blush": 0.20, "lips": 0.50, "eye": 0.70, "lipstick": 0.50, "lipColor": "201,122,126" },
       "color": { "saturation": 1.03, "contrast": 0.98, "warmth": 0.06, "highlight": 0.08 }
     },
     {
@@ -54,7 +54,7 @@
         { "anchor": "chin", "radius": 0.50, "strength": -0.02, "axis": "y" }
       ],
       "beauty": { "retouch": 0.18, "toneRed": 0.30, "toneYellow": 0.20, "brightness": 0.25 },
-      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.60 },
+      "makeup": { "blush": 0.12, "lips": 0.40, "eye": 0.60, "lipstick": 0.50, "lipColor": "201,123,106" },
       "color": { "saturation": 1.05, "contrast": 1.05, "warmth": 0.04 }
     },
     {

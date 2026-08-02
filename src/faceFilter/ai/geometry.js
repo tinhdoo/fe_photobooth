@@ -14,6 +14,8 @@ const FACE_OVAL = [
 const LEFT_EYE_RING = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7];
 const RIGHT_EYE_RING = [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249];
 const LIPS_RING = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
+// Viền môi TRONG (khoang miệng) — để tô son CHỪA răng/lưỡi khi cười hở (mask = viền ngoài - viền trong).
+const INNER_LIPS_RING = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
 const IDX = {
     eyeAouter: 33, eyeAinner: 133,
@@ -77,6 +79,7 @@ export function buildFaceGeometry(landmarks, aspect) {
             leftEye: ring(landmarks, LEFT_EYE_RING),
             rightEye: ring(landmarks, RIGHT_EYE_RING),
             lips: ring(landmarks, LIPS_RING),
+            innerLips: ring(landmarks, INNER_LIPS_RING),
         },
     };
 }

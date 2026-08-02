@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkflow } from '../../context/WorkflowContext';
 import ManagementPanel from '../staff/ManagementPanel';
 import { Lock, X } from 'lucide-react';
@@ -6,7 +6,7 @@ import { Lock, X } from 'lucide-react';
 const isVideoUrl = (url = '') => /\.(mp4|webm|mov)(\?|$)/i.test(url);
 
 const Welcome = () => {
-    const { nextStep, configs } = useWorkflow();
+    const { nextStep, configs, isIdleSuspended } = useWorkflow();
     const backgroundUrl = configs?.bg_welcome || '/1.png';
     const [showManagementPanel, setShowManagementPanel] = useState(false);
     const [showPinCard, setShowPinCard] = useState(false);
@@ -14,6 +14,17 @@ const Welcome = () => {
     const [pinError, setPinError] = useState('');
     const longPressTimer = useRef(null);
     const longPressTriggered = useRef(false);
+    const videoRef = useRef(null);
+
+    // Video nền đang chạy = Chrome giữ power request 'Display Required' -> Windows KHÔNG BAO GIỜ
+    // ngủ, dù power plan đặt bao nhiêu phút (kiểm chứng bằng `powercfg /requests`). Che bằng lớp
+    // phủ đen là chưa đủ, phải pause THẬT thì power request mới được nhả.
+    useEffect(() => {
+        const el = videoRef.current;
+        if (!el) return;
+        if (isIdleSuspended) el.pause();
+        else el.play().catch(() => { });
+    }, [isIdleSuspended]);
     const staffPin = String(configs?.staff_pin || '8888');
 
     const clearLongPress = () => {
@@ -88,6 +99,7 @@ const Welcome = () => {
         >
             {isVideoUrl(backgroundUrl) ? (
                 <video
+                    ref={videoRef}
                     src={backgroundUrl}
                     className="absolute inset-0 z-0 h-full w-full object-cover"
                     autoPlay

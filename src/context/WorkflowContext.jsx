@@ -23,6 +23,14 @@ const controlCanonLiveView = (action) => {
         // ignore
     }
 };
+// TẠM NGƯNG KHI RẢNH: booth đứng ở Welcome quá lâu -> pause video nền, ngưng poll, đóng cổng
+// máy đọc tiền. Mục đích là NHẢ hết thứ đang giữ máy thức để Windows tự ngủ theo power plan
+// (video nền chạy = Chrome giữ power request 'Display Required' -> máy KHÔNG BAO GIỜ ngủ).
+// Không tự ép sleep: thời gian ngủ vẫn do power plan Windows quyết định.
+const IDLE_SUSPEND_MS = 60 * 60 * 1000; // 1 giờ không ai chạm
+const IDLE_CHECK_MS = 30 * 1000;
+const IDLE_ACTIVITY_EVENTS = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
+
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
     'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
@@ -120,6 +128,26 @@ export const WorkflowProvider = ({ children }) => {
     // Dynamic Configs
     const [configs, setConfigs] = useState(() => normalizeConfigs(readCachedConfigs()));
 
+    // Trạng thái tạm ngưng khi rảnh. Dùng kèm ref vì các setInterval bên dưới được tạo 1 lần,
+    // closure của chúng không thấy được giá trị state mới.
+    const [isIdleSuspended, setIsIdleSuspended] = useState(false);
+    const idleSuspendedRef = useRef(false);
+
+    const setIdleSuspended = (next) => {
+        if (idleSuspendedRef.current === next) return;
+        idleSuspendedRef.current = next;
+        setIsIdleSuspended(next);
+        // Báo backend để đóng/mở cổng serial máy đọc tiền. Best-effort: lỗi mạng không được
+        // chặn UI (khách chạm là phải tỉnh ngay, kể cả khi backend chưa trả lời).
+        fetch(apiPath('/api/system/idle'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idle: next }),
+        }).catch(() => { });
+    };
+
+    const wakeFromIdle = () => setIdleSuspended(false);
+
     const fetchConfigs = async () => {
         try {
             if (!API_URL && !CLOUD_API_URL && !isLocalApp()) return;
@@ -207,7 +235,7 @@ export const WorkflowProvider = ({ children }) => {
         }
 
         fallbackInterval = setInterval(() => {
-            if (realtimeReady || document.visibilityState !== 'visible') return;
+            if (idleSuspendedRef.current || realtimeReady || document.visibilityState !== 'visible') return;
             fetchConfigs();
         }, isLocalApp() ? 60000 : 300000);
 
@@ -304,7 +332,10 @@ export const WorkflowProvider = ({ children }) => {
         };
 
         syncDevice();
-        const interval = setInterval(syncDevice, 60000);
+        const interval = setInterval(() => {
+            if (idleSuspendedRef.current) return; // đang tạm ngưng chờ máy ngủ -> không đánh thức mạng
+            syncDevice();
+        }, 60000);
 
         let channel = null;
         if (isSupabaseBrowserConfigured && supabase) {
@@ -434,6 +465,57 @@ export const WorkflowProvider = ({ children }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEventMode, currentStep]);
 
+    // Dọn trạng thái treo ở backend lúc khởi động: nếu tab reload đúng lúc đang tạm ngưng (App.jsx
+    // TỰ reload khi chunk lỗi/treo), state React về false nhưng backend vẫn giữ idle=true -> máy
+    // đọc tiền bị tắt vĩnh viễn, khách không trả tiền mặt được. Gọi resume 1 lần cho chắc.
+    useEffect(() => {
+        if (!isLocalApp()) return;
+        fetch(apiPath('/api/system/idle'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idle: false }),
+        }).catch(() => { });
+    }, []);
+
+    // Phát hiện booth rảnh -> tạm ngưng để Windows được ngủ.
+    // Chỉ ngưng khi đang đứng ở Welcome (step 1) và KHÔNG có phiên nào chạy dở, nên không bao
+    // giờ cắt ngang khách đang chụp/thanh toán. Effect chạy lại mỗi khi đổi bước -> đồng hồ rảnh
+    // được đặt lại, đúng ý "vừa có người thao tác".
+    useEffect(() => {
+        if (!isLocalApp()) return undefined; // chỉ máy booth, không áp cho web khách/cloud
+
+        let lastActivity = Date.now();
+        // Mọi thao tác đều đánh thức, KHÔNG chỉ trông vào lớp phủ đen ở MainLayout: lớp phủ đó chỉ
+        // có trên màn kiosk, còn /admin dùng AdminLayout -> nếu chỉ dựa vào nó thì lỡ ngưng khi
+        // đang ở trang admin sẽ kẹt vĩnh viễn (máy đọc tiền tắt, không có gì bật lại).
+        const markActivity = () => {
+            lastActivity = Date.now();
+            if (idleSuspendedRef.current) setIdleSuspended(false);
+        };
+        IDLE_ACTIVITY_EVENTS.forEach((evt) =>
+            window.addEventListener(evt, markActivity, { capture: true, passive: true })
+        );
+
+        const timer = setInterval(() => {
+            if (idleSuspendedRef.current) return; // đã ngưng rồi, chỉ thoát bằng thao tác của người
+            // Đọc path MỖI NHỊP: chuyển trang trong SPA (/ -> /admin) KHÔNG làm effect chạy lại,
+            // nên chỉ kiểm tra lúc đăng ký là hụt -> đang ngồi trang admin vẫn bị ngưng.
+            if (window.location.pathname !== '/' || currentStep !== 1 || isSessionActive) {
+                lastActivity = Date.now();
+                return;
+            }
+            if (Date.now() - lastActivity < IDLE_SUSPEND_MS) return;
+            setIdleSuspended(true);
+        }, IDLE_CHECK_MS);
+
+        return () => {
+            clearInterval(timer);
+            IDLE_ACTIVITY_EVENTS.forEach((evt) =>
+                window.removeEventListener(evt, markActivity, { capture: true })
+            );
+        };
+    }, [currentStep, isSessionActive]);
+
     // Timer Countdown
     useEffect(() => {
         if (!isSessionActive) return undefined;
@@ -529,6 +611,8 @@ export const WorkflowProvider = ({ children }) => {
                 isSessionActive,
                 timedOut,
                 savingBeforeReset,
+                isIdleSuspended,
+                wakeFromIdle,
                 SESSION_DURATION,
                 configs, // Expose generic configs
                 applyConfigs,

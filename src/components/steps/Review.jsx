@@ -85,7 +85,18 @@ const Review = () => {
 
     useEffect(() => {
         if (timedOut) {
-            nextStep(); // hết giờ -> tự sang Edit (rồi Edit tự in)
+            // Hết giờ BỎ QUA kiểm tra ô trống của handleContinue -> nếu còn ô trống thì TỰ ĐIỀN từ nguồn
+            // đã chụp (theo thứ tự, không trùng) để KHÔNG đẩy ô null sang Edit -> tránh mất ô/lệch ảnh
+            // trong bản in + album.
+            const slots = [...(sessionData.photos || [])];
+            const used = new Set(slots.filter(Boolean));
+            const avail = (sourcePhotos || []).filter((p) => p && !used.has(p));
+            let changed = false;
+            for (let i = 0; i < currentLayout.photoCount; i += 1) {
+                if (!slots[i] && avail.length) { slots[i] = avail.shift(); changed = true; }
+            }
+            if (changed) updateSessionData('photos', slots);
+            nextStep(); // -> Edit (rồi Edit tự in)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timedOut]);
@@ -106,6 +117,9 @@ const Review = () => {
 
         updateSessionData('photos', []);
         updateSessionData('capturedPhotos', []); // dọn nguồn để không giữ tham chiếu ảnh đã revoke
+        // Xoá retakeIndex còn sót (vd lượt "chụp lại 1 tấm" trước bị lỗi/thoát dở): nếu để sót,
+        // Capture sẽ vào nhánh retake với nguồn RỖNG -> mảng thưa, ô trống, count sai.
+        updateSessionData('retakeIndex', null);
         // Camera Canon đang ẤM (live view chạy suốt vùng chụp) -> vào THẲNG bước Chụp, BỎ màn
         // Chuẩn bị cho mượt. Chưa ấm (hoặc webcam) -> qua Chuẩn bị để warm + tránh đen màn.
         goToStep(((configs?.camera_mode || 'canon') === 'canon' && sessionData.cameraWarm) ? 4 : 3.5);
