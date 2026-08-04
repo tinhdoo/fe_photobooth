@@ -83,6 +83,8 @@ const Payment = () => {
                 updateSessionData('paymentCode', activeVoucher.code);
                 updateSessionData('paymentCodeValue', activeVoucher.value);
                 updateSessionData('paymentCodeApplied', activeVoucherValue);
+                // Lưu ID mã đã dùng -> Edit sẽ gắn nó với sessionId (album) để biết "mã dùng cho lượt nào".
+                if (activeVoucher.id) updateSessionData('paymentCodeId', activeVoucher.id);
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
             if (extraData.orderCode) updateSessionData('sepayOrderCode', extraData.orderCode);

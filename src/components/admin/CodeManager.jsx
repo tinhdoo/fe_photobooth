@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check } from 'lucide-react';
+import { authHeader } from '../../utils/auth';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -9,12 +10,56 @@ const normalizeCode = (code = {}) => ({
     value: Number(code.value ?? code.amount ?? 0),
     is_used: Boolean(code.is_used),
     created_at: code.created_at || new Date().toISOString(),
+    created_by: code.created_by || '',
+    note: code.note || '',
+    used_session_id: code.used_session_id || '',
 });
 
 // Hiển thị mệnh giá gọn: 70000 -> "70k", 100000 -> "100k".
 const denomLabel = (value) => {
     const n = Number(value) || 0;
     return n % 1000 === 0 ? `${n / 1000}k` : n.toLocaleString('vi-VN');
+};
+
+// Ô ghi chú sửa trực tiếp: gõ xong bấm ✓ (hoặc Enter/rời ô) để lưu. Chỉ lưu khi có thay đổi.
+// Định nghĩa ở MODULE SCOPE (không lồng trong CodeManager) để không bị remount -> mất focus.
+const NoteCell = ({ code, onSave }) => {
+    const [value, setValue] = useState(code.note || '');
+    const [saving, setSaving] = useState(false);
+    const dirty = value !== (code.note || '');
+
+    const commit = async () => {
+        if (!dirty || saving) return;
+        setSaving(true);
+        await onSave(code.id, value.trim());
+        setSaving(false);
+    };
+
+    return (
+        <div className="flex items-center gap-1">
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+                onBlur={commit}
+                placeholder="Ghi chú…"
+                maxLength={500}
+                className="w-full min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm outline-none transition-all focus:border-[#e63946] focus:bg-white focus:ring-1 focus:ring-[#e63946]/20"
+            />
+            {dirty && (
+                <button
+                    type="button"
+                    onClick={commit}
+                    disabled={saving}
+                    className="shrink-0 rounded-lg bg-emerald-500 p-1.5 text-white transition-all hover:bg-emerald-600 disabled:opacity-60"
+                    title="Lưu ghi chú"
+                >
+                    {saving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                </button>
+            )}
+        </div>
+    );
 };
 
 // Xuất danh sách mã ra Excel theo dạng 2 cột voucher song song, nhóm theo
@@ -144,7 +189,7 @@ const CodeManager = () => {
                 }
                 payload.expires_at = selectedDate.toISOString();
             }
-            const res = await axios.post('/api/codes', payload);
+            const res = await axios.post('/api/codes', payload, { headers: authHeader() });
             const createdRaw = Array.isArray(res.data) ? res.data : [];
             const created = createdRaw.map(normalizeCode);
 
@@ -182,6 +227,19 @@ const CodeManager = () => {
         navigator.clipboard.writeText(text);
         setNotification({ show: true, message: "Đã sao chép mã!", type: 'success' });
         setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 2000);
+    };
+
+    // Lưu ghi chú "mã dùng làm gì" (nhân viên tự điền, thường SAU khi dùng). Cần token.
+    const saveNote = async (id, note) => {
+        try {
+            await axios.post('/api/codes', { action: 'set-note', id, note }, { headers: authHeader() });
+            setCodes(prev => prev.map(c => (c.id === id ? { ...c, note } : c)));
+            return true;
+        } catch (error) {
+            const msg = error?.response?.data?.message || error?.response?.data?.error || 'Lưu ghi chú thất bại';
+            setNotification({ show: true, message: msg, type: 'error' });
+            return false;
+        }
     };
 
     // Helper component hiển thị trạng thái
@@ -338,12 +396,23 @@ const CodeManager = () => {
                                             <Calendar size={12} />
                                             <span>Tạo: {new Date(code.created_at).toLocaleDateString('vi-VN')}</span>
                                         </div>
-                                        {code.expires_at && (
-                                            <div className="flex items-center gap-1.5 text-orange-600/80 min-w-fit">
-                                                <Clock size={12} />
-                                                <span>Hết hạn: {new Date(code.expires_at).toLocaleDateString('vi-VN')}</span>
+                                        {code.created_by && (
+                                            <div className="flex items-center gap-1.5 min-w-fit">
+                                                <User size={12} />
+                                                <span>{code.created_by}</span>
                                             </div>
                                         )}
+                                        {code.used_session_id && (
+                                            <a href={`/album/${code.used_session_id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-blue-600 min-w-fit">
+                                                <Hash size={12} />
+                                                <span className="font-mono">{String(code.used_session_id).slice(0, 8)}…</span>
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {/* Ghi chú "dùng làm gì" — nhân viên tự điền sau khi dùng */}
+                                    <div className="mt-2">
+                                        <NoteCell code={code} onSave={saveNote} />
                                     </div>
                                 </div>
                             ))
@@ -358,7 +427,9 @@ const CodeManager = () => {
                                     <th className="py-4 pl-6">Mã Code</th>
                                     <th className="py-4">Giá trị</th>
                                     <th className="py-4 text-center">Trạng thái</th>
-                                    <th className="py-4">Thời hạn</th>
+                                    <th className="py-4">Nhân viên</th>
+                                    <th className="py-4 min-w-[180px]">Ghi chú</th>
+                                    <th className="py-4">Phiên</th>
                                     <th className="py-4">Ngày tạo</th>
                                     <th className="py-4 text-right pr-6">Thao tác</th>
                                 </tr>
@@ -366,7 +437,7 @@ const CodeManager = () => {
                             <tbody className="text-sm divide-y divide-gray-100">
                                 {codes.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6" className="py-10 text-center text-gray-400 italic">Chưa có mã nào được tạo.</td>
+                                        <td colSpan="8" className="py-10 text-center text-gray-400 italic">Chưa có mã nào được tạo.</td>
                                     </tr>
                                 ) : (
                                     codes.map((code) => (
@@ -378,13 +449,18 @@ const CodeManager = () => {
                                             <td className="py-4 text-center">
                                                 <StatusBadge code={code} />
                                             </td>
-                                            <td className="py-4 text-gray-500 text-xs">
-                                                {code.expires_at ? (
-                                                    <div className="flex flex-col">
-                                                        <span>{new Date(code.expires_at).toLocaleDateString('vi-VN')}</span>
-                                                        <span className="text-gray-400">{new Date(code.expires_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                    </div>
-                                                ) : <span className="text-gray-400 italic">Vĩnh viễn</span>}
+                                            <td className="py-4 text-gray-600 text-sm">
+                                                {code.created_by
+                                                    ? <span className="inline-flex items-center gap-1"><User size={13} className="text-gray-400" />{code.created_by}</span>
+                                                    : <span className="text-gray-300 italic">—</span>}
+                                            </td>
+                                            <td className="py-4 pr-3">
+                                                <NoteCell code={code} onSave={saveNote} />
+                                            </td>
+                                            <td className="py-4 text-xs">
+                                                {code.used_session_id
+                                                    ? <a href={`/album/${code.used_session_id}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-600 hover:underline" title={code.used_session_id}>{String(code.used_session_id).slice(0, 8)}…</a>
+                                                    : <span className="text-gray-300 italic">—</span>}
                                             </td>
                                             <td className="py-4 text-gray-500 text-xs">
                                                 {new Date(code.created_at).toLocaleDateString('vi-VN')}

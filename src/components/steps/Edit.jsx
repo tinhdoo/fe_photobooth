@@ -1045,6 +1045,17 @@ const Edit = () => {
                     updateSessionData('finalImage', compositeUrl);
                     // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
                     updateSessionData('sessionId', sessionId);
+
+                    // Gắn mã thanh toán (nếu có) với phiên này -> admin biết "mã dùng cho lượt nào".
+                    // Best-effort: lỗi mạng không được chặn luồng in/QR.
+                    if (sessionData.paymentCodeId) {
+                        axios.post(`${sessionBaseUrl}/api/codes`, {
+                            action: 'set-session',
+                            id: sessionData.paymentCodeId,
+                            session_id: sessionId,
+                        }).catch((err) => console.warn('Gắn mã với phiên thất bại:', err));
+                    }
+
                     nextStep(); // -> Result hiện QR ngay, không chờ video
 
                     // 2) Upload ảnh gốc + video motion Ở NỀN rồi cập nhật lại session (upsert cùng

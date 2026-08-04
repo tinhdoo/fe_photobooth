@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { WorkflowProvider, useWorkflow } from './context/WorkflowContext';
 import MainLayout from './layouts/MainLayout';
 import { isLocalHost } from './utils/runtime';
+import { isAuthenticated as checkAuth, isStaffRole } from './utils/auth';
 
 import Welcome from './components/steps/Welcome';
 import LayoutSelection from './components/steps/LayoutSelection';
@@ -66,6 +67,7 @@ const RevenueDashboard = lazy(() => import('./components/admin/RevenueDashboard'
 const Settings = lazy(() => import('./components/admin/Settings'));
 const BillSettings = lazy(() => import('./components/admin/BillSettings'));
 const BrandingSettings = lazy(() => import('./components/admin/BrandingSettings'));
+const StaffManager = lazy(() => import('./components/admin/StaffManager'));
 
 const LoadingScreen = () => {
     let logoUrl = '/logo_tomato.png';
@@ -107,10 +109,15 @@ const StepSuspense = ({ children }) => (
 );
 
 const ProtectedRoute = ({ children }) => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true' || sessionStorage.getItem('isAuthenticated') === 'true';
-    if (!isAuthenticated) {
+    if (!checkAuth()) {
         return <Navigate to="/admin/login" replace />;
     }
+    return children;
+};
+
+// Chặn nhân viên (role 'staff'): họ chỉ được vào "Mã thanh toán". Route khác -> đẩy về /admin/codes.
+const AdminOnlyRoute = ({ children }) => {
+    if (isStaffRole()) return <Navigate to="/admin/codes" replace />;
     return children;
 };
 
@@ -159,6 +166,8 @@ const StepContent = () => {
 
 const AdminIndex = () => {
     if (isLocalHost()) return <Navigate to="/admin/settings" replace />;
+    // Nhân viên chỉ có mục Mã thanh toán -> vào thẳng.
+    if (isStaffRole()) return <Navigate to="/admin/codes" replace />;
     // Trang mặc định: mobile mở thẳng "Mã thanh toán" (nhẹ + dùng nhiều nhất trên điện thoại),
     // desktop vào trang quản lý khung hình. Frame có route riêng (/admin/frames) để nút Frame
     // không bị điều hướng lại về trang thanh toán trên mobile.
@@ -221,12 +230,13 @@ const App = () => {
                             }
                         >
                             <Route index element={<AdminIndex />} />
-                            <Route path="frames" element={<CloudAdminRoute><FrameManager /></CloudAdminRoute>} />
+                            <Route path="frames" element={<CloudAdminRoute><AdminOnlyRoute><FrameManager /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="codes" element={<CloudAdminRoute><CodeManager /></CloudAdminRoute>} />
-                            <Route path="revenue" element={<CloudAdminRoute><RevenueDashboard /></CloudAdminRoute>} />
-                            <Route path="settings" element={<Settings />} />
+                            <Route path="revenue" element={<CloudAdminRoute><AdminOnlyRoute><RevenueDashboard /></AdminOnlyRoute></CloudAdminRoute>} />
+                            <Route path="staff" element={<CloudAdminRoute><AdminOnlyRoute><StaffManager /></AdminOnlyRoute></CloudAdminRoute>} />
+                            <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
                             <Route path="bill-settings" element={<BillSettings />} />
-                            <Route path="branding" element={<CloudAdminRoute><BrandingSettings /></CloudAdminRoute>} />
+                            <Route path="branding" element={<CloudAdminRoute><AdminOnlyRoute><BrandingSettings /></AdminOnlyRoute></CloudAdminRoute>} />
                         </Route>
                     </Routes>
                 </Suspense>

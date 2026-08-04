@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, PlusCircle } from 'lucide-react';
+import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, Users } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
 import { isLocalHost } from '../utils/runtime';
+import { isStaffRole, getDisplayName, clearAuth } from '../utils/auth';
 
 const BrandHeader = ({ compact = false, logoUrl = '/logo_tomato.png' }) => (
     <div className="flex items-center gap-3">
@@ -24,21 +24,30 @@ const AdminLayout = () => {
     const location = useLocation();
     const { configs } = useWorkflow();
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
+    const staffOnly = isStaffRole();
+    const displayName = getDisplayName();
 
     const menuItems = [
         { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán', short: 'Mã TT' },
         { to: '/admin/frames', icon: <Layout size={22} />, label: 'Frame', short: 'Frame' },
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu', short: 'Doanh thu' },
+        { to: '/admin/staff', icon: <Users size={22} />, label: 'Nhân viên', short: 'Nhân viên' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện', short: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt', short: 'Cài đặt' },
-    ].filter((item) => (
-        isLocalHost()
-            ? ['/admin/settings', '/admin/bill-settings'].includes(item.to)
-            : item.to !== '/admin/bill-settings'
-    ));
+    ].filter((item) => {
+        if (isLocalHost()) return ['/admin/settings', '/admin/bill-settings'].includes(item.to);
+        // Nhân viên: chỉ thấy Mã thanh toán. Admin: thấy hết (trừ bill-settings vốn chỉ cho local).
+        if (staffOnly) return item.to === '/admin/codes';
+        return item.to !== '/admin/bill-settings';
+    });
 
     // For bottom nav on mobile, pick the most important 4 items (which now starts with Codes)
     const mobileNavItems = menuItems.filter(item => item.to !== '/admin/settings');
+
+    const handleLogout = () => {
+        clearAuth();
+        window.location.href = '/admin/login';
+    };
 
     const isActive = (to) => {
         if (to === '/admin') return location.pathname === '/admin';
@@ -86,15 +95,11 @@ const AdminLayout = () => {
 
                     <button
                         type="button"
-                        onClick={() => {
-                            localStorage.removeItem('isAuthenticated');
-                            sessionStorage.removeItem('isAuthenticated');
-                            window.location.href = '/admin/login';
-                        }}
+                        onClick={handleLogout}
                         className="mt-6 flex w-full items-center justify-start gap-3 rounded-xl px-4 py-3 text-gray-400 transition-all hover:bg-red-50 hover:text-[#e63946]"
                     >
                         <LogOut size={20} />
-                        <span className="font-medium text-sm">Đăng xuất</span>
+                        <span className="font-medium text-sm">Đăng xuất{displayName ? ` (${displayName})` : ''}</span>
                     </button>
                 </nav>
 
@@ -108,11 +113,7 @@ const AdminLayout = () => {
                     <BrandHeader compact logoUrl={logoUrl} />
                     <button
                         type="button"
-                        onClick={() => {
-                            localStorage.removeItem('isAuthenticated');
-                            sessionStorage.removeItem('isAuthenticated');
-                            window.location.href = '/admin/login';
-                        }}
+                        onClick={handleLogout}
                         className="p-2 text-gray-400 hover:text-[#e63946] rounded-lg hover:bg-red-50 transition-colors"
                         title="Đăng xuất"
                     >
@@ -152,20 +153,22 @@ const AdminLayout = () => {
                                 </Link>
                             );
                         })}
-                        {/* Settings (always last in bottom nav) */}
-                        <Link
-                            to="/admin/settings"
-                            className={`flex flex-1 flex-col items-center justify-start gap-0.5 px-0.5 py-2 rounded-xl transition-all duration-200 ${
-                                isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400 active:text-[#e63946]'
-                            }`}
-                        >
-                            <div className={`transition-transform duration-200 ${isActive('/admin/settings') ? 'scale-110' : ''}`}>
-                                <Settings size={22} />
-                            </div>
-                            <span className={`whitespace-nowrap text-[10px] font-bold leading-tight ${isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400'}`}>
-                                Cài đặt
-                            </span>
-                        </Link>
+                        {/* Settings (always last in bottom nav) — ẩn với nhân viên */}
+                        {!staffOnly && (
+                            <Link
+                                to="/admin/settings"
+                                className={`flex flex-1 flex-col items-center justify-start gap-0.5 px-0.5 py-2 rounded-xl transition-all duration-200 ${
+                                    isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400 active:text-[#e63946]'
+                                }`}
+                            >
+                                <div className={`transition-transform duration-200 ${isActive('/admin/settings') ? 'scale-110' : ''}`}>
+                                    <Settings size={22} />
+                                </div>
+                                <span className={`whitespace-nowrap text-[10px] font-bold leading-tight ${isActive('/admin/settings') ? 'text-[#e63946]' : 'text-gray-400'}`}>
+                                    Cài đặt
+                                </span>
+                            </Link>
+                        )}
                     </nav>
                     {/* Safe area for devices with home indicator */}
                     <div className="h-[env(safe-area-inset-bottom,0px)] bg-white" />

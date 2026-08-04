@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Lock, User, ArrowRight } from 'lucide-react';
+import axios from 'axios';
+import { Lock, User, ArrowRight, RefreshCw } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
+import { CLOUD_API_URL } from '../config/api';
+import { isLocalHost } from '../utils/runtime';
+import { saveAuth } from '../utils/auth';
 
 const AdminLogin = () => {
     const { configs } = useWorkflow();
@@ -11,20 +15,40 @@ const AdminLogin = () => {
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
+        setError('');
 
-        if (username === 'admin' && password === 'admin@photobooth') {
-            if (rememberMe) {
-                localStorage.setItem('isAuthenticated', 'true');
+        // Máy booth (localhost): đăng nhập offline bằng tài khoản cứng, KHÔNG cần mạng.
+        if (isLocalHost()) {
+            if (username === 'admin' && password === 'admin@photobooth') {
+                saveAuth({ username: 'admin', display_name: 'Quản trị', role: 'admin' }, rememberMe);
+                navigate('/admin');
             } else {
-                sessionStorage.setItem('isAuthenticated', 'true');
+                setError('Tên đăng nhập hoặc mật khẩu không đúng');
             }
+            return;
+        }
+
+        // Cloud (Vercel): xác thực qua API, nhận token + role.
+        setLoading(true);
+        try {
+            const res = await axios.post(`${CLOUD_API_URL}/api/codes`, {
+                action: 'login',
+                username: username.trim(),
+                password,
+            });
+            const { token, role, display_name } = res.data || {};
+            if (!token) throw new Error('Phản hồi không hợp lệ');
+            saveAuth({ token, role, username: username.trim(), display_name }, rememberMe);
             navigate('/admin');
-        } else {
-            setError('Tên đăng nhập hoặc mật khẩu không đúng');
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Đăng nhập thất bại. Kiểm tra lại tài khoản.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -109,10 +133,14 @@ const AdminLogin = () => {
 
                     <button
                         type="submit"
-                        className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#e63946] py-4 font-bold text-white shadow-lg shadow-[#e63946]/20 transition-colors hover:bg-[#d62828]"
+                        disabled={loading}
+                        className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#e63946] py-4 font-bold text-white shadow-lg shadow-[#e63946]/20 transition-colors hover:bg-[#d62828] disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        Đăng nhập
-                        <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                        {loading ? (
+                            <><RefreshCw size={18} className="animate-spin" /> Đang đăng nhập...</>
+                        ) : (
+                            <>Đăng nhập<ArrowRight size={18} className="transition-transform group-hover:translate-x-1" /></>
+                        )}
                     </button>
                 </form>
             </motion.div>
