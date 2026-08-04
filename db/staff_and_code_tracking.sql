@@ -29,3 +29,9 @@ alter table public.payment_codes add column if not exists used_session_id text;
 -- index cho tra cứu theo nhân viên + lấy mã nhanh từ kho (chưa dùng/chưa ai lấy)
 create index if not exists payment_codes_claimed_by_idx on public.payment_codes (claimed_by);
 create index if not exists payment_codes_pool_idx on public.payment_codes (value, is_used, claimed_by);
+
+-- 3) BẢO MẬT QUAN TRỌNG: bỏ quyền anon đọc payment_codes.
+--    Nếu còn policy này, ai có anon key (nhúng trong bundle frontend) đọc được TOÀN BỘ mã
+--    chưa dùng qua Supabase REST rồi tự redeem -> vô hiệu hoá mọi phân quyền/truy vết.
+--    API dùng service-role key (bypass RLS) nên không cần policy anon nào.
+drop policy if exists "payment_codes_public_read" on public.payment_codes;

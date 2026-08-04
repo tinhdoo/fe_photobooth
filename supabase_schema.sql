@@ -67,15 +67,11 @@ create index if not exists payment_codes_expires_at_idx on payment_codes (expire
 
 alter table payment_codes enable row level security;
 
+-- KHÔNG mở anon read cho payment_codes: mã thanh toán là bí mật (= tiền). Nếu cho anon SELECT,
+-- bất kỳ ai có anon key (nhúng sẵn trong bundle frontend) đều đọc được TOÀN BỘ mã chưa dùng
+-- rồi tự redeem, vô hiệu hoá mọi phân quyền/truy vết. Mọi truy cập đi qua Vercel API bằng
+-- SUPABASE_SERVICE_ROLE_KEY (bypass RLS) nên KHÔNG cần policy anon nào.
 drop policy if exists "payment_codes_public_read" on payment_codes;
-create policy "payment_codes_public_read"
-on payment_codes
-for select
-to anon
-using (true);
-
--- Code generation and marking used are server-only through Vercel API using
--- SUPABASE_SERVICE_ROLE_KEY.
 
 create table if not exists devices (
   id uuid primary key default gen_random_uuid(),

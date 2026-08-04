@@ -5,6 +5,7 @@ import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
+import { errorMessage } from '../../utils/errorMessage';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
@@ -68,7 +69,7 @@ const Payment = () => {
                     setLoading(false);
                     setErrorModal({
                         show: true,
-                        message: error.response?.data?.message || 'Không thể sử dụng mã thanh toán. Vui lòng thử lại.'
+                        message: errorMessage(error, 'Không thể sử dụng mã thanh toán. Vui lòng thử lại.')
                     });
                     return;
                 }
@@ -130,7 +131,7 @@ const Payment = () => {
         } catch (error) {
             setErrorModal({
                 show: true,
-                message: error.response?.data?.message || 'Không thể xử lý mã thanh toán. Vui lòng thử lại.'
+                message: errorMessage(error, 'Không thể xử lý mã thanh toán. Vui lòng thử lại.')
             });
         } finally {
             setLoading(false);

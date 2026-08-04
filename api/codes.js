@@ -129,9 +129,11 @@ async function markCodeUsed(req, res, supabase) {
         .eq('id', id)
         .eq('is_used', false)
         .select()
-        .single();
+        .maybeSingle();
 
     if (error) throw error;
+    // 0 dòng khớp = một lượt khác vừa dùng trước (race) -> trả 400 rõ ràng, KHÔNG để 500.
+    if (!data) return json(res, 400, { success: false, message: 'Mã thanh toán đã được sử dụng.' });
     return json(res, 200, { success: true, code: data });
 }
 
@@ -160,7 +162,8 @@ async function requireActiveUser(req, res, supabase) {
 // Số lượng mã còn trong kho theo mệnh giá — CHỈ trả count, KHÔNG lộ chuỗi mã.
 // Nhân viên dùng để chọn mệnh giá khi "Lấy mã" mà không nhìn thấy mã nào.
 async function getStock(req, res, supabase) {
-    if (!requireAuth(req)) return json(res, 401, { error: 'Chưa đăng nhập.' });
+    const claims = await requireActiveUser(req, res, supabase);
+    if (!claims) return undefined; // chưa đăng nhập hoặc bị khóa
 
     const { data, error } = await supabase
         .from('payment_codes')
@@ -238,9 +241,10 @@ async function setCodeSession(req, res, supabase) {
         .update({ used_session_id: sessionId })
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
 
     if (error) throw error;
+    if (!data) return json(res, 404, { success: false, message: 'Mã thanh toán không tồn tại.' });
     return json(res, 200, { success: true, code: data });
 }
 
@@ -285,7 +289,10 @@ async function cleanupPaymentCodes(req, res, supabase) {
     const auth = String(req.headers.authorization || '');
     const okCleanup = secret && (auth === `Bearer ${secret}` || req.query.secret === secret);
     const okCron = cronSecret && auth === `Bearer ${cronSecret}`;
-    if ((secret || cronSecret) && !okCleanup && !okCron) {
+    // FAIL-CLOSED: cleanup là thao tác XÓA -> phải có secret hợp lệ. Nếu chưa cấu hình
+    // CLEANUP_SECRET/CRON_SECRET thì chặn luôn (tránh ai cũng gọi xóa được). Muốn cron tự dọn
+    // thì đặt CRON_SECRET trên Vercel.
+    if (!okCleanup && !okCron) {
         return json(res, 401, { error: 'Unauthorized cleanup request' });
     }
 
@@ -496,9 +503,9 @@ export default async function handler(req, res) {
         if (getAction === 'staff-list') return listStaff(req, res, supabase);
         if (getAction === 'stock') return getStock(req, res, supabase);
 
-        // Xem danh sách mã BẮT BUỘC đăng nhập -> tránh người lạ dò toàn bộ mã rồi tự redeem.
-        const claims = requireAuth(req);
-        if (!claims) return json(res, 401, { error: 'Chưa đăng nhập.' });
+        // Xem danh sách mã BẮT BUỘC đăng nhập + tài khoản còn active (khóa là chặn ngay).
+        const claims = await requireActiveUser(req, res, supabase);
+        if (!claims) return undefined;
 
         // Nhân viên CHỈ thấy mã DO MÌNH đã lấy (không thấy kho / mã người khác) -> buộc phải
         // "Lấy mã" để có mã, đảm bảo truy vết. Admin thấy toàn bộ.

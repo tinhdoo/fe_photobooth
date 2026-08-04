@@ -193,6 +193,14 @@ const CodeManager = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Bỏ lựa chọn "Bất kỳ" -> luôn tự chọn 1 mệnh giá còn hàng (mệnh giá đầu tiên) khi kho đổi.
+    useEffect(() => {
+        if (staffOnly && stock.length && !stock.some((d) => d.value === claimValue)) {
+            setClaimValue(stock[0].value);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stock]);
+
     const fetchCodes = async () => {
         try {
             const res = await axios.get('/api/codes', { headers: authHeader() });
@@ -329,13 +337,6 @@ const CodeManager = () => {
                                 <span className="text-xs text-gray-400">Kho còn {stockTotal} mã</span>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setClaimValue(0)}
-                                    className={`px-3 py-2 rounded-xl text-sm font-bold border transition-all active:scale-95 ${claimValue === 0 ? 'bg-[#e63946] text-white border-[#e63946] shadow' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
-                                >
-                                    Bất kỳ
-                                </button>
                                 {stock.map((d) => (
                                     <button
                                         key={d.value}
