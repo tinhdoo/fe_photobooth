@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { RefreshCw, UserPlus, User, Lock, ShieldCheck, KeyRound, CheckCircle, XCircle, Ban, Check } from 'lucide-react';
 import { authHeader } from '../../utils/auth';
+import { errorMessage } from '../../utils/errorMessage';
 
 const roleLabel = (role) => (role === 'admin' ? 'Quản trị' : 'Nhân viên');
 
@@ -20,7 +21,7 @@ const StaffManager = () => {
             const res = await axios.get('/api/codes?action=staff-list', { headers: authHeader() });
             setStaff(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
-            notify(error?.response?.data?.error || 'Không tải được danh sách nhân viên.', 'error');
+            notify(errorMessage(error, 'Không tải được danh sách nhân viên.'), 'error');
         }
     };
 
@@ -50,7 +51,7 @@ const StaffManager = () => {
             notify('Đã tạo tài khoản nhân viên.');
             fetchStaff();
         } catch (error) {
-            notify(error?.response?.data?.error || 'Tạo tài khoản thất bại.', 'error');
+            notify(errorMessage(error, 'Tạo tài khoản thất bại.'), 'error');
         } finally {
             setLoading(false);
         }
@@ -61,7 +62,7 @@ const StaffManager = () => {
             await axios.post('/api/codes', { action: 'staff-toggle', id: acc.id, active: !acc.active }, { headers: authHeader() });
             setStaff(prev => prev.map(s => (s.id === acc.id ? { ...s, active: !acc.active } : s)));
         } catch (error) {
-            notify(error?.response?.data?.error || 'Không đổi được trạng thái.', 'error');
+            notify(errorMessage(error, 'Không đổi được trạng thái.'), 'error');
         }
     };
 
@@ -76,7 +77,7 @@ const StaffManager = () => {
             setResetPwd('');
             notify('Đã đổi mật khẩu.');
         } catch (error) {
-            notify(error?.response?.data?.error || 'Đổi mật khẩu thất bại.', 'error');
+            notify(errorMessage(error, 'Đổi mật khẩu thất bại.'), 'error');
         }
     };
 
@@ -233,7 +234,7 @@ const StaffManager = () => {
                                 {notification.type === 'success' ? <CheckCircle size={40} strokeWidth={2.5} /> : <XCircle size={40} strokeWidth={2.5} />}
                             </div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{notification.type === 'success' ? 'Thành công' : 'Đã xảy ra lỗi'}</h3>
-                            <p className="text-gray-500 mb-6 font-medium">{notification.message}</p>
+                            <p className="text-gray-500 mb-6 font-medium">{String(notification.message ?? '')}</p>
                             <button
                                 onClick={() => setNotification({ ...notification, show: false })}
                                 className={`w-full py-3.5 rounded-xl font-bold text-white transition-all active:scale-[0.98] ${notification.type === 'success' ? 'bg-[#e63946] hover:bg-[#c1121f]' : 'bg-red-500 hover:bg-red-600'}`}

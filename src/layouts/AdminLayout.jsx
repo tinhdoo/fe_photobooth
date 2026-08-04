@@ -121,9 +121,10 @@ const AdminLayout = () => {
                     </button>
                 </div>
 
-                {/* Content Area — đệm dưới đủ để nút cuối (vd Lưu) vượt qua thanh nav fixed + safe-area */}
+                {/* Content Area — đệm dưới đủ để nút cuối (vd Lưu) vượt qua thanh nav fixed + safe-area.
+                    Nhân viên KHÔNG có thanh nav dưới -> bỏ đệm để không thừa khoảng trắng. */}
                 <div
-                    className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+6.5rem)] lg:pb-0"
+                    className={`flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${staffOnly ? 'pb-[env(safe-area-inset-bottom)]' : 'pb-[calc(env(safe-area-inset-bottom)+6.5rem)]'}`}
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     <main className="p-4 md:p-8 w-full max-w-full overflow-x-hidden box-border">
@@ -131,7 +132,8 @@ const AdminLayout = () => {
                     </main>
                 </div>
 
-                {/* Mobile Bottom Navigation */}
+                {/* Mobile Bottom Navigation — ẩn hẳn với nhân viên (chỉ 1 mục nên thừa) */}
+                {!staffOnly && (
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.08)]">
                     <nav className="flex items-stretch px-1 py-1">
                         {mobileNavItems.map((item) => {
@@ -173,6 +175,7 @@ const AdminLayout = () => {
                     {/* Safe area for devices with home indicator */}
                     <div className="h-[env(safe-area-inset-bottom,0px)] bg-white" />
                 </div>
+                )}
             </div>
         </div>
     );

@@ -3,6 +3,7 @@ import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket } from 'lucide-react';
 import { authHeader, isStaffRole, getUsername } from '../../utils/auth';
+import { errorMessage } from '../../utils/errorMessage';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -133,19 +134,20 @@ const CodeManager = () => {
     const [claimValue, setClaimValue] = useState(0); // 0 = bất kỳ mệnh giá
     const [claiming, setClaiming] = useState(false);
     const [claimedCode, setClaimedCode] = useState(null); // mã vừa lấy để đọc cho khách
+    // Số lượng mã còn trong kho theo mệnh giá — lấy từ API (KHÔNG lộ chuỗi mã cho nhân viên).
+    const [stock, setStock] = useState([]); // [{ value, count }]
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    const stockTotal = stock.reduce((s, d) => s + d.count, 0);
 
-    // Các mệnh giá còn trong kho (chưa dùng + chưa ai lấy + chưa hết hạn) kèm số lượng.
-    const availableDenoms = (() => {
-        const now = Date.now();
-        const map = {};
-        codes.forEach((c) => {
-            const inStock = !c.is_used && !c.claimed_by && (!c.expires_at || new Date(c.expires_at).getTime() > now);
-            if (inStock) map[c.value] = (map[c.value] || 0) + 1;
-        });
-        return Object.entries(map).map(([v, n]) => ({ value: Number(v), count: n })).sort((a, b) => a.value - b.value);
-    })();
+    const fetchStock = async () => {
+        try {
+            const res = await axios.get('/api/codes?action=stock', { headers: authHeader() });
+            setStock(Array.isArray(res.data) ? res.data : []);
+        } catch {
+            setStock([]);
+        }
+    };
 
     const handleClaim = async () => {
         setClaiming(true);
@@ -156,12 +158,12 @@ const CodeManager = () => {
             if (code) {
                 setClaimedCode(code);
                 fetchCodes();
+                fetchStock();
             } else {
                 setNotification({ show: true, message: 'Không lấy được mã.', type: 'error' });
             }
         } catch (error) {
-            const msg = error?.response?.data?.message || error?.response?.data?.error || 'Lấy mã thất bại.';
-            setNotification({ show: true, message: msg, type: 'error' });
+            setNotification({ show: true, message: errorMessage(error, 'Lấy mã thất bại.'), type: 'error' });
         } finally {
             setClaiming(false);
         }
@@ -181,11 +183,13 @@ const CodeManager = () => {
 
     useEffect(() => {
         fetchCodes();
+        if (staffOnly) fetchStock();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchCodes = async () => {
         try {
-            const res = await axios.get('/api/codes');
+            const res = await axios.get('/api/codes', { headers: authHeader() });
             const now = new Date();
             const list = Array.isArray(res.data) ? res.data.map(normalizeCode) : [];
             const sortedCodes = list.sort((a, b) => {
@@ -250,8 +254,7 @@ const CodeManager = () => {
             }
         } catch (error) {
             console.error("Error generating codes:", error);
-            const msg = error?.response?.data?.error || "Tạo mã thất bại";
-            setNotification({ show: true, message: msg, type: 'error' });
+            setNotification({ show: true, message: errorMessage(error, 'Tạo mã thất bại'), type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -284,8 +287,7 @@ const CodeManager = () => {
             setCodes(prev => prev.map(c => (c.id === id ? { ...c, note } : c)));
             return true;
         } catch (error) {
-            const msg = error?.response?.data?.message || error?.response?.data?.error || 'Lưu ghi chú thất bại';
-            setNotification({ show: true, message: msg, type: 'error' });
+            setNotification({ show: true, message: errorMessage(error, 'Lưu ghi chú thất bại'), type: 'error' });
             return false;
         }
     };
@@ -316,44 +318,57 @@ const CodeManager = () => {
                     </h3>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Mệnh giá</label>
-                            <select
-                                value={claimValue}
-                                onChange={(e) => setClaimValue(Number(e.target.value))}
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white text-sm"
-                            >
-                                <option value={0}>Bất kỳ mệnh giá</option>
-                                {availableDenoms.map((d) => (
-                                    <option key={d.value} value={d.value}>{formatCurrency(d.value)} — còn {d.count}</option>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-semibold text-gray-700">Chọn mệnh giá</label>
+                                <span className="text-xs text-gray-400">Kho còn {stockTotal} mã</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setClaimValue(0)}
+                                    className={`px-3 py-2 rounded-xl text-sm font-bold border transition-all active:scale-95 ${claimValue === 0 ? 'bg-[#e63946] text-white border-[#e63946] shadow' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                >
+                                    Bất kỳ
+                                </button>
+                                {stock.map((d) => (
+                                    <button
+                                        key={d.value}
+                                        type="button"
+                                        onClick={() => setClaimValue(d.value)}
+                                        className={`px-3 py-2 rounded-xl text-sm font-bold border transition-all active:scale-95 ${claimValue === d.value ? 'bg-[#e63946] text-white border-[#e63946] shadow' : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-[#e63946]/40'}`}
+                                    >
+                                        {denomLabel(d.value)}
+                                        <span className={`ml-1 text-xs font-medium ${claimValue === d.value ? 'text-white/80' : 'text-gray-400'}`}>· {d.count}</span>
+                                    </button>
                                 ))}
-                            </select>
-                            <p className="text-xs text-gray-400 mt-1 ml-1">
-                                Kho còn {availableDenoms.reduce((s, d) => s + d.count, 0)} mã chưa dùng.
-                            </p>
+                            </div>
+                            {stockTotal === 0 && (
+                                <p className="text-sm text-amber-600 mt-2 font-medium">Kho hết mã. Báo quản lý tạo thêm.</p>
+                            )}
                         </div>
 
                         <button
                             onClick={handleClaim}
-                            disabled={claiming}
-                            className="w-full py-3 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] text-base flex items-center justify-center gap-2"
+                            disabled={claiming || stockTotal === 0}
+                            className="w-full py-3.5 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] text-base flex items-center justify-center gap-2"
                         >
                             {claiming ? <><RefreshCw className="animate-spin" size={20} /> Đang lấy...</> : <><Ticket size={20} /> Lấy mã</>}
                         </button>
 
                         {claimedCode && (
-                            <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 text-center">
-                                <p className="text-xs font-semibold text-emerald-700 mb-1">Mã cho khách ({formatCurrency(claimedCode.value)})</p>
+                            <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-center">
+                                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 mb-2">Mã cho khách · {formatCurrency(claimedCode.value)}</p>
                                 <div className="flex items-center justify-center gap-2">
-                                    <span className="font-mono text-3xl font-black tracking-widest text-[#1a1a2e]">{claimedCode.code}</span>
+                                    <span className="font-mono text-4xl font-black tracking-[0.15em] text-[#1a1a2e]">{String(claimedCode.code ?? '')}</span>
                                     <button
-                                        onClick={() => copyToClipboard(claimedCode.code)}
+                                        onClick={() => copyToClipboard(String(claimedCode.code ?? ''))}
                                         className="rounded-lg bg-white p-2 text-blue-600 border border-gray-200 active:scale-95"
                                         title="Sao chép"
                                     >
                                         <Copy size={18} />
                                     </button>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-2">Đọc/đưa mã này cho khách. Ghi chú "dùng làm gì" ở danh sách bên phải sau khi khách dùng.</p>
+                                <p className="text-xs text-gray-500 mt-2">Đọc/đưa mã cho khách. Ghi chú "dùng làm gì" ở danh sách bên phải sau khi khách dùng.</p>
                             </div>
                         )}
                     </div>
@@ -453,11 +468,11 @@ const CodeManager = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
                     <div className="p-5 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <div>
-                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">Danh sách mã</h3>
-                            <p className="text-xs text-gray-500 mt-0.5 md:hidden">Vuốt để xem thêm</p>
+                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã tôi đã lấy' : 'Danh sách mã'}</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">{staffOnly ? 'Ghi chú "dùng làm gì" ngay tại đây.' : ''}</p>
                         </div>
                         <button
-                            onClick={fetchCodes}
+                            onClick={() => { fetchCodes(); if (staffOnly) fetchStock(); }}
                             className="p-2.5 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl text-gray-600 transition-all shadow-sm active:scale-95"
                             title="Làm mới"
                         >
@@ -468,7 +483,7 @@ const CodeManager = () => {
                     {/* --- MOBILE VIEW: CARDS --- */}
                     <div className="md:hidden flex flex-col divide-y divide-gray-100">
                         {codes.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400 italic">Chưa có dữ liệu.</div>
+                            <div className="p-8 text-center text-gray-400 italic">{staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có dữ liệu.'}</div>
                         ) : (
                             codes.map((code) => (
                                 <div key={code.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -538,7 +553,7 @@ const CodeManager = () => {
                             <tbody className="text-sm divide-y divide-gray-100">
                                 {codes.length === 0 ? (
                                     <tr>
-                                        <td colSpan="8" className="py-10 text-center text-gray-400 italic">Chưa có mã nào được tạo.</td>
+                                        <td colSpan="8" className="py-10 text-center text-gray-400 italic">{staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có mã nào được tạo.'}</td>
                                     </tr>
                                 ) : (
                                     codes.map((code) => (
@@ -650,7 +665,7 @@ const CodeManager = () => {
                             </h3>
 
                             <p className="text-gray-500 mb-6 font-medium">
-                                {notification.message}
+                                {String(notification.message ?? '')}
                             </p>
 
                             <button

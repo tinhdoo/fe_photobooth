@@ -6,12 +6,6 @@ import { isLocalHost } from './runtime';
 
 const KEY = 'ptb_auth';
 
-const activeStore = () => {
-    if (localStorage.getItem(KEY)) return localStorage;
-    if (sessionStorage.getItem(KEY)) return sessionStorage;
-    return null;
-};
-
 export function saveAuth(auth, remember) {
     const store = remember ? localStorage : sessionStorage;
     const other = remember ? sessionStorage : localStorage;

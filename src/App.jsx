@@ -235,7 +235,7 @@ const App = () => {
                             <Route path="revenue" element={<CloudAdminRoute><AdminOnlyRoute><RevenueDashboard /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="staff" element={<CloudAdminRoute><AdminOnlyRoute><StaffManager /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
-                            <Route path="bill-settings" element={<BillSettings />} />
+                            <Route path="bill-settings" element={<AdminOnlyRoute><BillSettings /></AdminOnlyRoute>} />
                             <Route path="branding" element={<CloudAdminRoute><AdminOnlyRoute><BrandingSettings /></AdminOnlyRoute></CloudAdminRoute>} />
                         </Route>
                     </Routes>

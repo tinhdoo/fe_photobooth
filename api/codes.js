@@ -34,9 +34,11 @@ async function insertOneCode(supabase, value, expiresAt, createdBy) {
 }
 
 async function generateCodes(req, res, supabase) {
+    // CHỈ admin được tạo mã (mã = tiền). Chặn nhân viên / người lạ tự mint mã.
+    const admin = guardAdmin(req, res);
+    if (!admin) return undefined;
     const expiresAt = req.body?.expires_at || null;
-    // Token là tùy chọn ở bước này (giữ tương thích UI cũ). Nếu có -> ghi lại nhân viên tạo mã.
-    const createdBy = requireAuth(req)?.u || null;
+    const createdBy = admin.u;
 
     // Hỗ trợ 2 dạng payload:
     //  - Nhiều mệnh giá: { batches: [{ value, quantity }, ...] }
@@ -131,6 +133,31 @@ async function markCodeUsed(req, res, supabase) {
 
     if (error) throw error;
     return json(res, 200, { success: true, code: data });
+}
+
+// Số lượng mã còn trong kho theo mệnh giá — CHỈ trả count, KHÔNG lộ chuỗi mã.
+// Nhân viên dùng để chọn mệnh giá khi "Lấy mã" mà không nhìn thấy mã nào.
+async function getStock(req, res, supabase) {
+    if (!requireAuth(req)) return json(res, 401, { error: 'Chưa đăng nhập.' });
+
+    const { data, error } = await supabase
+        .from('payment_codes')
+        .select('value, expires_at')   // KHÔNG select 'code'
+        .eq('is_used', false)
+        .is('claimed_by', null);
+    if (error) throw error;
+
+    const now = Date.now();
+    const map = {};
+    (data || []).forEach((r) => {
+        if (!r.expires_at || new Date(r.expires_at).getTime() > now) {
+            map[r.value] = (map[r.value] || 0) + 1;
+        }
+    });
+    const denoms = Object.entries(map)
+        .map(([v, n]) => ({ value: Number(v), count: n }))
+        .sort((a, b) => a.value - b.value);
+    return json(res, 200, denoms);
 }
 
 // Nhân viên "lấy" 1 mã từ kho để đưa khách -> ghi claimed_by = nhân viên đó.
@@ -423,6 +450,7 @@ export default async function handler(req, res) {
             if (action === 'generate') return generateCodes(req, res, supabase);
             if (action === 'validate') return validateCode(req, res, supabase);
             if (action === 'use') return markCodeUsed(req, res, supabase);
+            if (action === 'stock') return getStock(req, res, supabase);
             if (action === 'claim') return claimCode(req, res, supabase);
             if (action === 'set-session') return setCodeSession(req, res, supabase);
             if (action === 'set-note') return setCodeNote(req, res, supabase);
@@ -441,12 +469,21 @@ export default async function handler(req, res) {
         const getAction = String(req.query?.action || '').trim();
         if (getAction === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
         if (getAction === 'staff-list') return listStaff(req, res, supabase);
+        if (getAction === 'stock') return getStock(req, res, supabase);
 
-        const { data, error } = await supabase
+        // Xem danh sách mã BẮT BUỘC đăng nhập -> tránh người lạ dò toàn bộ mã rồi tự redeem.
+        const claims = requireAuth(req);
+        if (!claims) return json(res, 401, { error: 'Chưa đăng nhập.' });
+
+        // Nhân viên CHỈ thấy mã DO MÌNH đã lấy (không thấy kho / mã người khác) -> buộc phải
+        // "Lấy mã" để có mã, đảm bảo truy vết. Admin thấy toàn bộ.
+        let listQuery = supabase
             .from('payment_codes')
             .select('*')
             .order('created_at', { ascending: false });
+        if (claims.r !== 'admin') listQuery = listQuery.eq('claimed_by', claims.u);
 
+        const { data, error } = await listQuery;
         if (error) throw error;
 
         return json(res, 200, Array.isArray(data) ? data : []);
