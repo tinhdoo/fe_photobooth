@@ -475,6 +475,38 @@ export default async function handler(req, res) {
             .filter((tx) => inRange(tx, startDate, endDate))
             .filter((tx) => matchesMethod(tx, paymentMethod));
 
+        // Gắn TÊN nhân viên đã lấy mã cho các giao dịch trả bằng Mã thanh toán:
+        //   payment_code -> payment_codes.claimed_by (username) -> staff_accounts.display_name.
+        try {
+            const codeStrings = [...new Set(transactions.map((t) => t.payment_code).filter(Boolean))];
+            if (codeStrings.length) {
+                const { data: codeRows } = await supabase
+                    .from('payment_codes')
+                    .select('code, claimed_by')
+                    .in('code', codeStrings);
+                const codeToUser = {};
+                (codeRows || []).forEach((r) => { if (r.claimed_by) codeToUser[r.code] = r.claimed_by; });
+
+                const usernames = [...new Set(Object.values(codeToUser))];
+                const userToName = {};
+                if (usernames.length) {
+                    const { data: accs } = await supabase
+                        .from('staff_accounts')
+                        .select('username, display_name')
+                        .in('username', usernames);
+                    (accs || []).forEach((a) => { userToName[a.username] = a.display_name || a.username; });
+                }
+
+                transactions.forEach((t) => {
+                    const u = t.payment_code ? codeToUser[t.payment_code] : null;
+                    if (u) t.staff_name = userToName[u] || u;
+                });
+            }
+        } catch (enrichError) {
+            // Không có bảng staff_accounts / lỗi phụ -> bỏ qua, doanh thu vẫn trả bình thường.
+            console.warn('Enrich staff_name failed:', enrichError?.message || enrichError);
+        }
+
         const totalRevenue = transactions.reduce((sum, tx) => sum + toNumber(tx.value), 0);
         const paymentBreakdown = transactions.reduce((acc, tx) => {
             const key = tx.payment_method || 'unknown';

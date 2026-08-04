@@ -869,6 +869,7 @@ const RevenueDashboard = () => {
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-gray-400">
                                                 {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946] truncate">{getMethodDetail(tx)}</span>}
+                                                {tx.staff_name && <span className="shrink-0 text-gray-500">· {tx.staff_name}</span>}
                                                 {tx.device_id && <span className="shrink-0">{boothName(tx.device_id)}</span>}
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
@@ -911,6 +912,9 @@ const RevenueDashboard = () => {
                                                     {methodBadge(tx)}
                                                     {getMethodDetail(tx) && (
                                                         <span className="mt-1 block font-mono text-xs font-bold text-[#e63946]">{getMethodDetail(tx)}</span>
+                                                    )}
+                                                    {tx.staff_name && (
+                                                        <span className="mt-0.5 block text-xs text-gray-500">NV lấy mã: {tx.staff_name}</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-6">

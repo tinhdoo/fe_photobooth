@@ -102,7 +102,7 @@ const StaffManager = () => {
                                 type="text"
                                 value={form.display_name}
                                 onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-                                placeholder="VD: Ngọc (ca sáng)"
+                                placeholder="Tên hiển thị"
                                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white text-sm"
                             />
                         </div>
