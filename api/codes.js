@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { requireAuth } from '../lib/auth.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -14,13 +15,13 @@ function randomPaymentCode() {
 const MAX_PER_BATCH = 100;
 const MAX_TOTAL = 500;
 
-async function insertOneCode(supabase, value, expiresAt) {
+async function insertOneCode(supabase, value, expiresAt, createdBy) {
     let lastError = null;
     for (let attempt = 0; attempt < 10; attempt += 1) {
         const code = randomPaymentCode();
         const { data, error } = await supabase
             .from('payment_codes')
-            .insert({ code, value, expires_at: expiresAt, is_used: false })
+            .insert({ code, value, expires_at: expiresAt, is_used: false, created_by: createdBy || null })
             .select()
             .single();
 
@@ -34,6 +35,8 @@ async function insertOneCode(supabase, value, expiresAt) {
 
 async function generateCodes(req, res, supabase) {
     const expiresAt = req.body?.expires_at || null;
+    // Token là tùy chọn ở bước này (giữ tương thích UI cũ). Nếu có -> ghi lại nhân viên tạo mã.
+    const createdBy = requireAuth(req)?.u || null;
 
     // Hỗ trợ 2 dạng payload:
     //  - Nhiều mệnh giá: { batches: [{ value, quantity }, ...] }
@@ -64,7 +67,7 @@ async function generateCodes(req, res, supabase) {
     const created = [];
     for (const batch of batches) {
         for (let i = 0; i < batch.quantity; i += 1) {
-            created.push(await insertOneCode(supabase, batch.value, expiresAt));
+            created.push(await insertOneCode(supabase, batch.value, expiresAt, createdBy));
         }
     }
 
@@ -101,6 +104,8 @@ async function validateCode(req, res, supabase) {
 
 async function markCodeUsed(req, res, supabase) {
     const id = String(req.body?.id || req.query?.id || '').trim();
+    // Phiên booth đã dùng mã (để biết "mã dùng cho lượt nào"). Không bắt buộc.
+    const sessionId = String(req.body?.session_id || req.body?.sessionId || '').trim() || null;
     if (!id) return json(res, 400, { success: false, message: 'Thiếu ID mã thanh toán.' });
 
     const { data: current, error: fetchError } = await supabase
@@ -118,9 +123,29 @@ async function markCodeUsed(req, res, supabase) {
 
     const { data, error } = await supabase
         .from('payment_codes')
-        .update({ is_used: true, used_at: new Date().toISOString() })
+        .update({ is_used: true, used_at: new Date().toISOString(), used_session_id: sessionId })
         .eq('id', id)
         .eq('is_used', false)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return json(res, 200, { success: true, code: data });
+}
+
+// Ghi chú "mã dùng làm gì" — nhân viên tự điền, sửa được bất cứ lúc nào (kể cả sau khi dùng).
+async function setCodeNote(req, res, supabase) {
+    const claims = requireAuth(req);
+    if (!claims) return json(res, 401, { success: false, message: 'Chưa đăng nhập.' });
+
+    const id = String(req.body?.id || '').trim();
+    if (!id) return json(res, 400, { success: false, message: 'Thiếu ID mã thanh toán.' });
+    const note = String(req.body?.note ?? '').slice(0, 500);
+
+    const { data, error } = await supabase
+        .from('payment_codes')
+        .update({ note })
+        .eq('id', id)
         .select()
         .single();
 
@@ -183,6 +208,7 @@ export default async function handler(req, res) {
             if (action === 'generate') return generateCodes(req, res, supabase);
             if (action === 'validate') return validateCode(req, res, supabase);
             if (action === 'use') return markCodeUsed(req, res, supabase);
+            if (action === 'set-note') return setCodeNote(req, res, supabase);
             if (action === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
             return json(res, 400, { error: 'Invalid action' });
         }
