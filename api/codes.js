@@ -518,7 +518,23 @@ export default async function handler(req, res) {
         const { data, error } = await listQuery;
         if (error) throw error;
 
-        return json(res, 200, Array.isArray(data) ? data : []);
+        let rows = Array.isArray(data) ? data : [];
+        // Kèm TÊN HIỂN THỊ của nhân viên đã lấy mã (claimed_by lưu username -> map display_name).
+        const usernames = [...new Set(rows.map((r) => r.claimed_by).filter(Boolean))];
+        if (usernames.length) {
+            const { data: accs } = await supabase
+                .from('staff_accounts')
+                .select('username, display_name')
+                .in('username', usernames);
+            const nameMap = {};
+            (accs || []).forEach((a) => { nameMap[a.username] = a.display_name || a.username; });
+            rows = rows.map((r) => ({
+                ...r,
+                claimed_by_name: r.claimed_by ? (nameMap[r.claimed_by] || r.claimed_by) : '',
+            }));
+        }
+
+        return json(res, 200, rows);
     } catch (error) {
         console.error('Fetch payment codes failed:', error);
         return json(res, 500, { error: error.message || 'Fetch payment codes failed' });

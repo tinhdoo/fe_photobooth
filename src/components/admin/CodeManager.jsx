@@ -13,6 +13,7 @@ const normalizeCode = (code = {}) => ({
     created_at: code.created_at || new Date().toISOString(),
     created_by: code.created_by || '',
     claimed_by: code.claimed_by || '',
+    claimed_by_name: code.claimed_by_name || '',
     claimed_at: code.claimed_at || '',
     note: code.note || '',
     used_session_id: code.used_session_id || '',
@@ -522,7 +523,7 @@ const CodeManager = () => {
                                         {code.claimed_by && (
                                             <div className="flex items-center gap-1.5 min-w-fit">
                                                 <User size={12} />
-                                                <span>{code.claimed_by}</span>
+                                                <span>{code.claimed_by_name || code.claimed_by}</span>
                                             </div>
                                         )}
                                         {code.used_session_id && (
@@ -574,7 +575,7 @@ const CodeManager = () => {
                                             </td>
                                             <td className="py-4 text-gray-600 text-sm">
                                                 {code.claimed_by
-                                                    ? <span className="inline-flex items-center gap-1"><User size={13} className="text-gray-400" />{code.claimed_by}</span>
+                                                    ? <span className="inline-flex items-center gap-1"><User size={13} className="text-gray-400" />{code.claimed_by_name || code.claimed_by}</span>
                                                     : <span className="text-gray-300 italic">—</span>}
                                             </td>
                                             <td className="py-4 pr-3">
