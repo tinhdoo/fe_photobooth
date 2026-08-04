@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check } from 'lucide-react';
-import { authHeader } from '../../utils/auth';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket } from 'lucide-react';
+import { authHeader, isStaffRole, getUsername } from '../../utils/auth';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -11,6 +11,8 @@ const normalizeCode = (code = {}) => ({
     is_used: Boolean(code.is_used),
     created_at: code.created_at || new Date().toISOString(),
     created_by: code.created_by || '',
+    claimed_by: code.claimed_by || '',
+    claimed_at: code.claimed_at || '',
     note: code.note || '',
     used_session_id: code.used_session_id || '',
 });
@@ -23,10 +25,17 @@ const denomLabel = (value) => {
 
 // Ô ghi chú sửa trực tiếp: gõ xong bấm ✓ (hoặc Enter/rời ô) để lưu. Chỉ lưu khi có thay đổi.
 // Định nghĩa ở MODULE SCOPE (không lồng trong CodeManager) để không bị remount -> mất focus.
-const NoteCell = ({ code, onSave }) => {
+// canEdit=false -> chỉ hiển thị ghi chú (mã của nhân viên khác), không cho sửa.
+const NoteCell = ({ code, onSave, canEdit = true }) => {
     const [value, setValue] = useState(code.note || '');
     const [saving, setSaving] = useState(false);
     const dirty = value !== (code.note || '');
+
+    if (!canEdit) {
+        return code.note
+            ? <span className="text-sm text-gray-600">{code.note}</span>
+            : <span className="text-sm text-gray-300 italic">—</span>;
+    }
 
     const commit = async () => {
         if (!dirty || saving) return;
@@ -110,14 +119,53 @@ const exportCodesToExcel = (list, fileName) => {
 };
 
 const CodeManager = () => {
+    const staffOnly = isStaffRole(); // nhân viên: chỉ "Lấy mã" từ kho, không tạo mã
+    const myUsername = getUsername();
+    // Admin sửa mọi ghi chú; nhân viên chỉ sửa mã DO MÌNH lấy.
+    const canEditNote = (code) => !staffOnly || (!!code.claimed_by && code.claimed_by === myUsername);
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([{ value: 70000, quantity: 1 }]);
     const [expiresAt, setExpiresAt] = useState('');
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
     const [exportPrompt, setExportPrompt] = useState({ show: false, codes: [] });
+    // Trạng thái luồng "Lấy mã" của nhân viên
+    const [claimValue, setClaimValue] = useState(0); // 0 = bất kỳ mệnh giá
+    const [claiming, setClaiming] = useState(false);
+    const [claimedCode, setClaimedCode] = useState(null); // mã vừa lấy để đọc cho khách
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+    // Các mệnh giá còn trong kho (chưa dùng + chưa ai lấy + chưa hết hạn) kèm số lượng.
+    const availableDenoms = (() => {
+        const now = Date.now();
+        const map = {};
+        codes.forEach((c) => {
+            const inStock = !c.is_used && !c.claimed_by && (!c.expires_at || new Date(c.expires_at).getTime() > now);
+            if (inStock) map[c.value] = (map[c.value] || 0) + 1;
+        });
+        return Object.entries(map).map(([v, n]) => ({ value: Number(v), count: n })).sort((a, b) => a.value - b.value);
+    })();
+
+    const handleClaim = async () => {
+        setClaiming(true);
+        setClaimedCode(null);
+        try {
+            const res = await axios.post('/api/codes', { action: 'claim', value: Number(claimValue) || 0 }, { headers: authHeader() });
+            const code = res.data?.code ? normalizeCode(res.data.code) : null;
+            if (code) {
+                setClaimedCode(code);
+                fetchCodes();
+            } else {
+                setNotification({ show: true, message: 'Không lấy được mã.', type: 'error' });
+            }
+        } catch (error) {
+            const msg = error?.response?.data?.message || error?.response?.data?.error || 'Lấy mã thất bại.';
+            setNotification({ show: true, message: msg, type: 'error' });
+        } finally {
+            setClaiming(false);
+        }
+    };
 
     const updateRow = (index, patch) => {
         setRows(prev => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -247,7 +295,8 @@ const CodeManager = () => {
         const isExpired = code.expires_at && new Date(code.expires_at) < new Date();
         if (code.is_used) return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Đã dùng</span>;
         if (isExpired) return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600">Hết hạn</span>;
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-600">Hoạt động</span>;
+        if (code.claimed_by) return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Đã lấy</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-600">Trong kho</span>;
     };
 
     return (
@@ -258,7 +307,58 @@ const CodeManager = () => {
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6">
-                {/* --- 1. GENERATION FORM --- */}
+                {/* --- 1a. LẤY MÃ (nhân viên) --- */}
+                {staffOnly ? (
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit min-w-0 max-w-full overflow-hidden">
+                    <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-4 flex items-center gap-2 pb-3 border-b border-gray-100">
+                        <Ticket className="bg-[#e63946] text-white rounded-full p-1" size={24} />
+                        Lấy mã cho khách
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Mệnh giá</label>
+                            <select
+                                value={claimValue}
+                                onChange={(e) => setClaimValue(Number(e.target.value))}
+                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white text-sm"
+                            >
+                                <option value={0}>Bất kỳ mệnh giá</option>
+                                {availableDenoms.map((d) => (
+                                    <option key={d.value} value={d.value}>{formatCurrency(d.value)} — còn {d.count}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-400 mt-1 ml-1">
+                                Kho còn {availableDenoms.reduce((s, d) => s + d.count, 0)} mã chưa dùng.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={handleClaim}
+                            disabled={claiming}
+                            className="w-full py-3 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-[#e63946]/20 active:scale-[0.98] text-base flex items-center justify-center gap-2"
+                        >
+                            {claiming ? <><RefreshCw className="animate-spin" size={20} /> Đang lấy...</> : <><Ticket size={20} /> Lấy mã</>}
+                        </button>
+
+                        {claimedCode && (
+                            <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 text-center">
+                                <p className="text-xs font-semibold text-emerald-700 mb-1">Mã cho khách ({formatCurrency(claimedCode.value)})</p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <span className="font-mono text-3xl font-black tracking-widest text-[#1a1a2e]">{claimedCode.code}</span>
+                                    <button
+                                        onClick={() => copyToClipboard(claimedCode.code)}
+                                        className="rounded-lg bg-white p-2 text-blue-600 border border-gray-200 active:scale-95"
+                                        title="Sao chép"
+                                    >
+                                        <Copy size={18} />
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">Đọc/đưa mã này cho khách. Ghi chú "dùng làm gì" ở danh sách bên phải sau khi khách dùng.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                ) : (
                 <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 w-full xl:w-1/3 h-fit min-w-0 max-w-full overflow-hidden">
                     <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e] mb-4 flex items-center gap-2 pb-3 border-b border-gray-100">
                         <ArrowRight className="bg-[#e63946] text-white rounded-full p-1" size={24} />
@@ -347,6 +447,7 @@ const CodeManager = () => {
                         </button>
                     </div>
                 </div>
+                )}
 
                 {/* --- 2. CODES LIST --- */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
@@ -396,10 +497,10 @@ const CodeManager = () => {
                                             <Calendar size={12} />
                                             <span>Tạo: {new Date(code.created_at).toLocaleDateString('vi-VN')}</span>
                                         </div>
-                                        {code.created_by && (
+                                        {code.claimed_by && (
                                             <div className="flex items-center gap-1.5 min-w-fit">
                                                 <User size={12} />
-                                                <span>{code.created_by}</span>
+                                                <span>{code.claimed_by}</span>
                                             </div>
                                         )}
                                         {code.used_session_id && (
@@ -412,7 +513,7 @@ const CodeManager = () => {
 
                                     {/* Ghi chú "dùng làm gì" — nhân viên tự điền sau khi dùng */}
                                     <div className="mt-2">
-                                        <NoteCell code={code} onSave={saveNote} />
+                                        <NoteCell code={code} onSave={saveNote} canEdit={canEditNote(code)} />
                                     </div>
                                 </div>
                             ))
@@ -427,7 +528,7 @@ const CodeManager = () => {
                                     <th className="py-4 pl-6">Mã Code</th>
                                     <th className="py-4">Giá trị</th>
                                     <th className="py-4 text-center">Trạng thái</th>
-                                    <th className="py-4">Nhân viên</th>
+                                    <th className="py-4">NV lấy mã</th>
                                     <th className="py-4 min-w-[180px]">Ghi chú</th>
                                     <th className="py-4">Phiên</th>
                                     <th className="py-4">Ngày tạo</th>
@@ -450,12 +551,12 @@ const CodeManager = () => {
                                                 <StatusBadge code={code} />
                                             </td>
                                             <td className="py-4 text-gray-600 text-sm">
-                                                {code.created_by
-                                                    ? <span className="inline-flex items-center gap-1"><User size={13} className="text-gray-400" />{code.created_by}</span>
+                                                {code.claimed_by
+                                                    ? <span className="inline-flex items-center gap-1"><User size={13} className="text-gray-400" />{code.claimed_by}</span>
                                                     : <span className="text-gray-300 italic">—</span>}
                                             </td>
                                             <td className="py-4 pr-3">
-                                                <NoteCell code={code} onSave={saveNote} />
+                                                <NoteCell code={code} onSave={saveNote} canEdit={canEditNote(code)} />
                                             </td>
                                             <td className="py-4 text-xs">
                                                 {code.used_session_id

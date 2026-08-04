@@ -41,9 +41,9 @@ const AdminLogin = () => {
                 username: username.trim(),
                 password,
             });
-            const { token, role, display_name } = res.data || {};
+            const { token, role, display_name, username: serverUsername } = res.data || {};
             if (!token) throw new Error('Phản hồi không hợp lệ');
-            saveAuth({ token, role, username: username.trim(), display_name }, rememberMe);
+            saveAuth({ token, role, username: serverUsername || username.trim(), display_name }, rememberMe);
             navigate('/admin');
         } catch (err) {
             setError(err?.response?.data?.error || 'Đăng nhập thất bại. Kiểm tra lại tài khoản.');

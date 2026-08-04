@@ -133,6 +133,49 @@ async function markCodeUsed(req, res, supabase) {
     return json(res, 200, { success: true, code: data });
 }
 
+// Nhân viên "lấy" 1 mã từ kho để đưa khách -> ghi claimed_by = nhân viên đó.
+// Đây là điểm truy vết "nhân viên nào dùng mã" (vì mã do admin tạo hàng loạt).
+async function claimCode(req, res, supabase) {
+    const claims = requireAuth(req);
+    if (!claims) return json(res, 401, { success: false, message: 'Chưa đăng nhập.' });
+
+    const value = Number(req.body?.value || 0);
+    const nowIso = new Date().toISOString();
+
+    // Lấy vài ứng viên chưa dùng / chưa ai lấy / chưa hết hạn (ưu tiên tạo trước).
+    let query = supabase
+        .from('payment_codes')
+        .select('*')
+        .eq('is_used', false)
+        .is('claimed_by', null)
+        .order('created_at', { ascending: true })
+        .limit(10);
+    if (value > 0) query = query.eq('value', value);
+
+    const { data: candidates, error } = await query;
+    if (error) throw error;
+
+    const fresh = (candidates || []).filter(c => !c.expires_at || new Date(c.expires_at).getTime() > Date.now());
+
+    // Compare-and-swap: chỉ nhận mã nếu vẫn còn trống (tránh 2 nhân viên lấy trúng 1 mã).
+    for (const cand of fresh) {
+        const { data: updated, error: uErr } = await supabase
+            .from('payment_codes')
+            .update({ claimed_by: claims.u, claimed_at: nowIso })
+            .eq('id', cand.id)
+            .is('claimed_by', null)
+            .select()
+            .maybeSingle();
+        if (uErr) continue;
+        if (updated) return json(res, 200, { success: true, code: updated });
+    }
+
+    return json(res, 404, {
+        success: false,
+        message: value > 0 ? 'Hết mã mệnh giá này trong kho.' : 'Kho mã đã hết.',
+    });
+}
+
 // Gắn phiên booth (album) đã dùng mã — booth gọi ở bước Edit khi sessionId (UUID album) ra đời.
 // Không cần token (máy booth không đăng nhập). Ghi đè used_session_id (giá trị null đặt ở bước
 // Payment) bằng UUID album thật.
@@ -153,6 +196,7 @@ async function setCodeSession(req, res, supabase) {
 }
 
 // Ghi chú "mã dùng làm gì" — nhân viên tự điền, sửa được bất cứ lúc nào (kể cả sau khi dùng).
+// QUYỀN: admin sửa mọi mã; nhân viên CHỈ sửa được mã do CHÍNH MÌNH lấy (claimed_by === mình).
 async function setCodeNote(req, res, supabase) {
     const claims = requireAuth(req);
     if (!claims) return json(res, 401, { success: false, message: 'Chưa đăng nhập.' });
@@ -160,6 +204,18 @@ async function setCodeNote(req, res, supabase) {
     const id = String(req.body?.id || '').trim();
     if (!id) return json(res, 400, { success: false, message: 'Thiếu ID mã thanh toán.' });
     const note = String(req.body?.note ?? '').slice(0, 500);
+
+    // Kiểm tra quyền: lấy claimed_by của mã.
+    const { data: current, error: fetchError } = await supabase
+        .from('payment_codes')
+        .select('claimed_by')
+        .eq('id', id)
+        .maybeSingle();
+    if (fetchError) throw fetchError;
+    if (!current) return json(res, 404, { success: false, message: 'Mã thanh toán không tồn tại.' });
+    if (claims.r !== 'admin' && current.claimed_by !== claims.u) {
+        return json(res, 403, { success: false, message: 'Bạn chỉ được ghi chú mã do mình lấy.' });
+    }
 
     const { data, error } = await supabase
         .from('payment_codes')
@@ -367,6 +423,7 @@ export default async function handler(req, res) {
             if (action === 'generate') return generateCodes(req, res, supabase);
             if (action === 'validate') return validateCode(req, res, supabase);
             if (action === 'use') return markCodeUsed(req, res, supabase);
+            if (action === 'claim') return claimCode(req, res, supabase);
             if (action === 'set-session') return setCodeSession(req, res, supabase);
             if (action === 'set-note') return setCodeNote(req, res, supabase);
             if (action === 'cleanup') return cleanupPaymentCodes(req, res, supabase);

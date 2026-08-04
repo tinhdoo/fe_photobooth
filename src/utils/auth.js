@@ -46,6 +46,11 @@ export function getRole() {
     return getAuth()?.role || null;
 }
 
+// Username đăng nhập — khớp với claimed_by mà backend ghi khi nhân viên lấy mã.
+export function getUsername() {
+    return getAuth()?.username || '';
+}
+
 export function getDisplayName() {
     const a = getAuth();
     return a?.display_name || a?.username || '';
