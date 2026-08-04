@@ -143,9 +143,15 @@ const CodeManager = () => {
     const fetchStock = async () => {
         try {
             const res = await axios.get('/api/codes?action=stock', { headers: authHeader() });
-            setStock(Array.isArray(res.data) ? res.data : []);
-        } catch {
+            // Chỉ nhận đúng dạng [{value, count}] — tránh nhầm khi backend cũ trả về mảng mã.
+            const data = Array.isArray(res.data)
+                ? res.data.filter((d) => d && typeof d.value !== 'undefined' && typeof d.count === 'number')
+                : [];
+            setStock(data);
+        } catch (error) {
             setStock([]);
+            // Lộ lỗi thật (vd cột claimed_by chưa có / chưa chạy SQL) thay vì âm thầm báo "hết mã".
+            setNotification({ show: true, message: errorMessage(error, 'Không tải được kho mã.'), type: 'error' });
         }
     };
 
@@ -468,7 +474,7 @@ const CodeManager = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
                     <div className="p-5 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <div>
-                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã tôi đã lấy' : 'Danh sách mã'}</h3>
+                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã đã lấy' : 'Danh sách mã'}</h3>
                             <p className="text-xs text-gray-500 mt-0.5">{staffOnly ? 'Ghi chú "dùng làm gì" ngay tại đây.' : ''}</p>
                         </div>
                         <button

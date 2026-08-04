@@ -135,6 +135,28 @@ async function markCodeUsed(req, res, supabase) {
     return json(res, 200, { success: true, code: data });
 }
 
+// Xác thực + đảm bảo tài khoản CHƯA bị khóa (kiểm tra trực tiếp DB, không tin mỗi token).
+// -> Khóa tài khoản có hiệu lực NGAY, không phải chờ token 12h hết hạn.
+// Admin bootstrap (env) không có trong DB -> luôn hợp lệ.
+async function requireActiveUser(req, res, supabase) {
+    const claims = requireAuth(req);
+    if (!claims) {
+        json(res, 401, { success: false, message: 'Chưa đăng nhập hoặc phiên đã hết hạn.' });
+        return null;
+    }
+    const { data, error } = await supabase
+        .from('staff_accounts')
+        .select('active')
+        .eq('username', claims.u)
+        .maybeSingle();
+    if (error) throw error;
+    if (data && data.active === false) {
+        json(res, 403, { success: false, message: 'Tài khoản đã bị khóa.' });
+        return null;
+    }
+    return claims;
+}
+
 // Số lượng mã còn trong kho theo mệnh giá — CHỈ trả count, KHÔNG lộ chuỗi mã.
 // Nhân viên dùng để chọn mệnh giá khi "Lấy mã" mà không nhìn thấy mã nào.
 async function getStock(req, res, supabase) {
@@ -163,8 +185,8 @@ async function getStock(req, res, supabase) {
 // Nhân viên "lấy" 1 mã từ kho để đưa khách -> ghi claimed_by = nhân viên đó.
 // Đây là điểm truy vết "nhân viên nào dùng mã" (vì mã do admin tạo hàng loạt).
 async function claimCode(req, res, supabase) {
-    const claims = requireAuth(req);
-    if (!claims) return json(res, 401, { success: false, message: 'Chưa đăng nhập.' });
+    const claims = await requireActiveUser(req, res, supabase);
+    if (!claims) return undefined; // đã gửi 401/403 (chưa đăng nhập hoặc bị khóa)
 
     const value = Number(req.body?.value || 0);
     const nowIso = new Date().toISOString();
@@ -225,8 +247,8 @@ async function setCodeSession(req, res, supabase) {
 // Ghi chú "mã dùng làm gì" — nhân viên tự điền, sửa được bất cứ lúc nào (kể cả sau khi dùng).
 // QUYỀN: admin sửa mọi mã; nhân viên CHỈ sửa được mã do CHÍNH MÌNH lấy (claimed_by === mình).
 async function setCodeNote(req, res, supabase) {
-    const claims = requireAuth(req);
-    if (!claims) return json(res, 401, { success: false, message: 'Chưa đăng nhập.' });
+    const claims = await requireActiveUser(req, res, supabase);
+    if (!claims) return undefined; // chưa đăng nhập hoặc bị khóa
 
     const id = String(req.body?.id || '').trim();
     if (!id) return json(res, 400, { success: false, message: 'Thiếu ID mã thanh toán.' });
