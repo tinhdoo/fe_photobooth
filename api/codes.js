@@ -350,11 +350,14 @@ function guardAdmin(req, res) {
 }
 
 async function login(req, res, supabase) {
-    const username = String(req.body?.username || '').trim();
+    const rawUsername = String(req.body?.username || '').trim();
     const password = String(req.body?.password || '');
-    if (!username || !password) {
+    if (!rawUsername || !password) {
         return json(res, 400, { error: 'Vui lòng nhập tên đăng nhập và mật khẩu.' });
     }
+    // Username trong DB luôn là chữ thường (createStaff ép lower) -> tra cứu cũng hạ chữ thường
+    // để nhân viên gõ hoa/thường lệch vẫn đăng nhập được.
+    const username = rawUsername.toLowerCase();
 
     // 1) Tài khoản trong DB.
     const { data, error } = await supabase
@@ -382,9 +385,9 @@ async function login(req, res, supabase) {
     //    "phao cứu sinh"). Đặt ADMIN_USERNAME/ADMIN_PASSWORD trên Vercel.
     const envUser = globalThis.process?.env?.ADMIN_USERNAME;
     const envPass = globalThis.process?.env?.ADMIN_PASSWORD;
-    if (envUser && envPass && username === envUser && password === envPass) {
-        const token = signToken({ u: envUser, r: 'admin' });
-        return json(res, 200, { token, username: envUser, display_name: 'Quản trị', role: 'admin' });
+    if (envUser && envPass && username === String(envUser).trim().toLowerCase() && password === envPass) {
+        const token = signToken({ u: username, r: 'admin' });
+        return json(res, 200, { token, username, display_name: 'Quản trị', role: 'admin' });
     }
 
     return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
