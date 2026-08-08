@@ -44,6 +44,19 @@ const Result = () => {
         fetchViewUrl();
     }, [sessionId, finalImage]);
 
+    // Tự VỀ TRANG CHỦ nếu khách quét xong bỏ đi mà KHÔNG bấm nút: quá 5 phút ở màn QR -> resetSession
+    // (reload). Tránh booth kẹt ở màn QR lượt cũ -> giải phóng cho khách sau + để máy ảnh về nghỉ.
+    // Deps [] (mount 1 lần): KHÔNG phụ thuộc resetSession vì WorkflowContext re-render mỗi giây (đồng
+    // hồ phiên) sẽ đổi tham chiếu resetSession -> timer bị reset liên tục -> KHÔNG BAO GIỜ chạy. Closure
+    // cũ của resetSession vẫn đúng (nó đọc pendingMediaUpload ở cấp module, không qua closure). Bấm nút
+    // sớm hơn -> unmount -> timer tự huỷ.
+    useEffect(() => {
+        const AUTO_HOME_MS = 5 * 60 * 1000; // 5 phút
+        const timer = setTimeout(() => { resetSession(); }, AUTO_HOME_MS);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     return (
         <div
             className="flex h-full w-full flex-col items-center justify-center bg-[#FFF8E7] bg-cover bg-center p-8 font-serif"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket } from 'lucide-react';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket, Search } from 'lucide-react';
 import { authHeader, isStaffRole, getUsername } from '../../utils/auth';
 import { errorMessage } from '../../utils/errorMessage';
 
@@ -140,6 +140,24 @@ const CodeManager = () => {
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
     const stockTotal = stock.reduce((s, d) => s + d.count, 0);
+
+    // Lọc + tìm kiếm danh sách mã (tiện tra "mã nào đã lấy" mà không phải cuộn).
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all'); // all | stock | claimed | used | expired
+    const codeStatus = (c) => {
+        if (c.is_used) return 'used';
+        if (c.expires_at && new Date(c.expires_at) < new Date()) return 'expired';
+        if (c.claimed_by) return 'claimed';
+        return 'stock';
+    };
+    const filteredCodes = codes.filter((c) => {
+        if (statusFilter !== 'all' && codeStatus(c) !== statusFilter) return false;
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return String(c.code).toLowerCase().includes(q)
+            || String(c.claimed_by_name || c.claimed_by || '').toLowerCase().includes(q)
+            || String(c.note || '').toLowerCase().includes(q);
+    });
 
     const fetchStock = async () => {
         try {
@@ -474,26 +492,60 @@ const CodeManager = () => {
 
                 {/* --- 2. CODES LIST --- */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
-                    <div className="p-5 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <div>
-                            <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã đã lấy' : 'Danh sách mã'}</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">{staffOnly ? 'Ghi chú "dùng làm gì" ngay tại đây.' : ''}</p>
+                    <div className="p-5 md:p-6 border-b border-gray-100 bg-gray-50/50 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã đã lấy' : 'Danh sách mã'}</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">{staffOnly ? 'Ghi chú "dùng làm gì" ngay tại đây.' : `${filteredCodes.length}/${codes.length} mã`}</p>
+                            </div>
+                            <button
+                                onClick={() => { fetchCodes(); if (staffOnly) fetchStock(); }}
+                                className="p-2.5 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl text-gray-600 transition-all shadow-sm active:scale-95"
+                                title="Làm mới"
+                            >
+                                <RefreshCw size={18} />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => { fetchCodes(); if (staffOnly) fetchStock(); }}
-                            className="p-2.5 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl text-gray-600 transition-all shadow-sm active:scale-95"
-                            title="Làm mới"
-                        >
-                            <RefreshCw size={18} />
-                        </button>
+
+                        {/* Lọc + tìm kiếm */}
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="relative flex-1 min-w-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Tìm mã, tên nhân viên, ghi chú…"
+                                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-white text-sm"
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    { key: 'all', label: 'Tất cả' },
+                                    { key: 'claimed', label: 'Đã lấy' },
+                                    { key: 'stock', label: 'Trong kho' },
+                                    { key: 'used', label: 'Đã dùng' },
+                                    { key: 'expired', label: 'Hết hạn' },
+                                ].map((f) => (
+                                    <button
+                                        key={f.key}
+                                        type="button"
+                                        onClick={() => setStatusFilter(f.key)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                    >
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     {/* --- MOBILE VIEW: CARDS --- */}
                     <div className="md:hidden flex flex-col divide-y divide-gray-100">
-                        {codes.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400 italic">{staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có dữ liệu.'}</div>
+                        {filteredCodes.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 italic">{codes.length === 0 ? (staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có dữ liệu.') : 'Không có mã khớp bộ lọc.'}</div>
                         ) : (
-                            codes.map((code) => (
+                            filteredCodes.map((code) => (
                                 <div key={code.id} className="p-4 hover:bg-gray-50 transition-colors">
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
@@ -559,12 +611,12 @@ const CodeManager = () => {
                                 </tr>
                             </thead>
                             <tbody className="text-sm divide-y divide-gray-100">
-                                {codes.length === 0 ? (
+                                {filteredCodes.length === 0 ? (
                                     <tr>
-                                        <td colSpan="8" className="py-10 text-center text-gray-400 italic">{staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có mã nào được tạo.'}</td>
+                                        <td colSpan="8" className="py-10 text-center text-gray-400 italic">{codes.length === 0 ? (staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có mã nào được tạo.') : 'Không có mã khớp bộ lọc.'}</td>
                                     </tr>
                                 ) : (
-                                    codes.map((code) => (
+                                    filteredCodes.map((code) => (
                                         <tr key={code.id} className="hover:bg-gray-50/80 transition-colors group">
                                             <td className="py-4 pl-6">
                                                 <span className="font-mono font-bold text-[#1a1a2e] text-lg bg-gray-100/50 px-2 py-1 rounded">{code.code}</span>
