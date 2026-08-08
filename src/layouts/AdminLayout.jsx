@@ -41,8 +41,11 @@ const AdminLayout = () => {
         return item.to !== '/admin/bill-settings';
     });
 
-    // For bottom nav on mobile, pick the most important 4 items (which now starts with Codes)
-    const mobileNavItems = menuItems.filter(item => item.to !== '/admin/settings');
+    // Thanh nav dưới (mobile): bỏ Cài đặt (đã có riêng ở cuối) và "Giao diện" (ít dùng, đỡ chật).
+    // "Giao diện" vẫn có ở sidebar desktop.
+    const mobileNavItems = menuItems.filter(
+        (item) => item.to !== '/admin/settings' && item.to !== '/admin/branding'
+    );
 
     const handleLogout = () => {
         clearAuth();

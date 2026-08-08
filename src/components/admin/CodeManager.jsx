@@ -519,7 +519,7 @@ const CodeManager = () => {
                                     className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-white text-sm"
                                 />
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
                                 {[
                                     { key: 'all', label: 'Tất cả' },
                                     { key: 'claimed', label: 'Đã lấy' },
@@ -531,7 +531,7 @@ const CodeManager = () => {
                                         key={f.key}
                                         type="button"
                                         onClick={() => setStatusFilter(f.key)}
-                                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                        className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
                                     >
                                         {f.label}
                                     </button>
