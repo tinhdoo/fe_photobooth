@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { RefreshCw, UserPlus, User, Lock, ShieldCheck, KeyRound, CheckCircle, XCircle, Ban, Check } from 'lucide-react';
+import { RefreshCw, UserPlus, User, Lock, ShieldCheck, KeyRound, CheckCircle, XCircle, Ban, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { authHeader } from '../../utils/auth';
 import { errorMessage } from '../../utils/errorMessage';
 
@@ -13,6 +13,10 @@ const StaffManager = () => {
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
     const [resetFor, setResetFor] = useState(null); // { id, username }
     const [resetPwd, setResetPwd] = useState('');
+    const [renameFor, setRenameFor] = useState(null); // { id, username, display_name }
+    const [renameValue, setRenameValue] = useState('');
+    const [deleteFor, setDeleteFor] = useState(null); // { id, username, display_name }
+    const [busyDelete, setBusyDelete] = useState(false);
 
     const notify = (message, type = 'success') => setNotification({ show: true, message, type });
 
@@ -78,6 +82,35 @@ const StaffManager = () => {
             notify('Đã đổi mật khẩu.');
         } catch (error) {
             notify(errorMessage(error, 'Đổi mật khẩu thất bại.'), 'error');
+        }
+    };
+
+    const submitRename = async () => {
+        const name = renameValue.trim();
+        if (!name) { notify('Tên hiển thị không được để trống.', 'error'); return; }
+        try {
+            await axios.post('/api/codes', { action: 'staff-rename', id: renameFor.id, display_name: name }, { headers: authHeader() });
+            setStaff(prev => prev.map(s => (s.id === renameFor.id ? { ...s, display_name: name } : s)));
+            setRenameFor(null);
+            setRenameValue('');
+            notify('Đã đổi tên hiển thị.');
+        } catch (error) {
+            notify(errorMessage(error, 'Đổi tên thất bại.'), 'error');
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteFor) return;
+        setBusyDelete(true);
+        try {
+            await axios.post('/api/codes', { action: 'staff-delete', id: deleteFor.id }, { headers: authHeader() });
+            setStaff(prev => prev.filter(s => s.id !== deleteFor.id));
+            setDeleteFor(null);
+            notify('Đã xóa tài khoản.');
+        } catch (error) {
+            notify(errorMessage(error, 'Xóa tài khoản thất bại.'), 'error');
+        } finally {
+            setBusyDelete(false);
         }
     };
 
@@ -180,7 +213,14 @@ const StaffManager = () => {
                                         </div>
                                         <div className="text-sm text-gray-500 font-mono mt-0.5">@{acc.username}</div>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            onClick={() => { setRenameFor({ id: acc.id, username: acc.username, display_name: acc.display_name }); setRenameValue(acc.display_name || ''); }}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
+                                            title="Đổi tên hiển thị"
+                                        >
+                                            <Pencil size={15} /> Đổi tên
+                                        </button>
                                         <button
                                             onClick={() => { setResetFor({ id: acc.id, username: acc.username }); setResetPwd(''); }}
                                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
@@ -190,10 +230,17 @@ const StaffManager = () => {
                                         </button>
                                         <button
                                             onClick={() => toggleActive(acc)}
-                                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${acc.active ? 'text-red-600 bg-red-50 hover:bg-red-100' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${acc.active ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}
                                             title={acc.active ? 'Khóa tài khoản' : 'Mở khóa'}
                                         >
                                             {acc.active ? <><Ban size={15} /> Khóa</> : <><Check size={15} /> Mở</>}
+                                        </button>
+                                        <button
+                                            onClick={() => setDeleteFor({ id: acc.id, username: acc.username, display_name: acc.display_name })}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-all"
+                                            title="Xóa tài khoản"
+                                        >
+                                            <Trash2 size={15} /> Xóa
                                         </button>
                                     </div>
                                 </div>
@@ -220,6 +267,51 @@ const StaffManager = () => {
                         <div className="flex gap-3">
                             <button onClick={() => { setResetFor(null); setResetPwd(''); }} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">Hủy</button>
                             <button onClick={submitReset} className="flex-1 py-3 rounded-xl font-bold text-white bg-[#e63946] hover:bg-[#c1121f] flex items-center justify-center gap-2"><Check size={18} /> Lưu</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal đổi tên hiển thị */}
+            {renameFor && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-1">Đổi tên hiển thị</h3>
+                        <p className="text-sm text-gray-500 mb-4 font-mono">@{renameFor.username}</p>
+                        <input
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); }}
+                            placeholder="Tên hiển thị mới"
+                            maxLength={60}
+                            autoFocus
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white text-sm mb-4"
+                        />
+                        <div className="flex gap-3">
+                            <button onClick={() => { setRenameFor(null); setRenameValue(''); }} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">Hủy</button>
+                            <button onClick={submitRename} className="flex-1 py-3 rounded-xl font-bold text-white bg-[#e63946] hover:bg-[#c1121f] flex items-center justify-center gap-2"><Check size={18} /> Lưu</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal xác nhận xóa */}
+            {deleteFor && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 p-4 rounded-full bg-red-50 text-red-500"><AlertTriangle size={40} strokeWidth={2.5} /></div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">Xóa tài khoản?</h3>
+                            <p className="text-gray-500 mb-6">
+                                Xóa vĩnh viễn <span className="font-bold text-gray-800">{deleteFor.display_name}</span> (<span className="font-mono">@{deleteFor.username}</span>).<br />Hành động này không thể hoàn tác.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button onClick={() => setDeleteFor(null)} disabled={busyDelete} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-60">Hủy</button>
+                                <button onClick={confirmDelete} disabled={busyDelete} className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 flex items-center justify-center gap-2">
+                                    {busyDelete ? <RefreshCw className="animate-spin" size={18} /> : <Trash2 size={18} />} Xóa
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

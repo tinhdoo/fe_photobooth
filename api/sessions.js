@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { deleteR2Object } from '../lib/r2.js';
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
@@ -70,12 +71,35 @@ function buildSession(body) {
 
 function parseStoragePublicId(publicId) {
     const value = String(publicId || '').trim();
+    // Ảnh mới trên R2 có public_id dạng 'r2:booth/...' -> xử lý riêng, KHÔNG gộp vào path Supabase.
+    if (value.startsWith('r2:')) return null;
     const slashIndex = value.indexOf('/');
     if (slashIndex <= 0) return null;
     return {
         bucket: value.slice(0, slashIndex),
         path: value.slice(slashIndex + 1),
     };
+}
+
+// Thu các KEY R2 từ public_id 'r2:booth/...' (ảnh mới). Ảnh cũ (Supabase) không có prefix -> bỏ qua.
+function collectSessionR2Keys(session) {
+    const keys = new Set();
+    const add = (pid) => { const v = String(pid || ''); if (v.startsWith('r2:')) keys.add(v.slice(3)); };
+    add(session.composite_public_id);
+    add(session.gif_public_id);
+    (Array.isArray(session.photos) ? session.photos : []).forEach((p) => { add(p?.public_id); add(p?.video_public_id); });
+    const meta = session.meta_data || {};
+    add(meta.composite_public_id);
+    add(meta.video_public_id);
+    return Array.from(keys);
+}
+
+async function removeR2Keys(keys) {
+    let deleted = 0;
+    for (const key of keys) {
+        try { await deleteR2Object(key); deleted += 1; } catch { /* best-effort */ }
+    }
+    return deleted;
 }
 
 function collectSessionStoragePaths(session) {
@@ -141,6 +165,10 @@ async function purgeExpiredSession(supabase, row) {
         if (paths.length) await removeStoragePaths(supabase, bucket, paths);
     } catch { /* bỏ qua lỗi xoá storage */ }
     try {
+        const r2Keys = collectSessionR2Keys(row); // ảnh mới trên R2
+        if (r2Keys.length) await removeR2Keys(r2Keys);
+    } catch { /* bỏ qua lỗi xoá R2 */ }
+    try {
         if (row.status !== 'expired' && row.id != null) {
             await supabase.from('photo_sessions').update({ status: 'expired' }).eq('id', row.id);
         }
@@ -204,6 +232,11 @@ async function cleanupExpiredCloud(req, res, supabase) {
         // 3) Xóa ảnh của các session vừa xử lý NGAY (trước các bước quét tốn thời gian)
         //    để mỗi lần chạy đều dọn được dữ liệu, không phụ thuộc bước sau có kịp không.
         deletedStorageObjects += await removeStoragePaths(supabase, bucket, Array.from(sessionPaths));
+
+        // 3b) Xoá ảnh MỚI trên R2 (folder booth/) của các session vừa hết hạn.
+        const r2Keys = new Set();
+        for (const session of sessions) collectSessionR2Keys(session).forEach((k) => r2Keys.add(k));
+        if (r2Keys.size) deletedStorageObjects += await removeR2Keys(Array.from(r2Keys));
     }
 
     // 4) Dọn mobile_uploads cũ: xóa row staging + ảnh tương ứng.

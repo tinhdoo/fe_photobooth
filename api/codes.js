@@ -470,6 +470,47 @@ async function resetStaffPassword(req, res, supabase) {
     return json(res, 200, publicAccount(data));
 }
 
+async function renameStaff(req, res, supabase) {
+    if (!guardAdmin(req, res)) return undefined;
+    const id = String(req.body?.id || '').trim();
+    const displayName = String(req.body?.display_name || '').trim();
+    if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
+    if (!displayName) return json(res, 400, { error: 'Tên hiển thị không được để trống.' });
+    if (displayName.length > 60) return json(res, 400, { error: 'Tên hiển thị tối đa 60 ký tự.' });
+
+    const { data, error } = await supabase
+        .from('staff_accounts')
+        .update({ display_name: displayName })
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return json(res, 200, publicAccount(data));
+}
+
+async function deleteStaff(req, res, supabase) {
+    if (!guardAdmin(req, res)) return undefined;
+    const id = String(req.body?.id || '').trim();
+    if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
+
+    // Chặn xóa admin cuối cùng còn hoạt động -> tránh tự khóa mình khỏi hệ thống.
+    const { data: target } = await supabase.from('staff_accounts').select('role').eq('id', id).single();
+    if (target?.role === 'admin') {
+        const { count } = await supabase
+            .from('staff_accounts')
+            .select('id', { count: 'exact', head: true })
+            .eq('role', 'admin')
+            .eq('active', true);
+        if ((count || 0) <= 1) {
+            return json(res, 400, { error: 'Không thể xóa tài khoản Quản trị cuối cùng.' });
+        }
+    }
+
+    const { error } = await supabase.from('staff_accounts').delete().eq('id', id);
+    if (error) throw error;
+    return json(res, 200, { success: true });
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -493,6 +534,8 @@ export default async function handler(req, res) {
             if (action === 'staff-create') return createStaff(req, res, supabase);
             if (action === 'staff-toggle') return toggleStaff(req, res, supabase);
             if (action === 'staff-reset') return resetStaffPassword(req, res, supabase);
+            if (action === 'staff-rename') return renameStaff(req, res, supabase);
+            if (action === 'staff-delete') return deleteStaff(req, res, supabase);
             return json(res, 400, { error: 'Invalid action' });
         }
 

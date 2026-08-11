@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { photosUseR2, putR2Object, r2PublicUrl } from '../lib/r2.js';
 
 export const config = {
     api: {
@@ -75,11 +76,51 @@ export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
     try {
-        const supabase = getSupabaseAdmin();
-        const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
-        const bucket = await resolveBucket(supabase);
+        if (req.method === 'POST') {
+            const { files } = await parseForm(req);
+            const file = firstValue(files.file);
+            if (!file) return json(res, 400, { error: 'Missing file' });
+
+            const extension = cleanExtension(file.originalFilename, file.mimetype);
+            // Đường dẫn có random -> khó đoán (public bucket + xoá sau 48h theo hạn album).
+            const objectPath = `booth/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+            const buffer = await fs.readFile(file.filepath);
+            const contentType = file.mimetype || 'application/octet-stream';
+
+            // Ưu tiên R2 (egress miễn phí) khi PHOTO_STORAGE=r2 + cấu hình đủ. Lỗi -> fallback Supabase
+            // để KHÁCH luôn có ảnh. public_id 'r2:...' để cron cleanup xoá đúng nguồn.
+            if (photosUseR2()) {
+                try {
+                    await putR2Object(objectPath, buffer, contentType);
+                    return json(res, 201, {
+                        success: true,
+                        url: r2PublicUrl(objectPath),
+                        public_id: `r2:${objectPath}`,
+                    });
+                } catch (r2err) {
+                    console.error('R2 upload failed, fallback Supabase:', r2err?.message || r2err);
+                }
+            }
+
+            // Supabase (mặc định / fallback)
+            const supabase = getSupabaseAdmin();
+            const bucket = await resolveBucket(supabase);
+            await uploadToBucket(supabase, bucket, objectPath, buffer, { contentType, upsert: false });
+
+            const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+            const { data: signedData } = await supabase.storage.from(bucket).createSignedUrl(objectPath, 72 * 60 * 60);
+
+            return json(res, 201, {
+                success: true,
+                url: signedData?.signedUrl || publicData.publicUrl,
+                public_id: `${bucket}/${objectPath}`,
+            });
+        }
 
         if (req.method === 'GET') {
+            const supabase = getSupabaseAdmin();
+            const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
+            const bucket = await resolveBucket(supabase);
             const { data, error } = await supabase.storage.listBuckets();
             if (error) throw error;
 
@@ -88,37 +129,11 @@ export default async function handler(req, res) {
                 bucket,
                 exists: Array.isArray(data) && data.some((item) => item.name === bucket),
                 buckets: Array.isArray(data) ? data.map((item) => item.name) : [],
+                photos_storage: photosUseR2() ? 'r2' : 'supabase',
             });
         }
 
-        if (req.method !== 'POST') return methodNotAllowed(res);
-
-        const { files } = await parseForm(req);
-        const file = firstValue(files.file);
-        if (!file) return json(res, 400, { error: 'Missing file' });
-
-        const extension = cleanExtension(file.originalFilename, file.mimetype);
-        const objectPath = `booth/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
-        const buffer = await fs.readFile(file.filepath);
-
-        await uploadToBucket(supabase, bucket, objectPath, buffer, {
-                contentType: file.mimetype || 'application/octet-stream',
-                upsert: false,
-        });
-
-        const { data: publicData } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(objectPath);
-
-        const { data: signedData } = await supabase.storage
-            .from(bucket)
-            .createSignedUrl(objectPath, 72 * 60 * 60);
-
-        return json(res, 201, {
-            success: true,
-            url: signedData?.signedUrl || publicData.publicUrl,
-            public_id: `${bucket}/${objectPath}`,
-        });
+        return methodNotAllowed(res);
     } catch (error) {
         console.error('Cloud upload failed:', error);
         return json(res, 500, { error: error.message || 'Cloud upload failed' });
