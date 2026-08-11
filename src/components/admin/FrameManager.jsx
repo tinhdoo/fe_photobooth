@@ -1,14 +1,39 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp } from 'lucide-react';
+import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images } from 'lucide-react';
 import { LAYOUTS } from '../../data/layouts';
 import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
+import { makeThumbnailBlob } from '../../utils/imageThumb';
 import ConfirmDialog from './ConfirmDialog';
 import IconManager from './IconManager';
 
 import { FRAME_API_URL } from '../../config/api';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
+
+// API MỚI luôn trả về trường 'thumb_url' (kể cả null). API CŨ (chưa deploy) KHÔNG có trường này.
+// Dùng để KHÔNG gọi upload thumbnail nhầm vào API cũ — vì API cũ coi POST lạ là uploadFrame và sẽ
+// tạo ra "frame rác" tên thumb.png.
+const framesSupportThumb = (list) => list.length > 0 && Object.prototype.hasOwnProperty.call(list[0], 'thumb_url');
+
+// Tạo thumbnail từ nguồn (File hoặc URL) rồi upload lên `/api/frames?resource=thumb`.
+// Lỗi ở bước này KHÔNG được làm hỏng luồng chính (grid tự fallback về ảnh gốc) -> chỉ log.
+async function uploadThumbFromSource(layout, name, source) {
+    try {
+        const blob = await makeThumbnailBlob(source, 400);
+        const form = new FormData();
+        form.append('file', blob, 'thumb.png');
+        await axios.post(
+            frameApiPath(`/api/frames?resource=thumb&layout=${encodeURIComponent(layout)}&name=${encodeURIComponent(name)}`),
+            form,
+            { headers: { 'Content-Type': 'multipart/form-data' } },
+        );
+        return true;
+    } catch (err) {
+        console.warn('[thumb] không tạo được thumbnail cho', name, err?.message || err);
+        return false;
+    }
+}
 
 const FrameManager = () => {
     const [frames, setFrames] = useState([]);
@@ -35,6 +60,7 @@ const FrameManager = () => {
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const [topFrames, setTopFrames] = useState([]);
     const [topFramesLoading, setTopFramesLoading] = useState(true);
+    const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0 });
 
     const filteredLayouts = LAYOUTS.filter(l => activeTab === 'upload' ? l.isMobileOnly : !l.isMobileOnly);
 
@@ -81,6 +107,37 @@ const FrameManager = () => {
         }
     };
 
+    // Tạo bù thumbnail cho frame CŨ (đã upload trước khi có tính năng này) của layout đang xem.
+    // Chạy tuần tự trong trình duyệt: tải ảnh gốc -> thu nhỏ -> upload. Frame nào lỗi thì bỏ qua
+    // (grid vẫn hiển thị bằng ảnh gốc). Chỉ cần bấm 1 lần cho mỗi layout.
+    const handleBackfillThumbnails = async () => {
+        if (!framesSupportThumb(frames)) {
+            setNotification({ show: true, message: 'Cần deploy bản mới (API hỗ trợ thumbnail) trước đã.', type: 'info' });
+            return;
+        }
+        const missing = frames.filter((f) => !f.thumb_url);
+        if (missing.length === 0) {
+            setNotification({ show: true, message: 'Tất cả frame ở layout này đã có thumbnail.', type: 'success' });
+            return;
+        }
+        setBackfill({ running: true, done: 0, total: missing.length });
+        let ok = 0;
+        for (let i = 0; i < missing.length; i++) {
+            const f = missing[i];
+            // eslint-disable-next-line no-await-in-loop
+            const success = await uploadThumbFromSource(f.layout || selectedLayout, f.name, f.url);
+            if (success) ok += 1;
+            setBackfill({ running: true, done: i + 1, total: missing.length });
+        }
+        setBackfill({ running: false, done: 0, total: 0 });
+        await fetchFrames({ showLoading: false });
+        setNotification({
+            show: true,
+            message: `Đã tạo thumbnail cho ${ok}/${missing.length} frame.`,
+            type: ok === missing.length ? 'success' : 'info',
+        });
+    };
+
     const handleUpload = async (e) => {
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
@@ -94,9 +151,15 @@ const FrameManager = () => {
                 formData.append('layout', selectedLayout);
 
                 try {
-                    await axios.post(frameApiPath('/api/frames'), formData, {
+                    const res = await axios.post(frameApiPath('/api/frames'), formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
+                    // Tạo thumbnail ngay từ chính file vừa chọn (không phải tải lại ảnh gốc).
+                    // Chỉ làm khi API đã hỗ trợ thumbnail (tránh tạo frame rác trên API cũ).
+                    if (framesSupportThumb(frames)) {
+                        const savedName = res?.data?.name || file.name;
+                        await uploadThumbFromSource(selectedLayout, savedName, file);
+                    }
                 } catch (err) {
                     if (err.response?.status === 409) {
                         duplicates.push(file.name);
@@ -540,6 +603,27 @@ const FrameManager = () => {
                     )
                 }
 
+                {/* Banner tạo bù thumbnail — chỉ hiện khi API đã hỗ trợ thumbnail VÀ còn frame thiếu */}
+                {!framesLoading && framesSupportThumb(frames) && frames.some((f) => !f.thumb_url) && (
+                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 animate-fadeIn">
+                        <Images size={18} className="text-amber-600 shrink-0" />
+                        <span className="text-sm font-medium text-amber-800">
+                            {backfill.running
+                                ? `Đang tạo thumbnail... ${backfill.done}/${backfill.total}`
+                                : `${frames.filter((f) => !f.thumb_url).length} khung chưa có ảnh thu nhỏ nên tải chậm hơn.`}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleBackfillThumbnails}
+                            disabled={backfill.running}
+                            className="ml-auto inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {backfill.running ? <Loader2 size={16} className="animate-spin" /> : <Images size={16} />}
+                            {backfill.running ? 'Đang xử lý...' : 'Tạo ảnh thu nhỏ'}
+                        </button>
+                    </div>
+                )}
+
                 {/* Frames Grid */}
                 {
                     framesLoading ? (
@@ -554,6 +638,10 @@ const FrameManager = () => {
                                 return (
                                     <div
                                         key={frame.id}
+                                        // content-visibility: bỏ qua giải mã/vẽ các card NGOÀI màn hình
+                                        // -> mở grid nhiều frame nhẹ hơn hẳn. 'auto 340px' giữ chỗ để
+                                        // thanh cuộn không nhảy.
+                                        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 340px' }}
                                         className={`group relative bg-white rounded-2xl overflow-hidden
                                             transition-all duration-300
                                             hover:-translate-y-1 hover:shadow-xl cursor-pointer
@@ -632,7 +720,7 @@ const FrameManager = () => {
                                             />
 
                                             <img
-                                                src={frame.url}
+                                                src={frame.thumb_url || frame.url}
                                                 alt={frame.name}
                                                 loading="lazy"
                                                 decoding="async"

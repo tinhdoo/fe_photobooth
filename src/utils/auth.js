@@ -51,9 +51,10 @@ export function getDisplayName() {
 }
 
 // Giải mã phần payload của token (chỉ để đọc exp phía client, KHÔNG dùng để xác thực).
+// JWT = header.payload.signature -> exp nằm ở PAYLOAD (phần [1]), KHÔNG phải header [0].
 function decodeExp(token) {
     try {
-        let p = String(token).split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+        let p = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         while (p.length % 4) p += '=';
         return JSON.parse(atob(p))?.exp || null;
     } catch {

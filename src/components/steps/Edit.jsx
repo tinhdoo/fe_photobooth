@@ -1351,14 +1351,16 @@ const Edit = () => {
                         {/* Options - Compact Side-by-Side Design */}
                         <div className="flex gap-3 pt-5 w-full border-t border-[#7B5E43]/20">
 
-                            {/* QR Code Card */}
-                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${qrSettings.show ? 'bg-[#7B5E43]/5 border-[#7B5E43]/30' : 'bg-white/40 border-transparent grayscale brightness-95 opacity-60'}`}>
+                            {/* QR Code Card — khi CHƯA thêm QR: card hổ phách + nhấp nháy để NHẮC khách
+                                (đừng làm mờ như cũ). Khi đã thêm: về trạng thái nâu bình thường. */}
+                            <div className={`flex-1 transition-all duration-300 rounded-xl border flex flex-col ${qrSettings.show ? 'bg-[#7B5E43]/5 border-[#7B5E43]/30' : 'bg-amber-50 border-amber-300 ring-1 ring-amber-200 animate-pulse'}`}>
                                 <div className="flex items-center justify-between px-2.5 py-2 cursor-pointer" onClick={() => setQrSettings({ ...qrSettings, show: !qrSettings.show })}>
                                     <div className="flex items-center gap-1.5">
-                                        <div className={`p-1 rounded-md transition-colors ${qrSettings.show ? 'bg-[#7B5E43] text-white' : 'bg-gray-400 text-white'}`}>
+                                        <div className={`p-1 rounded-md transition-colors ${qrSettings.show ? 'bg-[#7B5E43] text-white' : 'bg-amber-400 text-white'}`}>
                                             <Monitor size={12} />
                                         </div>
-                                        <span className={`font-bold text-[10px] ${qrSettings.show ? 'text-[#7B5E43]' : 'text-gray-500'}`}>MÃ QR</span>
+                                        <span className={`font-bold text-[10px] ${qrSettings.show ? 'text-[#7B5E43]' : 'text-amber-600'}`}>MÃ QR</span>
+                                        {!qrSettings.show && <span className="text-[8px] font-bold text-amber-500">• bấm để tải ảnh</span>}
                                     </div>
                                     <div className={`w-7 h-3.5 rounded-full relative transition-colors ${qrSettings.show ? 'bg-[#7B5E43]' : 'bg-gray-300'}`}>
                                         <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all shadow-sm`} style={{ left: qrSettings.show ? 'calc(100% - 2.5px - 10px)' : '2px' }} />

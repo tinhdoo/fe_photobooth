@@ -117,6 +117,11 @@ function iconPrefix(layout, name) {
     return `frames/${layout}/${name}.icon.`;
 }
 
+// Thumbnail (bản thu nhỏ ~400px) để grid tải nhẹ. Lưu cạnh frame: `<name>.thumb.<ext>`.
+function thumbPrefix(layout, name) {
+    return `frames/${layout}/${name}.thumb.`;
+}
+
 async function listFrames(req, res, supabase, bucket) {
     const layout = cleanLayout(req.query.layout);
     if (!layout) return json(res, 400, { error: 'Missing layout' });
@@ -132,27 +137,34 @@ async function listFrames(req, res, supabase, bucket) {
 
     const files = Array.isArray(data) ? data : [];
     const icons = new Map();
+    const thumbs = new Map();
     files.forEach((item) => {
         const name = item.name || '';
-        const marker = '.icon.';
-        const markerIndex = name.indexOf(marker);
-        if (markerIndex > 0) {
-            icons.set(name.slice(0, markerIndex), name);
+        const iconIndex = name.indexOf('.icon.');
+        if (iconIndex > 0) {
+            icons.set(name.slice(0, iconIndex), name);
+        }
+        const thumbIndex = name.indexOf('.thumb.');
+        if (thumbIndex > 0) {
+            thumbs.set(name.slice(0, thumbIndex), name);
         }
     });
 
     const frames = files
         .filter((item) => {
             const name = item.name || '';
-            return item.id && !name.endsWith('.config.json') && !name.includes('.icon.');
+            return item.id && !name.endsWith('.config.json') && !name.includes('.icon.') && !name.includes('.thumb.');
         })
         .map((item) => {
             const name = item.name;
             const objectPath = framePath(layout, name);
             const iconName = icons.get(name);
+            const thumbName = thumbs.get(name);
             const frameVersion = item.updated_at || item.created_at || Date.now();
             const iconItem = iconName ? files.find((file) => file.name === iconName) : null;
             const iconVersion = iconItem?.updated_at || iconItem?.created_at || frameVersion;
+            const thumbItem = thumbName ? files.find((file) => file.name === thumbName) : null;
+            const thumbVersion = thumbItem?.updated_at || thumbItem?.created_at || frameVersion;
             const frameUrl = withVersion(publicUrl(supabase, bucket, objectPath), frameVersion);
             return {
                 id: `${layout}-${name}`,
@@ -160,6 +172,8 @@ async function listFrames(req, res, supabase, bucket) {
                 layout,
                 url: frameUrl,
                 image: frameUrl,
+                // Bản nhỏ cho grid; null nếu frame cũ chưa có -> frontend tự fallback về url gốc.
+                thumb_url: thumbName ? withVersion(publicUrl(supabase, bucket, framePath(layout, thumbName)), thumbVersion) : null,
                 icon_url: iconName ? withVersion(publicUrl(supabase, bucket, framePath(layout, iconName)), iconVersion) : null,
                 created_at: item.created_at,
                 updated_at: item.updated_at,
@@ -276,15 +290,42 @@ async function uploadIcon(req, res, supabase, bucket, layout, name) {
     return json(res, 200, { success: true, icon_url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()) });
 }
 
+// Lưu thumbnail (bản thu nhỏ) do client tạo sẵn. Dùng cho cả upload mới lẫn tạo bù frame cũ.
+async function uploadThumb(req, res, supabase, bucket, layout, name) {
+    if (!layout || !name) return json(res, 400, { error: 'Missing layout or name' });
+    const { files } = await parseForm(req);
+    const file = firstValue(files.file);
+    if (!file) return json(res, 400, { error: 'Missing file' });
+
+    const extension = cleanExtension(file.originalFilename, file.mimetype);
+    const objectPath = `${thumbPrefix(layout, name)}${extension}`;
+    const buffer = await fs.readFile(file.filepath);
+
+    const { error } = await supabase.storage
+        .from(bucket)
+        .upload(objectPath, buffer, {
+            contentType: file.mimetype || 'image/png',
+            upsert: true,
+        });
+
+    if (error) throw error;
+    await bumpFrameRevision(supabase, layout);
+    return json(res, 200, { success: true, thumb_url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()) });
+}
+
 async function deleteFrame(req, res, supabase, bucket, layout, name) {
+    // Liệt kê cả icon lẫn thumbnail đi kèm frame để xoá sạch.
     const { data } = await supabase.storage
         .from(bucket)
-        .list(`frames/${layout}`, { search: `${name}.icon.`, limit: 20 });
+        .list(`frames/${layout}`, { limit: 1000 });
 
     const paths = [framePath(layout, name), configPath(layout, name)];
     if (Array.isArray(data)) {
         data.forEach((item) => {
-            if ((item.name || '').startsWith(`${name}.icon.`)) paths.push(framePath(layout, item.name));
+            const itemName = item.name || '';
+            if (itemName.startsWith(`${name}.icon.`) || itemName.startsWith(`${name}.thumb.`)) {
+                paths.push(framePath(layout, itemName));
+            }
         });
     }
 
@@ -384,6 +425,7 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             if (resource === 'config') return saveConfig(req, res, supabase, bucket, layout, name);
             if (resource === 'icon') return uploadIcon(req, res, supabase, bucket, layout, name);
+            if (resource === 'thumb') return uploadThumb(req, res, supabase, bucket, layout, name);
             return uploadFrame(req, res, supabase, bucket);
         }
 
