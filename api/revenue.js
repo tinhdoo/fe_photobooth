@@ -194,7 +194,7 @@ async function hardResetRevenueData(supabase) {
     };
 }
 
-async function listStorageSessions(supabase, startDate = '', endDate = '') {
+async function listStorageSessions(supabase, startDate = '', endDate = '', dbUuids = null) {
     const bucket = await resolveBucket(supabase);
     // Session được ghi CẢ vào bảng photo_sessions (đã phân trang đầy đủ ở listDbSessions) LẪN storage
     // JSON -> nguồn storage này chỉ là BẢN TRÙNG (dedup theo uuid trong mergeTransactions). Vì vậy KHÔNG
@@ -224,6 +224,11 @@ async function listStorageSessions(supabase, startDate = '', endDate = '') {
             if (Number.isNaN(t)) return true; // không rõ thời điểm -> giữ lại cho an toàn
             return t >= lo && t <= hi;
         });
+    }
+
+    // Bỏ qua file mà DB ĐÃ CÓ (dedup) -> không tải lại bản trùng. DB đầy đủ => gần như 0 file tải.
+    if (dbUuids && dbUuids.size) {
+        files = files.filter((file) => !dbUuids.has(file.name.replace(/\.json$/, '')));
     }
 
     const rows = await Promise.all(files.map(async (file) => {
@@ -498,13 +503,16 @@ export default async function handler(req, res) {
         const endDate = req.query?.endDate || '';
         const paymentMethod = req.query?.paymentMethod || '';
 
-        const [payments, dbSessions, storageSessions, revenueResetAt, hiddenBooths] = await Promise.all([
+        const [payments, dbSessions, revenueResetAt, hiddenBooths] = await Promise.all([
             listPaymentTransactions(supabase, startDate, endDate),
             listDbSessions(supabase, startDate, endDate),
-            listStorageSessions(supabase, startDate, endDate),
             readRevenueResetAt(supabase),
             readHiddenBooths(supabase),
         ]);
+        // Storage session chỉ là BẢN TRÙNG của DB -> chỉ tải file mà DB CHƯA có (uuid).
+        // DB đầy đủ => 0 file phải tải (thay vì cả trăm/nghìn) mà KHÔNG mất giao dịch nào.
+        const dbUuids = new Set(dbSessions.map((s) => String(s.id)));
+        const storageSessions = await listStorageSessions(supabase, startDate, endDate, dbUuids);
 
         const hiddenSet = new Set(hiddenBooths.map(String));
         const transactions = mergeTransactions(payments, dbSessions, storageSessions)
