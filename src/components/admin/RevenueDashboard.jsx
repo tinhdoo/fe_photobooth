@@ -70,6 +70,31 @@ const RevenueDashboard = () => {
     const [editingDevice, setEditingDevice] = useState(null);
     const [editNameValue, setEditNameValue] = useState('');
 
+    // Hiển thị danh sách giao dịch theo LÔ (cuộn tới đâu hiện thêm) -> tránh render hàng nghìn dòng
+    // một lúc gây lag. Các TỔNG/biểu đồ vẫn tính trên TOÀN BỘ stats.transactions -> không sai số liệu.
+    const TX_PAGE_SIZE = 20;
+    const [visibleCount, setVisibleCount] = useState(TX_PAGE_SIZE);
+    const loadMoreRef = useRef(null);
+
+    // Dữ liệu đổi (fetch/lọc mới) -> hiển thị lại từ lô đầu.
+    useEffect(() => { setVisibleCount(TX_PAGE_SIZE); }, [stats.transactions]);
+
+    // Cuộn gần cuối danh sách -> tự nạp thêm 1 lô (infinite scroll). Preload trước 300px.
+    useEffect(() => {
+        const el = loadMoreRef.current;
+        const total = stats.transactions?.length || 0;
+        if (!el || visibleCount >= total) return;
+        const io = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting) {
+                setVisibleCount((c) => Math.min(c + TX_PAGE_SIZE, total));
+            }
+        }, { rootMargin: '300px' });
+        io.observe(el);
+        return () => io.disconnect();
+    }, [visibleCount, stats.transactions]);
+
+    const visibleTransactions = (stats.transactions || []).slice(0, visibleCount);
+
     // Lấy danh sách booth (để map device_id -> tên booth)
     const fetchDevices = () => {
         axios.get(apiPath('/api/devices'))
@@ -855,7 +880,7 @@ const RevenueDashboard = () => {
                         {/* Mobile Cards View */}
                         <div className="md:hidden flex flex-col divide-y divide-gray-100">
                             {stats.transactions?.length > 0 ? (
-                                stats.transactions.map((tx) => (
+                                visibleTransactions.map((tx) => (
                                     <div key={tx.id} className={`px-4 py-3 flex flex-col gap-1.5 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
                                         {/* Hàng 1: phương thức + giá trị */}
                                         <div className="flex items-center justify-between gap-3">
@@ -906,7 +931,7 @@ const RevenueDashboard = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {stats.transactions?.length > 0 ? (
-                                        stats.transactions.map((tx) => (
+                                        visibleTransactions.map((tx) => (
                                             <tr key={tx.id} className={`transition-colors group ${getMethodStyle(tx).row}`}>
                                                 <td className="pl-8 pr-4 py-6">
                                                     {methodBadge(tx)}
@@ -959,6 +984,19 @@ const RevenueDashboard = () => {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Cuộn tới đây -> tự nạp thêm 1 lô; kèm nút bấm dự phòng. Chỉ hiện khi còn dòng chưa hiển thị. */}
+                        {stats.transactions?.length > visibleCount && (
+                            <div ref={loadMoreRef} className="flex items-center justify-center border-t border-gray-100 py-5">
+                                <button
+                                    type="button"
+                                    onClick={() => setVisibleCount((c) => Math.min(c + TX_PAGE_SIZE, stats.transactions.length))}
+                                    className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-200"
+                                >
+                                    Tải thêm · đang hiện {visibleCount}/{stats.transactions.length}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

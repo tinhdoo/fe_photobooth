@@ -194,7 +194,7 @@ async function hardResetRevenueData(supabase) {
     };
 }
 
-async function listStorageSessions(supabase) {
+async function listStorageSessions(supabase, startDate = '', endDate = '') {
     const bucket = await resolveBucket(supabase);
     // Session được ghi CẢ vào bảng photo_sessions (đã phân trang đầy đủ ở listDbSessions) LẪN storage
     // JSON -> nguồn storage này chỉ là BẢN TRÙNG (dedup theo uuid trong mergeTransactions). Vì vậy KHÔNG
@@ -209,7 +209,23 @@ async function listStorageSessions(supabase) {
 
     if (error) return [];
 
-    const files = Array.isArray(data) ? data.filter((item) => item.name?.endsWith('.json')) : [];
+    let files = Array.isArray(data) ? data.filter((item) => item.name?.endsWith('.json')) : [];
+
+    // ĐIỂM NẶNG NHẤT: trước đây tải HẾT tới 1000 file JSON mỗi lần mở dashboard. Storage session
+    // chỉ là BẢN TRÙNG của DB (dedup theo uuid) và sẽ bị inRange lọc bỏ nếu ngoài khoảng ->
+    // chỉ tải file NẰM TRONG khoảng ngày (theo created_at của object, có đệm 1 ngày cận dưới cho
+    // chắc). Khoảng hẹp -> từ ~1000 file xuống còn vài file.
+    const startBuf = bufferBefore(startDate);
+    if (startBuf || endDate) {
+        const lo = startBuf ? new Date(startBuf).getTime() : -Infinity;
+        const hi = endDate ? new Date(endDate).getTime() : Infinity;
+        files = files.filter((file) => {
+            const t = new Date(file.created_at || file.updated_at || 0).getTime();
+            if (Number.isNaN(t)) return true; // không rõ thời điểm -> giữ lại cho an toàn
+            return t >= lo && t <= hi;
+        });
+    }
+
     const rows = await Promise.all(files.map(async (file) => {
         const { data: blob, error: downloadError } = await supabase.storage
             .from(bucket)
@@ -250,27 +266,49 @@ async function fetchAllPaged(buildPage, pageSize = 1000, maxPages = 500) {
     return all;
 }
 
-async function listDbSessions(supabase) {
-    const rows = await fetchAllPaged((from, to) => supabase
-        .from('photo_sessions')
-        .select('id, uuid, payment_method, amount, meta_data, status, created_at')
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
-        .range(from, to));
+async function listDbSessions(supabase, startDate = '', endDate = '') {
+    // txDate session = created_at (chính xác) -> lọc created_at là an toàn tuyệt đối, không sót.
+    const rows = await fetchAllPaged((from, to) => {
+        let q = supabase
+            .from('photo_sessions')
+            .select('id, uuid, payment_method, amount, meta_data, status, created_at');
+        if (startDate) q = q.gte('created_at', startDate);
+        if (endDate) q = q.lte('created_at', endDate);
+        return q
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
+            .range(from, to);
+    });
 
     return rows
         .map((session) => normalizeSessionTransaction(session, 'db-session'))
         .filter((session) => session.id);
 }
 
-async function listPaymentTransactions(supabase) {
-    const rows = await fetchAllPaged((from, to) => supabase
-        .from('payments')
-        .select('*')
-        .eq('status', 'paid')
-        .order('paid_at', { ascending: false, nullsFirst: false })
-        .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
-        .range(from, to));
+// Đệm cận dưới 1 ngày: payments có created_at <= paid_at (txDate). Nếu lọc created_at đúng bằng
+// startDate có thể sót QR tạo trước nhưng trả trong khoảng. Nới 1 ngày là quá đủ (QR trả ngay).
+function bufferBefore(iso, ms = 24 * 60 * 60 * 1000) {
+    if (!iso) return '';
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? '' : new Date(t - ms).toISOString();
+}
+
+async function listPaymentTransactions(supabase, startDate = '', endDate = '') {
+    // txDate payment = paid_at || created_at. Lọc created_at (luôn có) với đệm 1 ngày cận dưới ->
+    // giảm mạnh số dòng phải nạp mà KHÔNG sót doanh thu (inRange chốt lại chính xác sau).
+    const startBuf = bufferBefore(startDate);
+    const rows = await fetchAllPaged((from, to) => {
+        let q = supabase
+            .from('payments')
+            .select('*')
+            .eq('status', 'paid');
+        if (startBuf) q = q.gte('created_at', startBuf);
+        if (endDate) q = q.lte('created_at', endDate);
+        return q
+            .order('paid_at', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: false }) // tiebreaker -> total order, tránh trùng/sót ở ranh giới trang
+            .range(from, to);
+    });
 
     return rows.map((payment) => {
         const payload = normalizeMeta(payment.raw_payload);
@@ -461,9 +499,9 @@ export default async function handler(req, res) {
         const paymentMethod = req.query?.paymentMethod || '';
 
         const [payments, dbSessions, storageSessions, revenueResetAt, hiddenBooths] = await Promise.all([
-            listPaymentTransactions(supabase),
-            listDbSessions(supabase),
-            listStorageSessions(supabase),
+            listPaymentTransactions(supabase, startDate, endDate),
+            listDbSessions(supabase, startDate, endDate),
+            listStorageSessions(supabase, startDate, endDate),
             readRevenueResetAt(supabase),
             readHiddenBooths(supabase),
         ]);
