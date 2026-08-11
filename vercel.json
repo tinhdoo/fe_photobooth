@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "regions": ["sin1"],
   "functions": {
     "api/sessions.js": { "maxDuration": 60 },
     "api/codes.js": { "maxDuration": 60 }
