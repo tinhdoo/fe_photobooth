@@ -38,6 +38,9 @@ async function uploadThumbFromSource(layout, name, source) {
 const FrameManager = () => {
     const [frames, setFrames] = useState([]);
     const [framesLoading, setFramesLoading] = useState(true);
+    // Cache frame theo từng layout -> chuyển tab đã xem thì hiện lại NGAY (không tải lại/spinner),
+    // đồng thời làm mới ngầm để dữ liệu vẫn cập nhật (stale-while-revalidate).
+    const [framesByLayout, setFramesByLayout] = useState({});
     const [uploading, setUploading] = useState(false);
     const [selectedLayout, setSelectedLayout] = useState(LAYOUTS[0].id);
     const [editingFrame, setEditingFrame] = useState(null);
@@ -74,8 +77,16 @@ const FrameManager = () => {
     });
 
     useEffect(() => {
-        fetchFrames();
         setSelectedFrames(new Set()); // Reset selection on layout change
+        const cached = framesByLayout[selectedLayout];
+        if (cached) {
+            // Đã xem layout này -> hiện lại NGAY từ cache, KHÔNG gọi lại API (tiết kiệm request).
+            // Dữ liệu vẫn đúng trong phiên vì mỗi lần upload/xoá/backfill đều cập nhật cache.
+            setFrames(cached);
+            setFramesLoading(false);
+        } else {
+            fetchFrames();                 // lần đầu vào layout này -> tải + spinner
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedLayout]);
 
@@ -99,7 +110,9 @@ const FrameManager = () => {
             const res = await axios.get(frameApiPath('/api/frames'), {
                 params: { layout: selectedLayout }
             });
-            setFrames(Array.isArray(res.data) ? res.data : []);
+            const list = Array.isArray(res.data) ? res.data : [];
+            setFrames(list);
+            setFramesByLayout((prev) => ({ ...prev, [selectedLayout]: list })); // cập nhật cache layout này
         } catch (error) {
             console.error("Error fetching frames:", error);
         } finally {
