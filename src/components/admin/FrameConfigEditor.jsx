@@ -4,6 +4,7 @@ import { X, Save, RotateCw, RefreshCw, Copy, Clipboard, Wand2, CheckCircle, XCir
 import { LAYOUTS } from '../../data/layouts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { detectFrameSlots, analyzeColorFrame, samplePixelColor } from '../../utils/frameDetection';
+import { makeThumbnailBlob } from '../../utils/imageThumb';
 import ConfirmDialog from './ConfirmDialog';
 
 import { FRAME_API_URL } from '../../config/api';
@@ -169,6 +170,18 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                     frameApiPath(`/api/frames?resource=overlay&layout=${encodeURIComponent(frame.layout)}&name=${encodeURIComponent(frame.name)}`),
                     fd
                 );
+                // Tạo LẠI thumbnail từ bản đã đục lỗ, nếu không grid vẫn hiện ảnh MÀU cũ.
+                try {
+                    const thumbBlob = await makeThumbnailBlob(punchedBlobRef.current);
+                    const tf = new FormData();
+                    tf.append('file', thumbBlob, 'thumb.png');
+                    await axios.post(
+                        frameApiPath(`/api/frames?resource=thumb&layout=${encodeURIComponent(frame.layout)}&name=${encodeURIComponent(frame.name)}`),
+                        tf
+                    );
+                } catch (thumbErr) {
+                    console.warn('Không tạo lại được thumbnail sau khi đục lỗ:', thumbErr);
+                }
             }
             await axios.post(frameApiPath('/api/frames'), config, {
                 params: { layout: frame.layout, name: frame.name, resource: 'config' }
