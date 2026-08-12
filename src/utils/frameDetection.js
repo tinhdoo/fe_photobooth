@@ -223,3 +223,121 @@ export const detectFrameSlots = (imageUrl, expectedCount = null) => {
         img.onerror = () => reject(new Error('Could not load image for analysis.'));
     });
 };
+
+// ===========================================================================
+//  CHẾ ĐỘ DÒ THEO MÀU (ô tô đặc 1 màu đánh dấu)
+// ---------------------------------------------------------------------------
+//  Người thiết kế tô vùng đặt ảnh bằng 1 màu "độc" (mặc định hồng #E6007E).
+//  Ta dò các mảng cùng màu (trong ngưỡng dung sai) làm ô, rồi ĐỤC per-pixel
+//  (alpha = 0) đúng các pixel màu đó -> thu được overlay trong suốt giống hệt
+//  khung PNG khoét lỗ. Chi tiết trang trí vẽ đè (màu KHÁC) không trùng màu nên
+//  được giữ nguyên, vẫn nằm trên ảnh. Nhờ vậy luồng kéo/căn chỉnh ảnh, in...
+//  chạy y như khung trong suốt.
+// ===========================================================================
+
+export const hexToRgb = (hex) => {
+    const raw = String(hex || '').trim().replace('#', '');
+    const s = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+    const n = parseInt(s, 16);
+    if (Number.isNaN(n) || s.length !== 6) return { r: 230, g: 0, b: 126 };
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+};
+
+// tolerance 0..100 -> ngưỡng khoảng cách màu Euclid 0..~220 (441 là xa nhất).
+const colorThreshold2 = (tolerance) => {
+    const t = Math.max(0, Math.min(100, Number(tolerance) || 0)) * 2.2;
+    return t * t;
+};
+
+const detectColorBoxes = (data, width, height, target, thr2) => connectedComponents(
+    width,
+    height,
+    (x, y) => {
+        const idx = (y * width + x) * 4;
+        if (data[idx + 3] < 40) return false; // pixel đã trong suốt -> bỏ
+        const dr = data[idx] - target.r;
+        const dg = data[idx + 1] - target.g;
+        const db = data[idx + 2] - target.b;
+        return dr * dr + dg * dg + db * db <= thr2;
+    },
+    { minFillRatio: 0.5, minAreaFrac: 0.01, minDimFrac: 0.06 },
+).map((bounds) => toPercentBox(bounds, width, height, 0.15));
+
+/**
+ * Phân tích khung theo MÀU: vừa dò ô (trên bản thu nhỏ cho nhanh), vừa tạo overlay
+ * đã ĐỤC LỖ per-pixel trên bản full-res.
+ * @returns {Promise<{ boxes: Array, blob: Blob, previewUrl: string }>}
+ */
+export const analyzeColorFrame = (imageUrl, colorHex, tolerance = 30, expectedCount = null) =>
+    new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = imageUrl;
+
+        img.onload = () => {
+            try {
+                const target = hexToRgb(colorHex);
+                const thr2 = colorThreshold2(tolerance);
+
+                // 1) DÒ ô trên bản downsample.
+                const { canvas: dCanvas, ctx: dCtx } = downsampleImage(img);
+                const dData = dCtx.getImageData(0, 0, dCanvas.width, dCanvas.height).data;
+                const rawBoxes = detectColorBoxes(dData, dCanvas.width, dCanvas.height, target, thr2);
+                const boxes = limitToExpectedCount(sortBoxes(rawBoxes), expectedCount)
+                    .map((b) => ({ ...b, rotation: 0 }));
+
+                // 2) ĐỤC LỖ trên bản FULL-RES: pixel trùng màu -> alpha 0 (giữ chi tiết đè màu khác).
+                const full = document.createElement('canvas');
+                full.width = img.naturalWidth || img.width;
+                full.height = img.naturalHeight || img.height;
+                const fCtx = full.getContext('2d', { willReadFrequently: true });
+                fCtx.drawImage(img, 0, 0, full.width, full.height);
+                const imgData = fCtx.getImageData(0, 0, full.width, full.height);
+                const d = imgData.data;
+                for (let i = 0; i < d.length; i += 4) {
+                    if (d[i + 3] < 40) continue;
+                    const dr = d[i] - target.r;
+                    const dg = d[i + 1] - target.g;
+                    const db = d[i + 2] - target.b;
+                    if (dr * dr + dg * dg + db * db <= thr2) d[i + 3] = 0;
+                }
+                fCtx.putImageData(imgData, 0, 0);
+
+                full.toBlob((blob) => {
+                    if (!blob) { reject(new Error('Không tạo được overlay đã đục lỗ.')); return; }
+                    resolve({ boxes, blob, previewUrl: URL.createObjectURL(blob) });
+                }, 'image/png');
+            } catch (e) {
+                reject(e);
+            }
+        };
+
+        img.onerror = () => reject(new Error('Không tải được ảnh khung để phân tích.'));
+    });
+
+// Hút màu tại 1 điểm (eyedropper). xPct/yPct: 0..1 theo cạnh ảnh hiển thị.
+export const samplePixelColor = (imageUrl, xPct, yPct) =>
+    new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = imageUrl;
+        img.onload = () => {
+            try {
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0, w, h);
+                const x = Math.max(0, Math.min(w - 1, Math.round(xPct * w)));
+                const y = Math.max(0, Math.min(h - 1, Math.round(yPct * h)));
+                const p = ctx.getImageData(x, y, 1, 1).data;
+                const hex = `#${[p[0], p[1], p[2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+                resolve(hex);
+            } catch (e) {
+                reject(e);
+            }
+        };
+        img.onerror = () => reject(new Error('Không tải được ảnh để hút màu.'));
+    });

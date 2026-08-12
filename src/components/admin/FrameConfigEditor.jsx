@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Save, RotateCw, RefreshCw, Copy, Clipboard, Wand2, CheckCircle, XCircle } from 'lucide-react';
+import { X, Save, RotateCw, RefreshCw, Copy, Clipboard, Wand2, CheckCircle, XCircle, Palette, Pipette, Loader2 } from 'lucide-react';
 import { LAYOUTS } from '../../data/layouts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { detectFrameSlots } from '../../utils/frameDetection';
+import { detectFrameSlots, analyzeColorFrame, samplePixelColor } from '../../utils/frameDetection';
 import ConfirmDialog from './ConfirmDialog';
 
 import { FRAME_API_URL } from '../../config/api';
@@ -69,6 +69,19 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     const containerRef = useRef(null);
     const dragState = useRef(null);
     const hasDragged = useRef(false);
+
+    // --- Chế độ dò ô ---
+    const [detectMode, setDetectMode] = useState('transparent'); // 'transparent' | 'color'
+    const [markerColor, setMarkerColor] = useState('#E6007E');   // màu đánh dấu ô (hồng độc)
+    const [tolerance, setTolerance] = useState(30);              // dung sai màu 0..100
+    const [sampling, setSampling] = useState(false);            // đang hút màu từ ảnh
+    const [busy, setBusy] = useState(false);
+    // Ảnh khung dùng để HIỂN THỊ overlay: đổi sang bản đã đục lỗ (blob) sau khi dò màu.
+    const [overlayUrl, setOverlayUrl] = useState(frame.url);
+    // Blob overlay đã đục lỗ chờ lưu (chỉ ghi đè lên server khi bấm Lưu).
+    const punchedBlobRef = useRef(null);
+    // Giữ URL ảnh GỐC (còn màu) để dò/hút màu lại được kể cả sau khi preview đã đục lỗ.
+    const originalUrlRef = useRef(frame.url);
 
     const layoutDef = LAYOUTS.find(l => l.id === frame.layout) || LAYOUTS[0];
 
@@ -137,8 +150,26 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [frame]);
 
+    // Dọn blob URL preview (overlay đã đục lỗ) khi đóng editor.
+    useEffect(() => {
+        return () => {
+            if (overlayUrl && overlayUrl.startsWith('blob:')) URL.revokeObjectURL(overlayUrl);
+        };
+    }, [overlayUrl]);
+
     const handleSave = async () => {
         try {
+            setBusy(true);
+            // Chế độ màu: ghi ĐÈ ảnh khung bằng bản đã đục lỗ TRƯỚC khi lưu cấu hình,
+            // để luồng chạy sau (Edit/Capture/In) thấy khung đã trong suốt.
+            if (punchedBlobRef.current) {
+                const fd = new FormData();
+                fd.append('file', punchedBlobRef.current, 'overlay.png');
+                await axios.post(
+                    frameApiPath(`/api/frames?resource=overlay&layout=${encodeURIComponent(frame.layout)}&name=${encodeURIComponent(frame.name)}`),
+                    fd
+                );
+            }
             await axios.post(frameApiPath('/api/frames'), config, {
                 params: { layout: frame.layout, name: frame.name, resource: 'config' }
             });
@@ -147,6 +178,8 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         } catch (error) {
             console.error("Error saving config:", error);
             setNotification({ show: true, message: "Lưu cấu hình thất bại", type: 'error' });
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -306,19 +339,23 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         setConfirmDialog({
             isOpen: true,
             title: 'Tự động phát hiện?',
-            message: 'Tính năng này sẽ thay thế tất cả hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình.',
+            message: detectMode === 'color'
+                ? `Sẽ dò các vùng tô màu ${markerColor} làm ô ảnh, tự đục lỗ trong suốt và thay thế toàn bộ ô hiện tại.`
+                : 'Tính năng này sẽ thay thế tất cả hộp hiện tại dựa trên vùng ô ảnh sáng hoặc trong suốt của khung hình.',
             confirmText: 'Phát hiện',
             type: 'info',
             onConfirm: () => {
                 closeConfirmDialog();
-                runAutoDetect();
+                if (detectMode === 'color') runColorDetect();
+                else runAutoDetect();
             },
         });
     };
 
     const runAutoDetect = async () => {
+        setBusy(true);
         try {
-            const detectedBoxes = await detectFrameSlots(frame.url, layoutDef.photoCount);
+            const detectedBoxes = await detectFrameSlots(originalUrlRef.current, layoutDef.photoCount);
             if (detectedBoxes.length > 0) {
                 // Just use detected boxes as photo slots
                 const finalBoxes = detectedBoxes.map(b => ({
@@ -335,6 +372,69 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         } catch (error) {
             console.error("Auto detect failed", error);
             setNotification({ show: true, message: "Không thể tải hình ảnh để phân tich.", type: 'error' });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // Dò theo màu: phân tích ảnh GỐC (còn màu) -> ô + overlay đã đục lỗ để xem trước.
+    // CHƯA ghi server; chỉ ghi đè khi bấm Lưu.
+    const runColorDetect = async () => {
+        setBusy(true);
+        try {
+            const { boxes, blob, previewUrl } = await analyzeColorFrame(
+                originalUrlRef.current, markerColor, tolerance, layoutDef.photoCount
+            );
+            if (!boxes.length) {
+                setNotification({ show: true, message: 'Không thấy ô nào khớp màu. Thử hút lại đúng màu ô hoặc tăng "Dung sai màu".', type: 'error' });
+                return;
+            }
+            setConfig(prev => ({ ...prev, boxes }));
+            setSelectedBoxIndices([]);
+            punchedBlobRef.current = blob;
+            setOverlayUrl(prev => {
+                if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+                return previewUrl;
+            });
+            setNotification({ show: true, message: `Đã dò ${boxes.length} ô theo màu và đục lỗ (xem trước). Bấm Lưu để áp dụng.`, type: 'success' });
+        } catch (error) {
+            console.error("Color detect failed", error);
+            setNotification({ show: true, message: "Không phân tích được khung theo màu.", type: 'error' });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const switchMode = (mode) => {
+        setDetectMode(mode);
+        setSampling(false);
+        if (mode === 'transparent') {
+            // Bỏ preview đục lỗ, quay lại ảnh gốc.
+            punchedBlobRef.current = null;
+            setOverlayUrl(prev => {
+                if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+                return originalUrlRef.current;
+            });
+        }
+    };
+
+    const handleSampleClick = async (e) => {
+        e.stopPropagation();
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const xPct = (clientX - rect.left) / rect.width;
+        const yPct = (clientY - rect.top) / rect.height;
+        try {
+            const hex = await samplePixelColor(originalUrlRef.current, xPct, yPct);
+            setMarkerColor(hex);
+            setNotification({ show: true, message: `Đã hút màu ${hex}. Bấm "Tự động phát hiện" để dò ô.`, type: 'success' });
+        } catch (err) {
+            console.error(err);
+            setNotification({ show: true, message: 'Không hút được màu tại điểm này.', type: 'error' });
+        } finally {
+            setSampling(false);
         }
     };
 
@@ -410,8 +510,18 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
                             {/* Frame Overlay */}
                             <div className="absolute inset-0 z-20 pointer-events-none opacity-80">
-                                <img src={frame.url} className="w-full h-full object-fill" alt="Frame" />
+                                <img src={overlayUrl} className="w-full h-full object-fill" alt="Frame" />
                             </div>
+
+                            {/* Lớp bắt click khi ĐANG HÚT MÀU (phủ trên cùng) */}
+                            {sampling && (
+                                <div
+                                    className="absolute inset-0 z-[55] cursor-crosshair"
+                                    onClick={handleSampleClick}
+                                    onTouchStart={handleSampleClick}
+                                    title="Chạm vào ô ảnh để hút màu"
+                                />
+                            )}
 
                             {/* Interaction layer */}
                             {config.boxes.map((box, i) => (
@@ -600,16 +710,67 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 </button>
                             </div>
 
-                            <button onClick={handleAutoDetect} className="w-full py-3 border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl flex items-center justify-center gap-2 text-sm font-bold">
-                                <Wand2 size={18} /> Tự động phát hiện
+                            {/* Chọn kiểu ô ảnh: lỗ trong suốt (mặc định) hoặc dò theo màu */}
+                            <div className="space-y-3 rounded-xl border border-gray-200 p-3">
+                                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Kiểu ô ảnh</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={() => switchMode('transparent')}
+                                        className={`py-2 rounded-lg text-xs font-bold border transition-colors ${detectMode === 'transparent' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        Lỗ trong suốt
+                                    </button>
+                                    <button
+                                        onClick={() => switchMode('color')}
+                                        className={`py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${detectMode === 'color' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        <Palette size={14} /> Theo màu
+                                    </button>
+                                </div>
+
+                                {detectMode === 'color' && (
+                                    <div className="space-y-3 pt-1">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="color"
+                                                value={markerColor}
+                                                onChange={(e) => setMarkerColor(e.target.value)}
+                                                className="h-9 w-11 rounded-lg border border-gray-300 bg-white p-0.5 cursor-pointer"
+                                                title="Màu đánh dấu ô"
+                                            />
+                                            <button
+                                                onClick={() => setSampling((s) => !s)}
+                                                className={`flex-1 py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${sampling ? 'bg-amber-500 text-white border-amber-500 animate-pulse' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                            >
+                                                <Pipette size={14} /> {sampling ? 'Chạm vào ô…' : 'Hút màu từ ảnh'}
+                                            </button>
+                                        </div>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Dung sai màu: {tolerance}</span>
+                                            <input
+                                                type="range" min="0" max="100"
+                                                value={tolerance}
+                                                onChange={(e) => setTolerance(parseInt(e.target.value))}
+                                                className="w-full h-2 bg-gray-200 rounded-lg accent-purple-600"
+                                            />
+                                        </label>
+                                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                                            Tô vùng đặt ảnh bằng 1 màu độc (mặc định hồng). Sau khi dò, phần mềm tự đục lỗ trong suốt; chi tiết trang trí màu khác vẫn giữ nguyên trên ảnh.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={handleAutoDetect} disabled={busy} className="w-full py-3 border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl flex items-center justify-center gap-2 text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed">
+                                {busy ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />} Tự động phát hiện
                             </button>
 
                             <button onClick={resetGrid} className="w-full py-3 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2 text-sm font-bold">
                                 <RefreshCw size={18} /> Đặt lại vị trí
                             </button>
 
-                            <button onClick={handleSave} className="w-full py-4 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20">
-                                <Save size={20} /> Lưu cấu hình
+                            <button onClick={handleSave} disabled={busy} className="w-full py-4 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 disabled:opacity-60 disabled:cursor-not-allowed">
+                                {busy ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} Lưu cấu hình
                             </button>
                         </div>
                     </div>

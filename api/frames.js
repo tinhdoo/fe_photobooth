@@ -313,6 +313,30 @@ async function uploadThumb(req, res, supabase, bucket, layout, name) {
     return json(res, 200, { success: true, thumb_url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()) });
 }
 
+// Ghi ĐÈ ảnh khung bằng bản overlay đã "đục lỗ" (chế độ dò theo màu ở editor tạo ra:
+// các pixel trùng màu đánh dấu -> alpha 0). Dùng upsert để thay đúng file khung sẵn có,
+// nhờ vậy toàn bộ luồng chạy sau (Edit/Capture/In) hoạt động y hệt khung PNG khoét lỗ.
+async function uploadOverlay(req, res, supabase, bucket, layout, name) {
+    if (!layout || !name) return json(res, 400, { error: 'Missing layout or name' });
+    const { files } = await parseForm(req);
+    const file = firstValue(files.file);
+    if (!file) return json(res, 400, { error: 'Missing file' });
+
+    const objectPath = framePath(layout, name);
+    const buffer = await fs.readFile(file.filepath);
+
+    const { error } = await supabase.storage
+        .from(bucket)
+        .upload(objectPath, buffer, {
+            contentType: file.mimetype || 'image/png',
+            upsert: true,
+        });
+
+    if (error) throw error;
+    await bumpFrameRevision(supabase, layout);
+    return json(res, 200, { success: true, url: withVersion(publicUrl(supabase, bucket, objectPath), Date.now()) });
+}
+
 async function deleteFrame(req, res, supabase, bucket, layout, name) {
     // Liệt kê cả icon lẫn thumbnail đi kèm frame để xoá sạch.
     const { data } = await supabase.storage
@@ -426,6 +450,7 @@ export default async function handler(req, res) {
             if (resource === 'config') return saveConfig(req, res, supabase, bucket, layout, name);
             if (resource === 'icon') return uploadIcon(req, res, supabase, bucket, layout, name);
             if (resource === 'thumb') return uploadThumb(req, res, supabase, bucket, layout, name);
+            if (resource === 'overlay') return uploadOverlay(req, res, supabase, bucket, layout, name);
             return uploadFrame(req, res, supabase, bucket);
         }
 
