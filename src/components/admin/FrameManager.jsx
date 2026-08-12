@@ -792,6 +792,7 @@ const FrameManager = () => {
                 {
                     editingFrame && (
                         <FrameConfigEditor
+                            key={editingFrame.id || editingFrame.name}
                             frame={editingFrame}
                             onClose={() => setEditingFrame(null)}
                         />

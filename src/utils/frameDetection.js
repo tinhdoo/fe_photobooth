@@ -249,6 +249,67 @@ const colorThreshold2 = (tolerance) => {
     return t * t;
 };
 
+// Dãn mask (max-filter tách trục) -> "ăn" thêm bán kính px quanh vùng đục, nuốt gọn
+// viền màu sót do khử răng cưa ở mép ô.
+const dilateMask = (mask, w, h, radius) => {
+    if (radius <= 0) return mask;
+    const tmp = new Uint8Array(w * h);
+    for (let y = 0; y < h; y += 1) {
+        const row = y * w;
+        for (let x = 0; x < w; x += 1) {
+            let m = 0;
+            for (let k = -radius; k <= radius; k += 1) {
+                const xx = x + k;
+                if (xx < 0 || xx >= w) continue;
+                if (mask[row + xx] > m) { m = mask[row + xx]; if (m === 255) break; }
+            }
+            tmp[row + x] = m;
+        }
+    }
+    const out = new Uint8Array(w * h);
+    for (let x = 0; x < w; x += 1) {
+        for (let y = 0; y < h; y += 1) {
+            let m = 0;
+            for (let k = -radius; k <= radius; k += 1) {
+                const yy = y + k;
+                if (yy < 0 || yy >= h) continue;
+                const v = tmp[yy * w + x];
+                if (v > m) { m = v; if (m === 255) break; }
+            }
+            out[y * w + x] = m;
+        }
+    }
+    return out;
+};
+
+// Box-blur tách trục -> làm MỀM mép mask (0..255) để alpha chuyển mượt, hết răng cưa.
+const boxBlurMask = (src, w, h, radius) => {
+    if (radius <= 0) return Float32Array.from(src);
+    const norm = 1 / (2 * radius + 1);
+    const clampX = (v) => (v < 0 ? 0 : v >= w ? w - 1 : v);
+    const clampY = (v) => (v < 0 ? 0 : v >= h ? h - 1 : v);
+    const tmp = new Float32Array(w * h);
+    for (let y = 0; y < h; y += 1) {
+        const row = y * w;
+        let sum = 0;
+        for (let k = -radius; k <= radius; k += 1) sum += src[row + clampX(k)];
+        for (let x = 0; x < w; x += 1) {
+            tmp[row + x] = sum * norm;
+            sum += src[row + clampX(x + radius + 1)] - src[row + clampX(x - radius)];
+        }
+    }
+    const out = new Float32Array(w * h);
+    for (let x = 0; x < w; x += 1) {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k += 1) sum += tmp[clampY(k) * w + x];
+        for (let y = 0; y < h; y += 1) {
+            out[y * w + x] = sum * norm;
+            sum += tmp[clampY(y + radius + 1) * w + x] - tmp[clampY(y - radius) * w + x];
+        }
+    }
+    return out;
+};
+
 const detectColorBoxes = (data, width, height, target, thr2) => connectedComponents(
     width,
     height,
@@ -286,7 +347,9 @@ export const analyzeColorFrame = (imageUrl, colorHex, tolerance = 30, expectedCo
                 const boxes = limitToExpectedCount(sortBoxes(rawBoxes), expectedCount)
                     .map((b) => ({ ...b, rotation: 0 }));
 
-                // 2) ĐỤC LỖ trên bản FULL-RES: pixel trùng màu -> alpha 0 (giữ chi tiết đè màu khác).
+                // 2) ĐỤC LỖ trên bản FULL-RES bằng MATTE MỀM (per-pixel, giữ chi tiết đè màu khác):
+                //    a) mask lõi = pixel trùng màu; b) DÃN mask nuốt viền hồng sót ở mép;
+                //    c) FEATHER (blur) cho alpha chuyển mượt; d) DESPILL khử ám hồng ở dải mép.
                 const full = document.createElement('canvas');
                 full.width = img.naturalWidth || img.width;
                 full.height = img.naturalHeight || img.height;
@@ -294,12 +357,45 @@ export const analyzeColorFrame = (imageUrl, colorHex, tolerance = 30, expectedCo
                 fCtx.drawImage(img, 0, 0, full.width, full.height);
                 const imgData = fCtx.getImageData(0, 0, full.width, full.height);
                 const d = imgData.data;
-                for (let i = 0; i < d.length; i += 4) {
+                const w = full.width;
+                const h = full.height;
+                const N = w * h;
+
+                // a) mask lõi (255 = chắc chắn là màu ô)
+                const core = new Uint8Array(N);
+                for (let p = 0, i = 0; p < N; p += 1, i += 4) {
                     if (d[i + 3] < 40) continue;
                     const dr = d[i] - target.r;
                     const dg = d[i + 1] - target.g;
                     const db = d[i + 2] - target.b;
-                    if (dr * dr + dg * dg + db * db <= thr2) d[i + 3] = 0;
+                    if (dr * dr + dg * dg + db * db <= thr2) core[p] = 255;
+                }
+
+                // b + c) dãn rồi feather theo tỉ lệ ảnh (mép ~1-3px)
+                const minSide = Math.min(w, h);
+                const grow = Math.max(1, Math.round(minSide * 0.0015));
+                const feather = Math.max(1, Math.round(minSide * 0.002));
+                const soft = boxBlurMask(dilateMask(core, w, h, grow), w, h, feather);
+
+                // d) áp alpha mềm + despill. CHỈ khử ám ở pixel còn GẦN màu marker (residue thật)
+                //    -> tránh làm bạc mép trang trí có màu (hoa, chữ...) nằm cạnh ô.
+                const spillMax2 = thr2 * 4; // trong ~2x ngưỡng màu mới coi là ám marker
+                for (let p = 0, i = 0; p < N; p += 1, i += 4) {
+                    const a = soft[p] / 255; // 1 = trong suốt hẳn
+                    if (a <= 0.003) continue;
+                    if (a > 0.02 && a < 0.98) {
+                        const dr = d[i] - target.r;
+                        const dg = d[i + 1] - target.g;
+                        const db = d[i + 2] - target.b;
+                        if (dr * dr + dg * dg + db * db < spillMax2) {
+                            const L = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                            const s = a * 0.6;
+                            d[i] = Math.round(d[i] * (1 - s) + L * s);
+                            d[i + 1] = Math.round(d[i + 1] * (1 - s) + L * s);
+                            d[i + 2] = Math.round(d[i + 2] * (1 - s) + L * s);
+                        }
+                    }
+                    d[i + 3] = Math.round(d[i + 3] * (1 - a));
                 }
                 fCtx.putImageData(imgData, 0, 0);
 
