@@ -64,8 +64,18 @@ const resolveAssetUrl = (url) => {
     return `${window.location.origin}${url.startsWith('/') ? url : `/${url}`}`;
 };
 
+// Fetch-cors cho ảnh R2: r2.dev cache KHÔNG vary theo Origin -> khi <img> (không gửi Origin) tải
+// trước, cache lưu bản THIẾU header ACAO -> fetch cors sau bị chặn CORS (ghép 2 strip / tải file
+// thất bại). Dùng cache key RIÊNG (?cors=1) cho các fetch cors (luôn gửi Origin) -> luôn có ACAO.
+// Chỉ áp cho R2 (r2.dev); Supabase/blob giữ nguyên.
+const corsAssetUrl = (url) => {
+    const u = resolveAssetUrl(url);
+    if (/r2\.dev/i.test(u)) return `${u}${u.includes('?') ? '&' : '?'}cors=1`;
+    return u;
+};
+
 const fetchAsObjectUrl = async (url) => {
-    const response = await fetch(resolveAssetUrl(url), { mode: 'cors' });
+    const response = await fetch(corsAssetUrl(url), { mode: 'cors' });
     if (!response.ok) throw new Error(`Không tải được tài nguyên: ${url}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
@@ -434,7 +444,7 @@ const ViewPage = () => {
         if (!url) return;
 
         try {
-            const response = await fetch(url, { mode: 'cors' });
+            const response = await fetch(corsAssetUrl(url), { mode: 'cors' });
             const blob = await response.blob();
             const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -474,7 +484,7 @@ const ViewPage = () => {
     };
 
     const fetchAsFile = async (url, filename) => {
-        const response = await fetch(url, { mode: 'cors' });
+        const response = await fetch(corsAssetUrl(url), { mode: 'cors' });
         const blob = await response.blob();
         const type = blob.type || (/\.mp4$/i.test(filename) ? 'video/mp4' : 'image/jpeg');
         return new File([blob], filename, { type });

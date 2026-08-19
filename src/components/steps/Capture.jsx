@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { CameraService } from '../../services/CameraService';
-import { Camera } from 'lucide-react'; // Added import
+import { Camera } from 'lucide-react';
 import { FirebaseService } from '../../services/FirebaseService';
 
 // Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
@@ -69,6 +69,13 @@ const Capture = () => {
     const [latestPhoto, setLatestPhoto] = useState(null);
     const isRetakeMode = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
 
+    // Chụp lại NGAY trong lúc đang chụp chuỗi: khách chạm 1 ô ảnh nhỏ ĐÃ chụp -> huỷ đếm ngược/timer
+    // chuyển ô đang chờ rồi chụp lại đúng ô đó, xong tự chạy tiếp chuỗi. retakeSlot: ô đang chụp lại
+    // (để highlight UI). retakeSlotRef: nguồn sự thật cho logic trong takePhoto async (tránh closure
+    // cũ). Khác hẳn sessionData.retakeIndex (luồng chụp lại từ bước Review, ẩn dải ảnh nhỏ).
+    const [retakeSlot, setRetakeSlot] = useState(null);
+    const retakeSlotRef = useRef(null);
+
     // Webcam refs and state
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
@@ -99,10 +106,33 @@ const Capture = () => {
     // Đếm số frame poll lỗi liên tiếp -> chỉ báo lỗi kết nối khi thực sự hỏng (tránh báo nhầm
     // do 1-2 frame 503 lúc mới khởi động).
     const liveFrameFailRef = useRef(0);
+    // --- WATCHDOG LIVE VIEW (chống đen màn) ---
+    // Vấn đề: cameraReady bật sẵn từ cameraWarm -> ẩn overlay + tự đếm ngược NGAY, nhưng nếu /ws
+    // KHÔNG đẩy frame (EVF phía middleware kẹt lúc chuyển Chuẩn bị->Chụp) thì màn ĐEN CÂM, không
+    // báo lỗi, không tự phục hồi (nhánh /ws không có onError khi frame ngừng đến). Watchdog theo dõi
+    // thời điểm frame cuối; quá lâu không có hình -> hiện "Đang kết nối lại" + ép /start-liveview và
+    // dựng lại /ws. Đồng thời CHẶN đếm ngược tới khi có >=1 frame thật -> không bắn /capture vào máy treo.
+    const lastFrameAtRef = useRef(Date.now());   // lần cuối nhận được frame live view (onLoad)
+    const hasLiveFrameRef = useRef(false);       // đã có >=1 frame thật? (gate hot-path setState)
+    const stalledRef = useRef(false);            // đang đứng hình?
+    const lastRecoveryAtRef = useRef(0);         // lần cuối chạy phục hồi (đừng nhồi liên tục)
+    const [hasLiveFrame, setHasLiveFrame] = useState(false); // để re-render mở đếm ngược khi có hình
+    const [liveStalled, setLiveStalled] = useState(false);   // để hiện overlay "Đang kết nối lại"
+    const [wsReconnectToken, setWsReconnectToken] = useState(0); // bump -> effect /ws chạy lại (reconnect)
+    // Ghi nhận 1 frame live view vừa tới (gọi ở onLoad của <img> live view). Dùng ref chặn setState
+    // thừa vì onLoad bắn ~30 lần/s.
+    const markLiveFrame = () => {
+        lastFrameAtRef.current = Date.now();
+        if (!hasLiveFrameRef.current) { hasLiveFrameRef.current = true; setHasLiveFrame(true); }
+        if (stalledRef.current) { stalledRef.current = false; setLiveStalled(false); }
+    };
     // Còn mounted không -> chặn các setTimeout sau khi chụp (advance/countdown) chạy MUỘN sau khi
     // đã rời bước (vd hết giờ -> nextStep tự động unmount Capture) -> tránh nextStep() thừa gây
     // NHẢY/BỎ bước (Review bị skip). Đặt false ở cleanup unmount bên dưới.
     const mountedRef = useRef(true);
+    // Các timer hẹn giờ chuyển ô kế / sang bước sau khi chụp xong. Lưu lại để HUỶ được khi khách
+    // chạm chụp lại giữa chừng (nếu không, ô kế vẫn tự bắt đầu chồng lên lượt chụp lại).
+    const advanceTimersRef = useRef([]);
 
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
@@ -118,6 +148,8 @@ const Capture = () => {
             // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
             // Set src='' với MJPEG nhiều khi không ngắt kết nối -> tích tụ tới trần ~6/host -> đơ.
             const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+            // Huỷ các timer chuyển ô/sang bước còn treo -> tránh startCountdown/nextStep chạy sau khi rời bước.
+            try { advanceTimersRef.current.forEach((t) => clearTimeout(t)); advanceTimersRef.current = []; } catch (e) { /* ignore */ }
             try { stopCanonDraw(); } catch (e) { /* ignore */ }
             try {
                 const r = mediaRecorderRef.current;
@@ -428,18 +460,43 @@ const Capture = () => {
             if (el) { el.removeEventListener('load', onPollLoad); el.removeEventListener('error', onPollError); }
             if (lastUrl) URL.revokeObjectURL(lastUrl);
         };
+        // wsReconnectToken: watchdog bump -> chạy lại effect này = đóng /ws cũ + kết nối lại.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cameraMode, wsReconnectToken]);
+
+    // Watchdog live view (canon): phát hiện đứng hình -> hiện overlay + tự phục hồi. Bỏ qua trong
+    // lúc đang chụp thật (EVF cố ý tắt để /capture) bằng cách coi như vừa có frame -> không báo nhầm.
+    useEffect(() => {
+        if (cameraMode !== 'canon') return undefined;
+        const STALL_MS = 4000;         // quá 4s không có frame -> coi là đứng hình
+        const RECOVER_EVERY_MS = 6000; // giãn nhịp phục hồi, không nhồi liên tục
+        const id = setInterval(() => {
+            const now = Date.now();
+            if (shootingRef.current) { lastFrameAtRef.current = now; return; } // đang chụp -> EVF tắt là bình thường
+            if (now - lastFrameAtRef.current < STALL_MS) return;                 // vẫn có hình -> ổn
+            if (!stalledRef.current) { stalledRef.current = true; setLiveStalled(true); }
+            if (now - lastRecoveryAtRef.current < RECOVER_EVERY_MS) return;
+            lastRecoveryAtRef.current = now;
+            // Ép middleware bật lại EVF (EnsureSessionOpen + StartLiveView) rồi dựng lại /ws.
+            try { fetch('http://localhost:5001/start-liveview', { cache: 'no-store' }).catch(() => {}); } catch { /* ignore */ }
+            setWsReconnectToken((t) => t + 1);
+        }, 1000);
+        return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraMode]);
 
     useEffect(() => {
         const needsRetake = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
         const needsMorePhotos = photosTaken.length < TOTAL_PHOTOS;
+        // Canon: CHỜ có >=1 frame live view thật rồi mới đếm ngược -> không bắn /capture vào lúc màn
+        // đen/máy chưa ra hình (nguyên nhân "vào là chụp rồi kẹt"). Webcam/hotfolder không dùng cờ này.
+        const canonNeedsFrame = cameraMode === 'canon' && !hasLiveFrame;
 
-        if (cameraReady && (needsRetake || needsMorePhotos)) {
+        if (cameraReady && !canonNeedsFrame && (needsRetake || needsMorePhotos)) {
             startCountdown();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cameraReady]); // Only depend on cameraReady (initially), logic internal checks sessionData/photos
+    }, [cameraReady, hasLiveFrame]); // thêm hasLiveFrame: có hình đầu tiên (canon) -> mở đếm ngược
 
     const getEffectiveCountdown = () => TOTAL_PHOTOS > 4 ? 3 : (parseInt(configs.countdown) || 5);
 
@@ -470,9 +527,47 @@ const Capture = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [countdown, configs.countdown, TOTAL_PHOTOS]);
 
+    const clearAdvanceTimers = () => {
+        advanceTimersRef.current.forEach((t) => clearTimeout(t));
+        advanceTimersRef.current = [];
+    };
+
+    // Hẹn giờ chuyển ô kế (chưa đủ ảnh) hoặc sang bước sau (đủ ảnh) sau khi chụp xong. Dùng
+    // advanceTimersRef để có thể HUỶ khi khách chạm chụp lại trong lúc chờ.
+    const scheduleAdvance = (count) => {
+        const t1 = setTimeout(() => {
+            setFlash(false);
+            setIsShooting(false);
+            const t2 = setTimeout(() => {
+                if (!mountedRef.current) return;
+                if (count < TOTAL_PHOTOS) startCountdown();
+                else nextStep();
+            }, count < TOTAL_PHOTOS ? 2000 : 1500);
+            advanceTimersRef.current.push(t2);
+        }, 500);
+        advanceTimersRef.current.push(t1);
+    };
+
     // Ghi ảnh sau khi chụp xong: phân biệt rõ NGUỒN (capturedPhotos, lưới phải) và Ô (photos, lưới trái).
     // Khi chụp lại, thay đúng ảnh trong nguồn, KHÔNG để ô trống (null) bên trái lọt sang nguồn.
     const applyCapture = (newItem) => {
+        // Chụp lại NGAY trong lúc chụp chuỗi (khách chạm ô ảnh nhỏ): thay đúng ô được chạm, giữ mảng
+        // liền mạch -> chuỗi tự tiếp tục ở ô trống kế. Lúc này photos===capturedPhotos===photosTaken
+        // (đồng bộ ở nhánh chụp lần đầu) nên cập nhật đồng loạt là nhất quán. Đọc từ ref để không dính
+        // closure cũ khi takePhoto await (Canon /capture) lâu.
+        const inlineIdx = retakeSlotRef.current;
+        if (inlineIdx !== null && inlineIdx !== undefined) {
+            const oldItem = photosTaken[inlineIdx];
+            const updated = [...photosTaken];
+            updated[inlineIdx] = newItem;
+            releaseReplacedPhoto(oldItem, updated);
+            retakeSlotRef.current = null;
+            setRetakeSlot(null);
+            setPhotosTaken(updated);
+            updateSessionData('photos', updated);
+            updateSessionData('capturedPhotos', updated);
+            return updated.length;
+        }
         const ri = sessionData.retakeIndex;
         if (ri !== undefined && ri !== null) {
             const prevSources = (sessionData.capturedPhotos && sessionData.capturedPhotos.length)
@@ -564,17 +659,10 @@ const Capture = () => {
                     const count = applyCapture(canonPhoto);
                     setLatestPhoto(finalUrl);
 
-                    setTimeout(() => {
-                        setFlash(false);
-                        setIsShooting(false);
-                        if (count < TOTAL_PHOTOS) {
-                            // Poll /frame tự cập nhật lại khi live view resume sau /capture ->
-                            // KHÔNG cần đóng/đổi token reconnect nữa (đó là nguồn gây tích tụ kết nối cũ).
-                            setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
-                        } else {
-                            setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
-                        }
-                    }, 500);
+                    // Poll /frame tự cập nhật lại khi live view resume sau /capture -> KHÔNG cần đóng/
+                    // đổi token reconnect. scheduleAdvance: hẹn giờ chuyển ô/sang bước, huỷ được khi
+                    // khách chạm chụp lại giữa chừng.
+                    scheduleAdvance(count);
                 } else {
                     throw new Error(data.error || "Canon Capture Failed");
                 }
@@ -587,10 +675,13 @@ const Capture = () => {
                     ? "Máy ảnh không phản hồi, đang thử lại..."
                     : ("Lỗi chụp ảnh Canon: " + error.message));
                 setTimeout(() => setCameraError(null), 3000);
-                // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh hoặc
-                // đang chụp lại). Lỗi sẽ hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý.
-                if (isRetakeMode || photosTaken.length < TOTAL_PHOTOS) {
-                    setTimeout(() => { if (mountedRef.current) startCountdown(); }, 3500);
+                // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh, đang chụp lại
+                // từ Review, HOẶC đang chụp lại inline khách chạm ô ảnh nhỏ - retakeSlotRef còn set kể cả
+                // khi đã đủ ảnh). Lỗi hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý. Đẩy timer
+                // vào advanceTimersRef để khách chạm ô khác giữa lúc chờ vẫn huỷ được.
+                if (isRetakeMode || retakeSlotRef.current !== null || photosTaken.length < TOTAL_PHOTOS) {
+                    const rt = setTimeout(() => { if (mountedRef.current) startCountdown(); }, 3500);
+                    advanceTimersRef.current.push(rt);
                 }
             }
             return;
@@ -628,15 +719,7 @@ const Capture = () => {
                     const count = applyCapture(finalUrl);
                     setLatestPhoto(finalUrl);
 
-                    setTimeout(() => {
-                        setFlash(false);
-                        setIsShooting(false);
-                        if (count < TOTAL_PHOTOS) {
-                            setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
-                        } else {
-                            setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
-                        }
-                    }, 500);
+                    scheduleAdvance(count);
                 } else {
                     throw new Error(data.error || "Hot Folder Timeout");
                 }
@@ -702,16 +785,8 @@ const Capture = () => {
             // Show Instant Preview
             setLatestPhoto(photoUrl);
 
-            setTimeout(() => {
-                setFlash(false);
-                setIsShooting(false);
-                // Chụp lại -> nguồn đã đầy -> quay lại Review; chụp mới chưa đủ -> chụp tiếp
-                if (count < TOTAL_PHOTOS) {
-                    setTimeout(() => { if (mountedRef.current) startCountdown(); }, 2000);
-                } else {
-                    setTimeout(() => { if (mountedRef.current) nextStep(); }, 1500);
-                }
-            }, 500);
+            // Chụp lại -> nguồn đã đầy -> quay lại Review; chụp mới chưa đủ -> chụp tiếp.
+            scheduleAdvance(count);
 
         } catch (error) {
             console.error("Capture Failed", error);
@@ -753,7 +828,7 @@ const Capture = () => {
                                 className="w-full h-full object-cover"
                                 style={{ transform: 'scaleX(-1)' }}
                                 alt="LiveView"
-                                onLoad={() => { _cameraReadyOnce = true; liveFrameFailRef.current = 0; setCameraReady(true); }}
+                                onLoad={() => { _cameraReadyOnce = true; liveFrameFailRef.current = 0; setCameraReady(true); markLiveFrame(); }}
                                 onError={() => {
                                     liveFrameFailRef.current += 1;
                                     if (liveFrameFailRef.current > 25) {
@@ -774,6 +849,16 @@ const Capture = () => {
                     {!cameraReady && !cameraError && (
                         <div className="absolute inset-0 bg-[#F7E8CF] flex items-center justify-center">
                             <p className="text-xl" style={{ color: primaryTextColor }}>Đang khởi động camera...</p>
+                        </div>
+                    )}
+
+                    {/* Watchdog: live view ĐỨNG HÌNH (canon) -> báo rõ + đang tự kết nối lại. Thay cho
+                        màn ĐEN CÂM trước đây. Ẩn khi đã có lỗi kết nối rõ ràng (cameraError) để không đè. */}
+                    {cameraMode === 'canon' && liveStalled && !cameraError && (
+                        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/70 text-white">
+                            <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+                            <p className="text-xl font-serif">Đang kết nối lại máy ảnh...</p>
+                            <p className="mt-1 text-sm text-white/70">Vui lòng đợi giây lát</p>
                         </div>
                     )}
 
@@ -846,8 +931,9 @@ const Capture = () => {
                     <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-4 z-30 px-8">
                         {Array.from({ length: TOTAL_PHOTOS }).map((_, i) => {
                             const photoUrl = photosTaken[i];
-                            const isCurrent = i === photosTaken.length; // The slot currently being taken
-
+                            // Ô đang được chụp: khi đang chụp lại 1 tấm thì sáng ô đó, ngược lại là ô kế tiếp.
+                            const activeIdx = (retakeSlot !== null && retakeSlot !== undefined) ? retakeSlot : photosTaken.length;
+                            const isCurrent = i === activeIdx;
                             return (
                                 <motion.div
                                     key={i}
@@ -855,7 +941,7 @@ const Capture = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.1 }}
                                     className={`
-                                    w-24 h-20 md:w-32 md:h-24 rounded-lg flex items-center justify-center text-2xl font-serif transition-all duration-300 overflow-hidden shadow-lg border-2
+                                    relative w-24 h-20 md:w-32 md:h-24 rounded-lg flex items-center justify-center text-2xl font-serif transition-all duration-300 overflow-hidden shadow-lg border-2
                                     ${photoUrl ? 'bg-[#D5B895] border-[#fff]/50' : 'bg-[#D5B895]/50 border-transparent text-[#8E6B4D]'}
                                     ${isCurrent ? 'scale-110 border-[#fff] shadow-xl ring-2 ring-[#fff]/30' : ''}
                                 `}

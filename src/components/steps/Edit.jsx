@@ -26,8 +26,61 @@ const FILTERS = [
             ctx.putImageData(imageData, 0, 0);
         }
     },
-    // 5 filter beauty (Natural, Soft Pink, Glass Skin, Korean Idol, Studio) được nạp động
-    // từ /face-filters/ai-filters.json và chèn vào đây lúc chạy (xem state beautyFilters).
+    // Cổ điển / Vintage — port từ HM Photobooth (FFmpeg: curves=preset=vintage + eq saturation=0.9).
+    // Áp TOÀN ẢNH (không dò mặt) -> chất film phai ngả vàng phủ đều cả khung.
+    {
+        id: 'vintage',
+        name: '🎞️ Cổ Điển',
+        filter: (ctx, w, h) => {
+            // Dựng LUT 256 từ các điểm điều khiển của preset "vintage" (FFmpeg curves.c), nội suy tuyến tính.
+            const buildLut = (pts) => {
+                const lut = new Uint8ClampedArray(256);
+                for (let i = 0; i < 256; i++) {
+                    const x = i / 255;
+                    let y = pts[pts.length - 1][1];
+                    for (let k = 0; k < pts.length - 1; k++) {
+                        const [x0, y0] = pts[k];
+                        const [x1, y1] = pts[k + 1];
+                        if (x >= x0 && x <= x1) { const t = (x - x0) / ((x1 - x0) || 1); y = y0 + (y1 - y0) * t; break; }
+                    }
+                    lut[i] = Math.round(y * 255);
+                }
+                return lut;
+            };
+            const rL = buildLut([[0, 0.11], [0.42, 0.51], [1, 0.95]]);
+            const gL = buildLut([[0, 0], [0.50, 0.48], [1, 1]]);
+            const bL = buildLut([[0, 0.22], [0.49, 0.44], [1, 0.80]]);
+            const img = ctx.getImageData(0, 0, w, h);
+            const p = img.data;
+            const s = 0.9; // eq saturation=0.9
+            for (let i = 0; i < p.length; i += 4) {
+                const r = rL[p[i]], g = gL[p[i + 1]], b = bL[p[i + 2]];
+                const lum = 0.299 * r + 0.587 * g + 0.114 * b; // giảm bão hòa quanh độ sáng
+                p[i] = lum + (r - lum) * s;
+                p[i + 1] = lum + (g - lum) * s;
+                p[i + 2] = lum + (b - lum) * s;
+            }
+            ctx.putImageData(img, 0, 0);
+        }
+    },
+    // Sepia — port từ HM Photobooth (ma trận sepia chuẩn). Nâu ấm cổ điển, áp toàn ảnh.
+    {
+        id: 'sepia',
+        name: '🟤 Sepia',
+        filter: (ctx, w, h) => {
+            const img = ctx.getImageData(0, 0, w, h);
+            const p = img.data;
+            for (let i = 0; i < p.length; i += 4) {
+                const r = p[i], g = p[i + 1], b = p[i + 2];
+                p[i] = 0.393 * r + 0.769 * g + 0.189 * b;
+                p[i + 1] = 0.349 * r + 0.686 * g + 0.168 * b;
+                p[i + 2] = 0.272 * r + 0.534 * g + 0.131 * b;
+            }
+            ctx.putImageData(img, 0, 0);
+        }
+    },
+    // 3 filter beauty (Natural, Soft Pink, Korean Idol) được nạp động từ /face-filters/ai-filters.json
+    // và chèn vào SAU danh sách này lúc chạy (xem state beautyFilters). Bộ hiển thị vẫn đúng 7 ô (grid-cols-7).
 ];
 
 const mapWithConcurrency = async (items, limit, worker) => {
