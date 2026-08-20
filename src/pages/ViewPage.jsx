@@ -331,6 +331,7 @@ const ViewPage = () => {
     const [errorDialog, setErrorDialog] = useState(null);
     const [motionVideo, setMotionVideo] = useState(null); // { blob, filename } sau khi tạo xong
     const [combined, setCombined] = useState(null); // { url, blob } — 2 strip GHÉP thành 1 ảnh (chỉ layout strip)
+    const [combineFailed, setCombineFailed] = useState(false); // ghép strip lỗi -> hiện thẳng composite gốc
     // Album đã có ảnh ghép nhưng ảnh lẻ/video CHƯA về (booth đang upload nền) -> báo cho khách biết
     // "đang tải thêm" để KHÔNG tưởng chỉ có mỗi ảnh ghép rồi bỏ đi.
     const [loadingMore, setLoadingMore] = useState(false);
@@ -404,6 +405,7 @@ const ViewPage = () => {
     // ghép 2 bản: strip dọc -> cạnh nhau; strip ngang -> chồng dọc. Layout khác giữ nguyên.
     useEffect(() => {
         const src = session?.composite_url;
+        setCombineFailed(false);
         if (!src || !strip) { setCombined(null); return undefined; }
         let cancelled = false;
         let createdUrl = null;
@@ -431,14 +433,19 @@ const ViewPage = () => {
                 setCombined({ url: createdUrl, blob });
             } catch (e) {
                 console.warn('Ghép 2 strip thất bại, dùng ảnh gốc:', e);
-                if (!cancelled) setCombined(null);
+                if (!cancelled) { setCombined(null); setCombineFailed(true); }
             }
         })();
         return () => { cancelled = true; if (createdUrl) URL.revokeObjectURL(createdUrl); };
     }, [session?.composite_url, strip, stripHorizontal]);
 
-    // Ảnh ghép dùng để HIỂN THỊ + TẢI: strip -> bản đã ghép 2 strip; layout khác -> composite gốc.
-    const displayCompositeUrl = combined?.url || session?.composite_url;
+    // Ảnh ghép dùng để HIỂN THỊ + TẢI:
+    //  - strip: dùng bản ĐÃ GHÉP (blob). KHÔNG hiện composite gốc trong lúc chờ ghép để tránh tải
+    //    ảnh 2 lần (r2.dev bị throttle) — chờ ghép xong; chỉ khi ghép LỖI mới rơi về composite gốc.
+    //  - layout khác: composite gốc.
+    const displayCompositeUrl = strip
+        ? (combined?.url || (combineFailed ? session?.composite_url : null))
+        : session?.composite_url;
 
     const downloadUrl = async (url, filename) => {
         if (!url) return;
@@ -929,13 +936,20 @@ const ViewPage = () => {
                             {/* 1 ẢNH DUY NHẤT: strip -> đã ghép 2 strip thành nguyên tờ 4x6 (giữ ảnh/
                                 tải về ra 1 ảnh, không còn 2 nửa rời). Layout khác -> composite gốc. */}
                             <div className={`mx-auto w-full ${stripHorizontal ? 'max-w-[520px]' : 'max-w-[680px]'}`}>
-                                <img
-                                    src={displayCompositeUrl}
-                                    alt="Ảnh đã ghép"
-                                    className="h-auto w-full object-contain"
-                                    loading="eager"
-                                    decoding="async"
-                                />
+                                {displayCompositeUrl ? (
+                                    <img
+                                        src={displayCompositeUrl}
+                                        alt="Ảnh đã ghép"
+                                        className="h-auto w-full object-contain"
+                                        loading="eager"
+                                        decoding="async"
+                                    />
+                                ) : (
+                                    // strip: đang ghép 2 strip (chưa có blob) -> skeleton, tránh tải composite thô
+                                    <div className={`mx-auto flex ${stripHorizontal ? 'aspect-[3/2]' : 'aspect-[2/3]'} w-full animate-pulse items-center justify-center rounded-xl bg-[#F3E7CF]`}>
+                                        <span className="h-8 w-8 rounded-full border-4 border-[#D5B895]/30 border-t-[#7B5E43] animate-spin" />
+                                    </div>
+                                )}
                             </div>
 
                             <button

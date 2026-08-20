@@ -18,7 +18,10 @@ const ManagementPanel = ({ onClose }) => {
     const [confirmExit, setConfirmExit] = useState(false);
     const [confirmShutdown, setConfirmShutdown] = useState(false);
     const [confirmHome, setConfirmHome] = useState(false);
-    const { isEventMode, toggleEventMode, currentStep, resetSession } = useWorkflow();
+    const [modePrompt, setModePrompt] = useState(false); // modal nhập mật khẩu đổi chế độ
+    const [modePw, setModePw] = useState('');
+    const [modeErr, setModeErr] = useState('');
+    const { isEventMode, toggleEventMode, currentStep, resetSession, configs } = useWorkflow();
 
     const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? '';
 
@@ -57,6 +60,29 @@ const ManagementPanel = ({ onClose }) => {
             return;
         }
         resetSession();
+    };
+
+    // Đổi chế độ tính tiền (Trả phí <-> Sự kiện) là thao tác nhạy cảm: Sự kiện = MIỄN PHÍ. Bắt nhập
+    // mật khẩu để tránh chạm nhầm & chặn người không có quyền tự gạt máy sang free. Mật khẩu riêng
+    // 'mode_switch_password' (chủ đặt trong Cài đặt); nếu chưa đặt -> tạm dùng staff_pin.
+    const modePassword = String(configs?.mode_switch_password || '').trim() || String(configs?.staff_pin || '8888');
+
+    const openModePrompt = () => {
+        setModePw('');
+        setModeErr('');
+        setModePrompt(true);
+    };
+
+    const submitModePassword = () => {
+        if (String(modePw) !== modePassword) {
+            setModeErr('Mật khẩu không đúng.');
+            setModePw('');
+            return;
+        }
+        setModePrompt(false);
+        setModePw('');
+        setModeErr('');
+        toggleEventMode();
     };
 
     return (
@@ -157,8 +183,8 @@ const ManagementPanel = ({ onClose }) => {
                         <div className="flex shrink-0 items-center gap-3">
                             <button
                                 type="button"
-                                onClick={toggleEventMode}
-                                title="Đổi chế độ tính tiền"
+                                onClick={openModePrompt}
+                                title="Đổi chế độ tính tiền (cần mật khẩu)"
                                 className="flex items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-sm font-bold text-[#3f342a] shadow-sm transition-colors hover:bg-[#faf6ef]"
                             >
                                 <span className={`h-2 w-2 rounded-full ${isEventMode ? 'bg-[#e63946]' : 'bg-emerald-500'}`} />
@@ -206,6 +232,61 @@ const ManagementPanel = ({ onClose }) => {
                     </div>
                 </div>
             </div>
+
+            {modePrompt && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-6 font-sans"
+                    onClick={() => setModePrompt(false)}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl border border-[#E7D3B7] bg-white p-6 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="mb-4 flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                                <Zap size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-[#3F3127]">Đổi chế độ tính tiền</h2>
+                                <p className="text-sm font-bold text-[#7B5E43]">
+                                    Chuyển sang {isEventMode ? '“Trả phí”' : '“Sự kiện” (miễn phí)'} — nhập mật khẩu
+                                </p>
+                            </div>
+                        </div>
+                        <input
+                            type="password"
+                            inputMode="text"
+                            autoFocus
+                            value={modePw}
+                            onChange={(e) => { setModeErr(''); setModePw(e.target.value); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') submitModePassword(); }}
+                            placeholder="Mật khẩu đổi chế độ"
+                            className="mb-3 h-14 w-full rounded-2xl border border-[#E7D3B7] bg-[#FFF8E7] px-4 text-center text-2xl font-black tracking-widest text-[#3F3127] outline-none focus:border-[#8E6B4D]"
+                        />
+                        {modeErr && (
+                            <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-center text-sm font-bold text-red-600">
+                                {modeErr}
+                            </div>
+                        )}
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setModePrompt(false)}
+                                className="h-12 flex-1 rounded-2xl bg-[#F3E4CF] text-sm font-black text-[#7B5E43] active:scale-95"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={submitModePassword}
+                                className="h-12 flex-1 rounded-2xl bg-[#8E6B4D] text-sm font-black text-white active:scale-95"
+                            >
+                                Xác nhận
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

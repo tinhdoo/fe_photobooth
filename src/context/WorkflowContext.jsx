@@ -53,6 +53,7 @@ const DEFAULT_CONFIGS = {
     camera_mode: 'canon',
     hot_folder: 'C:/Photobooth_Input',
     staff_pin: '8888',
+    mode_switch_password: '', // mật khẩu đổi chế độ Trả phí/Sự kiện; rỗng -> tạm dùng staff_pin
     print_brightness: 0,
     print_contrast: 0,
     print_saturation: 0,
@@ -78,6 +79,7 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     camera_mode: nextConfigs.camera_mode || fallback.camera_mode || DEFAULT_CONFIGS.camera_mode,
     hot_folder: nextConfigs.hot_folder || fallback.hot_folder || DEFAULT_CONFIGS.hot_folder,
     staff_pin: String(nextConfigs.staff_pin || fallback.staff_pin || DEFAULT_CONFIGS.staff_pin),
+    mode_switch_password: String(nextConfigs.mode_switch_password ?? fallback.mode_switch_password ?? DEFAULT_CONFIGS.mode_switch_password),
     print_brightness: parseInt(nextConfigs.print_brightness ?? fallback.print_brightness) || 0,
     print_contrast: parseInt(nextConfigs.print_contrast ?? fallback.print_contrast) || 0,
     print_saturation: parseInt(nextConfigs.print_saturation ?? fallback.print_saturation) || 0,
