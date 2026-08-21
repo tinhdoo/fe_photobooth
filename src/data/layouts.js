@@ -80,6 +80,18 @@ export const LAYOUTS = [
     icon: '9.png',
   },
   {
+    // Lưới 3x3 = 9 ô (kiểu "PHOTO TIME"). In trên tờ 4x6 dọc; ghép/preview/chụp đều tổng quát
+    // theo cols/rows/photoCount nên không cần code riêng. Frame (tiêu đề, viền) thêm sau ở FrameManager.
+    id: 'grid_9',
+    name: 'Layout 8',
+    type: 'grid',
+    printMode: 'grid_4x6',
+    photoCount: 9,
+    cols: 3,
+    rows: 3,
+    icon: 'grid_9.svg',
+  },
+  {
     id: 'mobile_double_horizontal',
     name: 'Layout 1',
     description: '70.000 VNĐ',

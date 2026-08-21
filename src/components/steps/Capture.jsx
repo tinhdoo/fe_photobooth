@@ -928,7 +928,7 @@ const Capture = () => {
 
                 {/* Bottom Thumbnail Strip (Overlay or Part of Card) - Hide if Retaking specific photo */}
                 {!isRetakeMode && (
-                    <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-4 z-30 px-8">
+                    <div className={`absolute bottom-6 left-0 right-0 flex justify-center z-30 px-8 ${TOTAL_PHOTOS > 8 ? 'gap-2' : 'gap-4'}`}>
                         {Array.from({ length: TOTAL_PHOTOS }).map((_, i) => {
                             const photoUrl = photosTaken[i];
                             // Ô đang được chụp: khi đang chụp lại 1 tấm thì sáng ô đó, ngược lại là ô kế tiếp.
@@ -941,7 +941,7 @@ const Capture = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.1 }}
                                     className={`
-                                    relative w-24 h-20 md:w-32 md:h-24 rounded-lg flex items-center justify-center text-2xl font-serif transition-all duration-300 overflow-hidden shadow-lg border-2
+                                    relative rounded-lg flex items-center justify-center text-2xl font-serif transition-all duration-300 overflow-hidden shadow-lg border-2 ${TOTAL_PHOTOS > 8 ? 'w-16 h-14 md:w-20 md:h-16' : 'w-24 h-20 md:w-32 md:h-24'}
                                     ${photoUrl ? 'bg-[#D5B895] border-[#fff]/50' : 'bg-[#D5B895]/50 border-transparent text-[#8E6B4D]'}
                                     ${isCurrent ? 'scale-110 border-[#fff] shadow-xl ring-2 ring-[#fff]/30' : ''}
                                 `}
