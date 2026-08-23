@@ -298,6 +298,20 @@ const RevenueDashboard = () => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount || 0));
     };
 
+    // Tách chi tiết thanh toán khi trả GHÉP (voucher + tiền mặt/QR) -> hiện "Voucher 50k + Tiền mặt 10k"
+    // thay vì chỉ 1 con số tổng. Trả '' nếu không cần tách (thuần tiền mặt/QR).
+    const kShort = (n) => `${Math.round(Number(n || 0) / 1000)}k`;
+    const paymentBreakdown = (tx) => {
+        const v = voucherApplied(tx);
+        const r = realRevenue(tx);
+        if (v > 0 && r > 0) {
+            // Mã một phần (voucher + tiền mặt/QR): tách doanh thu THỰC thu được và phần voucher che.
+            return `Doanh thu thực ${kShort(r)} - Voucher ${kShort(v)}`;
+        }
+        if (v > 0 && r === 0) return `Voucher ${kShort(v)}`; // trả 100% bằng mã -> không có doanh thu thực
+        return '';
+    };
+
     const getMethodLabel = (tx) => {
         if (tx.method_label) return tx.method_label;
         const method = String(tx.payment_method || '').toLowerCase();
@@ -888,7 +902,12 @@ const RevenueDashboard = () => {
                                                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getMethodStyle(tx).dot}`} />
                                                 <span className="truncate">{getMethodLabel(tx)}</span>
                                             </div>
-                                            <span className="shrink-0 font-black text-[#e63946] text-base whitespace-nowrap">{formatCurrency(tx.value)}</span>
+                                            <div className="shrink-0 text-right">
+                                                <span className="block font-black text-[#e63946] text-base whitespace-nowrap">{formatCurrency(tx.value)}</span>
+                                                {paymentBreakdown(tx) && (
+                                                    <span className="block text-[11px] font-semibold text-gray-500 whitespace-nowrap">{paymentBreakdown(tx)}</span>
+                                                )}
+                                            </div>
                                         </div>
                                         {/* Hàng 2: mã · phòng + trạng thái + nút xem (status/nút luôn shrink-0 -> không bị cắt) */}
                                         <div className="flex items-center justify-between gap-3">
@@ -951,7 +970,12 @@ const RevenueDashboard = () => {
                                                         <span className="text-gray-400 text-xs">-</span>
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-6 font-black text-[#e63946]">{formatCurrency(tx.value)}</td>
+                                                <td className="px-4 py-6 font-black text-[#e63946]">
+                                                    {formatCurrency(tx.value)}
+                                                    {paymentBreakdown(tx) && (
+                                                        <span className="mt-0.5 block text-xs font-semibold text-gray-500">{paymentBreakdown(tx)}</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-6 text-sm text-gray-500">
                                                     {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                                 </td>

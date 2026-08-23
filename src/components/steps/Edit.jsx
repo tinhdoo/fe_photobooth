@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useWorkflow, setPendingMediaUpload } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
-import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2 } from 'lucide-react';
+import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2, Move } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 import { getDeviceId } from '../../utils/deviceId';
@@ -291,6 +291,9 @@ const Edit = () => {
     // Cache config (boxes) theo frameId để đổi frame không phải fetch lại mỗi lần -> hết delay
     const frameConfigCacheRef = useRef(new Map());
     const [frameConfig, setFrameConfig] = useState({ boxes: [] });
+    // Ref bám theo frameConfig -> lệnh IN (kể cả tự in khi hết giờ) luôn đọc config ô MỚI NHẤT,
+    // tránh in bằng closure cũ (boxes rỗng) khiến ảnh xếp lưới mặc định lệch với khung overlay.
+    const frameConfigRef = useRef({ boxes: [] });
     const [isUploading, setIsUploading] = useState(false);
     const [isFiltering, setIsFiltering] = useState(false);
     const [errorDialog, setErrorDialog] = useState({ show: false, title: '', message: '' });
@@ -389,6 +392,10 @@ const Edit = () => {
     useEffect(() => {
         selectedFrameRef.current = selectedFrame;
     }, [selectedFrame]);
+
+    useEffect(() => {
+        frameConfigRef.current = frameConfig;
+    }, [frameConfig]);
 
     // 2. Generate Preview QR Code (Local generation instead of external API)
     useEffect(() => {
@@ -533,7 +540,18 @@ const Edit = () => {
         if (!timedOut || isPrintingRef.current || !framesLoaded) return;
         console.log("Timeout: Auto-printing...");
         isPrintingRef.current = true;
-        handlePrint();
+        (async () => {
+            // AN TOÀN THÊM: nếu đang chọn 1 frame THẬT (có ảnh/layout/name) nhưng config ô CHƯA có
+            // (fetch lỗi/chậm) -> tải lại + chờ áp trước khi in. Nếu không, drawComposite rơi vào lưới
+            // mặc định trong khi vẫn phủ ảnh khung -> ảnh LỆCH Ô như khách phản ánh khi hết giờ.
+            const f = selectedFrameRef.current;
+            const needConfig = f && f.url && f.layout && f.name && !(frameConfigRef.current?.boxes?.length);
+            if (needConfig) {
+                try { await handleSelectFrame(f); } catch { /* thất bại -> vẫn in bản hiện có */ }
+                await new Promise((r) => setTimeout(r, 200)); // chờ state/ref commit
+            }
+            handlePrint();
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timedOut, framesLoaded]);
 
@@ -834,10 +852,13 @@ const Edit = () => {
             await Promise.all(Array.from(preloadSources).map(cachedLoadImage));
 
             const drawComposite = async (targetCanvas, targetCtx) => {
+                // Đọc config ô MỚI NHẤT từ ref (không dùng biến state đóng băng trong closure) ->
+                // in đúng ô kể cả khi hết giờ tự in ngay sau khi frame vừa áp xong.
+                const fc = frameConfigRef.current || frameConfig;
                 // 4. Draw Photos (Custom vs Grid)
-                if (frameConfig && frameConfig.boxes && frameConfig.boxes.length > 0) {
+                if (fc && fc.boxes && fc.boxes.length > 0) {
                     let implicitPhotoIndex = 0;
-                    for (const box of frameConfig.boxes) {
+                    for (const box of fc.boxes) {
                         if (box.type === 'qr') continue; // Handled by manual overlay
 
                         const targetIdx = box.photoIndex !== undefined ? box.photoIndex : (implicitPhotoIndex % photosToDraw.length);
@@ -862,7 +883,7 @@ const Edit = () => {
                                 targetCtx.translate(-(x + w / 2), -(y + h / 2));
                             }
 
-                            if (frameConfig.borderRadius > 0) {
+                            if (fc.borderRadius > 0) {
                                 targetCtx.beginPath();
                                 targetCtx.rect(x, y, w, h); // Clip in rotated space
                                 targetCtx.clip();
@@ -1253,6 +1274,17 @@ const Edit = () => {
             >
                 Chọn Màu & Khung Ảnh
             </motion.h2>
+
+            {/* Gợi ý: khách thường không biết có thể kéo ảnh trong ô để căn -> note nhỏ ngay dưới tiêu đề. */}
+            <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="-mt-9 mb-8 flex items-center justify-center gap-2 text-center text-xl font-serif font-semibold"
+                style={{ color: primaryTextColor }}
+            >
+                <Move size={20} />
+                Có thể kéo ảnh trong từng ô để căn chỉnh nha
+            </motion.p>
 
             <div className="flex-1 flex gap-8 overflow-hidden px-4">
                 {/* LEFT: Preview */}

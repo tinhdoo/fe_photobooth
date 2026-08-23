@@ -37,10 +37,15 @@ const getReviewGrid = (layout) => {
     const cols = layout.photoCount > 4 && layout.photoCount % 2 === 0 ? 2 : (layout.cols || 2);
     const rows = layout.photoCount > 4 && layout.photoCount % 2 === 0 ? Math.ceil(layout.photoCount / 2) : (layout.rows || 2);
 
+    // Khung preview khớp ĐÚNG hướng tờ in: grid dọc = 2:3 (tờ 4x6 dọc), grid ngang = 3:2.
+    // Trước đây dùng 3*cols/2*rows (giả định ô ngang 3:2) -> lưới vuông như 3x3 bị ép thành khung
+    // NGANG, ô bị nén nhỏ xíu. Dùng đúng tỉ lệ tờ -> ô tự có tỉ lệ dọc giống ảnh in thật, to & rõ.
+    const isHorizontal = layout.type && layout.type.includes('horizontal');
+
     return {
         className: 'grid',
         style: {
-            aspectRatio: `${3 * cols} / ${2 * rows}`,
+            aspectRatio: isHorizontal ? '3 / 2' : '2 / 3',
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
             gap: '10px'
@@ -120,6 +125,10 @@ const Review = () => {
         // Xoá retakeIndex còn sót (vd lượt "chụp lại 1 tấm" trước bị lỗi/thoát dở): nếu để sót,
         // Capture sẽ vào nhánh retake với nguồn RỖNG -> mảng thưa, ô trống, count sai.
         updateSessionData('retakeIndex', null);
+        // CHỤP LẠI = ảnh mới -> cho phép in lại. Nếu phiên trước đã in (vd bị hết giờ tự in ra bản
+        // lỗi) thì 'printedSessionId' còn set -> guard "đã in" sẽ CHẶN in bản mới. Xoá cờ + QR cũ
+        // để lượt chụp lại này in được tấm mới.
+        updateSessionData('printedSessionId', null);
         // Camera Canon đang ẤM (live view chạy suốt vùng chụp) -> vào THẲNG bước Chụp, BỎ màn
         // Chuẩn bị cho mượt. Chưa ấm (hoặc webcam) -> qua Chuẩn bị để warm + tránh đen màn.
         goToStep(((configs?.camera_mode || 'canon') === 'canon' && sessionData.cameraWarm) ? 4 : 3.5);
@@ -169,6 +178,8 @@ const Review = () => {
 
     const handleRetakePhoto = (photoIndex) => {
         updateSessionData('retakeIndex', photoIndex);
+        // Chụp lại 1 tấm cũng là ảnh mới -> mở lại quyền in (xoá cờ "đã in" của phiên trước).
+        updateSessionData('printedSessionId', null);
         // Camera Canon đang ẤM (live view chạy suốt vùng chụp) -> vào THẲNG bước Chụp, BỎ màn
         // Chuẩn bị cho mượt. Chưa ấm (hoặc webcam) -> qua Chuẩn bị để warm + tránh đen màn.
         goToStep(((configs?.camera_mode || 'canon') === 'canon' && sessionData.cameraWarm) ? 4 : 3.5);
@@ -191,9 +202,9 @@ const Review = () => {
 
                     <div className="flex w-full justify-center rounded-[2rem] bg-white/75 p-5 shadow-[0_18px_55px_-35px_rgba(47,62,70,0.45)]">
                         <div
-                            className={`w-full ${currentLayout.type?.includes('horizontal') ? 'max-w-[560px]' : 'max-w-[310px]'} bg-white p-4 shadow-[0_24px_65px_-30px_rgba(47,62,70,0.45)] ${previewGrid.className}`}
+                            className={`w-full ${currentLayout.type?.includes('horizontal') ? 'max-w-[560px]' : 'max-w-[440px]'} bg-white p-4 shadow-[0_24px_65px_-30px_rgba(47,62,70,0.45)] ${previewGrid.className}`}
                             style={{
-                                maxHeight: '62vh',
+                                maxHeight: '70vh',
                                 ...previewGrid.style
                             }}
                         >
@@ -235,7 +246,7 @@ const Review = () => {
                         </div>
                     </div>
 
-                    <div className={`grid gap-4 ${sourcePhotos.length > 4 ? 'grid-cols-4' : 'grid-cols-2'} pr-1`}>
+                    <div className={`grid gap-4 ${currentLayout.cols === 3 ? 'grid-cols-3' : (sourcePhotos.length > 4 ? 'grid-cols-4' : 'grid-cols-2')} pr-1`}>
                         {sourcePhotos.map((photoObj, index) => {
                             const photoSrc = getPhotoUrl(photoObj);
                             const canFill = activeSlot !== null && activeSlot !== undefined;

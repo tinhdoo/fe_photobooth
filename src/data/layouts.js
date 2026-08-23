@@ -1,8 +1,22 @@
 
 export const LAYOUTS = [
   {
+    // Lưới 3x3 = 9 ô (kiểu "PHOTO TIME"). In trên tờ 4x6 dọc; ghép/preview/chụp đều tổng quát
+    // theo cols/rows/photoCount nên không cần code riêng. Frame (tiêu đề, viền) thêm sau ở FrameManager.
+    // Đặt ĐẦU danh sách để hiện đầu tiên ở bước chọn layout.
+    id: 'grid_9',
+    name: '9 cuts',
+    type: 'grid',
+    printMode: 'grid_4x6',
+    photoCount: 9,
+    cols: 3,
+    rows: 3,
+    icon: 'grid_9.png',
+    fullColorIcon: true, // icon nền màu (không phải line-art) -> KHÔNG áp mix-blend-multiply
+  },
+  {
     id: 'strip_4',
-    name: 'Layout 1',
+    name: '4 cuts',
     description: '70.000 VND',
     type: 'strip',
     printMode: 'double_strip',
@@ -13,7 +27,7 @@ export const LAYOUTS = [
   },
   {
     id: 'strip_3',
-    name: 'Layout 2',
+    name: '3 cuts',
     description: '70.000 VND',
     type: 'strip',
     printMode: 'double_strip',
@@ -24,7 +38,7 @@ export const LAYOUTS = [
   },
   {
     id: 'grid_6',
-    name: 'Layout 3',
+    name: '6 cuts',
     description: '70.000 VND',
     type: 'grid',
     printMode: 'grid_4x6',
@@ -35,7 +49,7 @@ export const LAYOUTS = [
   },
   {
     id: 'grid_2',
-    name: 'Layout 4',
+    name: '2 cuts',
     description: '70.000 VND',
     type: 'grid',
     printMode: 'grid_4x6',
@@ -46,7 +60,7 @@ export const LAYOUTS = [
   },
   {
     id: 'horizontal_4',
-    name: 'Layout 5',
+    name: '4 cuts',
     description: '70.000 VND',
     type: 'grid_horizontal',
     printMode: 'grid_4x6',
@@ -57,7 +71,7 @@ export const LAYOUTS = [
   },
   {
     id: 'grid_4_vertical',
-    name: 'Layout 6',
+    name: '4 cuts',
     description: '70.000 VND',
     type: 'grid',
     printMode: 'grid_4x6',
@@ -70,7 +84,7 @@ export const LAYOUTS = [
     // 1 strip NGANG 3 ảnh, in 2 BẢN GIỐNG HỆT chồng trên 1 tờ 4x6 nằm ngang, cắt ngang
     // bằng dao 2-inch -> ra 2 strip ngang y hệt nhau (như double_strip dọc nhưng nằm ngang).
     id: 'strip_h_2x3',
-    name: 'Layout 7',
+    name: '3 cuts',
     description: '70.000 VND',
     type: 'strip_horizontal',
     printMode: 'double_strip_horizontal',
@@ -80,20 +94,8 @@ export const LAYOUTS = [
     icon: '9.png',
   },
   {
-    // Lưới 3x3 = 9 ô (kiểu "PHOTO TIME"). In trên tờ 4x6 dọc; ghép/preview/chụp đều tổng quát
-    // theo cols/rows/photoCount nên không cần code riêng. Frame (tiêu đề, viền) thêm sau ở FrameManager.
-    id: 'grid_9',
-    name: 'Layout 8',
-    type: 'grid',
-    printMode: 'grid_4x6',
-    photoCount: 9,
-    cols: 3,
-    rows: 3,
-    icon: 'grid_9.svg',
-  },
-  {
     id: 'mobile_double_horizontal',
-    name: 'Layout 1',
+    name: '2 cuts',
     description: '70.000 VNĐ',
     type: 'grid',
     printMode: 'grid_4x6',
@@ -105,7 +107,7 @@ export const LAYOUTS = [
   },
   {
     id: 'mobile_double_vertical',
-    name: 'Layout 2',
+    name: '2 cuts',
     description: '70.000 VNĐ',
     type: 'grid_horizontal',
     printMode: 'grid_4x6',
@@ -117,7 +119,7 @@ export const LAYOUTS = [
   },
   {
     id: 'mobile_single',
-    name: 'Layout 3',
+    name: '1 cuts',
     description: '70.000 VNĐ',
     type: 'grid_horizontal',
     printMode: 'grid_4x6',

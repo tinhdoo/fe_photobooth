@@ -137,7 +137,7 @@ const LayoutSelection = () => {
                                 <img
                                     src={layoutIconUrls[layout.icon]}
                                     alt={layout.name}
-                                    className="w-full h-full object-contain mix-blend-multiply opacity-90"
+                                    className={`w-full h-full object-contain ${layout.fullColorIcon ? '' : 'mix-blend-multiply opacity-90'}`}
                                 />
                             </div>
 
