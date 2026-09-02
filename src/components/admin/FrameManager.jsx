@@ -155,10 +155,26 @@ const FrameManager = () => {
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
 
+        // Vercel serverless giới hạn body ~4.5MB -> chặn sớm + báo RÕ file nào quá lớn (frame 4x6
+        // PNG trong suốt độ phân giải cao rất dễ vượt). Chỉ upload các file trong giới hạn.
+        const MAX_BYTES = 4.4 * 1024 * 1024;
+        const mb = (n) => (n / 1024 / 1024).toFixed(1);
+        const tooBig = files.filter((f) => f.size > MAX_BYTES);
+        if (tooBig.length > 0) {
+            setNotification({
+                show: true,
+                type: 'error',
+                message: `Frame quá lớn (giới hạn 4.5MB): ${tooBig.map((f) => `${f.name} (${mb(f.size)}MB)`).join(', ')}. Hãy giảm dung lượng/độ phân giải rồi thử lại.`,
+            });
+            setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 8000);
+        }
+        const okFiles = files.filter((f) => f.size <= MAX_BYTES);
+        if (okFiles.length === 0) { e.target.value = null; return; }
+
         setUploading(true);
         const duplicates = [];
         try {
-            const uploadPromises = files.map(async file => {
+            const uploadPromises = okFiles.map(async file => {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('layout', selectedLayout);
@@ -195,8 +211,13 @@ const FrameManager = () => {
             }
         } catch (error) {
             console.error("Error uploading frames:", error);
-            setNotification({ show: true, message: "Tải lên thất bại", type: 'error' });
-            setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+            const status = error.response?.status;
+            let reason;
+            if (status === 413) reason = "Frame quá lớn — vượt giới hạn 4.5MB của máy chủ. Hãy giảm dung lượng ảnh.";
+            else if (status === 401 || status === 403) reason = "Phiên đăng nhập hết hạn hoặc không đủ quyền. Hãy đăng nhập lại.";
+            else reason = error.response?.data?.error || error.message || "không rõ lý do";
+            setNotification({ show: true, message: `Tải frame thất bại: ${reason}`, type: 'error' });
+            setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 7000);
         } finally {
             setUploading(false);
             e.target.value = null;

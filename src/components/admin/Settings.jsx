@@ -750,7 +750,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 {/* SECTION 1: THANH TOÁN & IN ẤN */}
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between border-b pb-2">
-                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Thanh toán & In ấn</h3>
+                                        <h3 className="text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest">Thanh toán & In ấn</h3>
                                         {isLocalAdmin && (
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm font-bold text-gray-600">
@@ -849,7 +849,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}
-                                        <div className="bg-gray-50/80 p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6">
+                                        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm transition-shadow hover:shadow-md space-y-6">
                                             <h4 className="text-base font-bold text-[#354f52] flex items-center gap-2 tracking-wide">
                                                 📸 Chụp tại quầy
                                             </h4>
@@ -897,7 +897,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                         </div>
 
                                         {/* Mobile Upload Flow */}
-                                        <div className="bg-[#f8fcf3] p-4 sm:p-6 rounded-2xl border border-[#e6eedf] space-y-6">
+                                        <div className="bg-[#f8fcf3] p-5 sm:p-6 rounded-2xl border border-[#e6eedf] shadow-sm transition-shadow hover:shadow-md space-y-6">
                                             <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
                                                 📱 Tải trực tuyến
                                             </h4>
@@ -1093,7 +1093,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                         </div>
                                     </div>                                {/* SECTION 2: THỜI GIAN CHỤP */}
                                 <div className="space-y-4">
-                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider border-b pb-2">Thời gian & Trải nghiệm</h3>
+                                    <h3 className="text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest border-b pb-2">Thời gian & Trải nghiệm</h3>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">

@@ -13,8 +13,13 @@ const voucherApplied = (tx) => {
     const applied = Number(tx.payment_code_applied || 0);
     const value = txValue(tx);
     if (applied > 0) return Math.min(applied, value);
-    // Session cũ thiếu payment_code_applied: nếu trả 100% bằng mã -> coi cả giá trị là voucher.
-    return String(tx.payment_method || '').toLowerCase() === 'code' ? value : 0;
+    // Thiếu payment_code_applied: ƯU TIÊN dùng GIÁ TRỊ MÃ (payment_code_value) -> voucher che tối đa
+    // đúng bằng mệnh giá mã (vd mã 50k trên đơn 60k -> che 50k, còn 10k là tiền mặt/QR). Trước đây
+    // coi CẢ tổng là voucher -> hiện sai "Voucher 60k" và làm MẤT 10k doanh thu thật.
+    const m = String(tx.payment_method || '').toLowerCase();
+    if (!m.includes('code')) return 0;
+    const codeVal = Number(tx.payment_code_value || 0);
+    return codeVal > 0 ? Math.min(codeVal, value) : value; // không có mệnh giá -> đành coi 100% (mã cũ)
 };
 // Doanh thu THẬT = tiền thu được (tiền mặt + QR) = tổng giá trị trừ phần voucher che.
 // Mã một phần (code+cash / code+qr): phần tiền mặt/QR VẪN tính, chỉ trừ phần voucher.
