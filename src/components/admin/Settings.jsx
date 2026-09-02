@@ -683,43 +683,43 @@ const Settings = ({ forceLocalAdmin = false }) => {
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 w-full max-w-full animate-fadeIn">
-            {/* Left Sidebar: Navigation & Header */}
-            <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
+        <div className="animate-fadeIn">
+            {/* Header full-width — đồng bộ khuôn với các trang admin khác (tiêu đề trên đầu) */}
+            <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt & Thiết bị</h1>
                     <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
                 </div>
 
                 {isLocalAdmin && (
-                    <nav className="space-y-2">
+                    <nav className="flex gap-2 shrink-0">
                         <button
                             onClick={() => setActiveTab('general')}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-left ${activeTab === 'general'
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'general'
                                 ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
+                                : 'bg-white border border-gray-100 text-gray-500 hover:text-[#e63946]'
                                 }`}
                         >
-                            <SettingsIcon size={20} />
-                            Cài đặt chung
+                            <SettingsIcon size={18} />
+                            <span className="hidden sm:inline">Cài đặt chung</span>
                         </button>
 
                         <button
                             onClick={() => setActiveTab('devices')}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-left ${activeTab === 'devices'
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'devices'
                                 ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-[#e63946]'
+                                : 'bg-white border border-gray-100 text-gray-500 hover:text-[#e63946]'
                                 }`}
                         >
-                            <Monitor size={20} />
-                            Quản lý Thiết bị
+                            <Monitor size={18} />
+                            <span className="hidden sm:inline">Quản lý Thiết bị</span>
                         </button>
                     </nav>
                 )}
             </div>
 
-            {/* Right Content Area */}
-            <div className="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100">
+            {/* Content full-width */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
                 {activeTab === 'general' ? (
                     <div>
                         <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
