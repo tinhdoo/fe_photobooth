@@ -683,9 +683,9 @@ const Settings = ({ forceLocalAdmin = false }) => {
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-6rem)] w-full max-w-full overflow-hidden animate-fadeIn">
+        <div className="flex flex-col lg:flex-row gap-6 w-full max-w-full animate-fadeIn">
             {/* Left Sidebar: Navigation & Header */}
-            <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-6">
+            <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt & Thiết bị</h1>
                     <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
@@ -719,10 +719,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
             </div>
 
             {/* Right Content Area */}
-            <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <div className="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100">
                 {activeTab === 'general' ? (
-                    <div className="h-full flex flex-col">
-                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div>
+                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
                             <h2 className="text-xl font-bold text-[#1a1a2e] flex items-center gap-2">
                                 <SettingsIcon size={20} className="text-[#e63946]" />
                                 Cấu hình chung
@@ -736,7 +736,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 lg:overflow-y-auto overflow-x-hidden p-4 sm:p-8">
+                        <div className="p-4 sm:p-8">
                             {message && (
                                 <div className={`p-4 mb-8 rounded-xl border ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} animate-fadeIn`}>
                                     <div className="flex items-center gap-2 font-bold">
@@ -746,11 +746,11 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 </div>
                             )}
 
-                            <div className="space-y-12 max-w-5xl mx-auto pb-12">
+                            <div className="space-y-10 pb-4">
                                 {/* SECTION 1: THANH TOÁN & IN ẤN */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between border-b pb-2">
-                                        <h3 className="text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest">Thanh toán & In ấn</h3>
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                        <h3 className="flex items-center gap-2.5 text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest"><span className="h-4 w-1.5 rounded-full bg-[#e63946]" />Thanh toán & In ấn</h3>
                                         {isLocalAdmin && (
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm font-bold text-gray-600">
@@ -849,19 +849,23 @@ const Settings = ({ forceLocalAdmin = false }) => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}
-                                        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm transition-shadow hover:shadow-md space-y-6">
-                                            <h4 className="text-base font-bold text-[#354f52] flex items-center gap-2 tracking-wide">
-                                                📸 Chụp tại quầy
-                                            </h4>
+                                        <div className="bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
+                                            <div className="flex items-center gap-3 pb-1">
+                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#354f52]/10 text-2xl">📸</div>
+                                                <div>
+                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Chụp tại quầy</h4>
+                                                    <p className="text-xs font-semibold text-gray-400">Khách chụp trực tiếp tại máy</p>
+                                                </div>
+                                            </div>
 
                                             <div className="group">
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
                                                     Giá mỗi lượt chụp
                                                 </label>
                                                 <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-                                                        <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
+                                                    <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -871,9 +875,9 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     Giá bản in thêm
                                                 </label>
                                                 <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-xl border-gray-200 pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-                                                        <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
+                                                    <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -897,19 +901,23 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                         </div>
 
                                         {/* Mobile Upload Flow */}
-                                        <div className="bg-[#f8fcf3] p-5 sm:p-6 rounded-2xl border border-[#e6eedf] shadow-sm transition-shadow hover:shadow-md space-y-6">
-                                            <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
-                                                📱 Tải trực tuyến
-                                            </h4>
+                                        <div className="bg-gradient-to-br from-[#f4fbec] to-[#eef7e6] p-6 sm:p-7 rounded-3xl border border-[#dcebcf] shadow-lg shadow-green-200/30 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
+                                            <div className="flex items-center gap-3 pb-1">
+                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#6aa84f]/15 text-2xl">📱</div>
+                                                <div>
+                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Tải trực tuyến</h4>
+                                                    <p className="text-xs font-semibold text-[#6aa84f]">Khách tải ảnh về qua điện thoại</p>
+                                                </div>
+                                            </div>
 
                                             <div className="group">
                                                 <label className="block text-xs font-bold text-[#e63946] mb-2">
                                                     Giá mỗi phiên tải
                                                 </label>
                                                 <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="mobile_price" value={configs.mobile_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-                                                        <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
+                                                    <input type="number" name="mobile_price" value={configs.mobile_price} onChange={handleChange} className="block w-full rounded-2xl border-[#dcebcf] bg-white/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -919,9 +927,9 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     Giá bản in thêm
                                                 </label>
                                                 <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="mobile_print_price" value={configs.mobile_print_price} onChange={handleChange} className="block w-full rounded-xl border-[#e6eedf] pl-4 pr-12 py-2.5 text-sm focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-                                                        <span className="text-gray-400 font-bold text-xs uppercase">VND</span>
+                                                    <input type="number" name="mobile_print_price" value={configs.mobile_print_price} onChange={handleChange} className="block w-full rounded-2xl border-[#dcebcf] bg-white/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1211,8 +1219,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
                             </div>
                         </div>
 
-                        {/* Footer Action */}
-                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+                        {/* Footer Action — dính đáy để luôn bấm Lưu được, không phải cuộn xuống cuối */}
+                        <div className="p-4 sm:p-6 border-t border-gray-100 bg-white/90 backdrop-blur flex justify-end sticky bottom-0 rounded-b-2xl z-10">
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
@@ -1237,7 +1245,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="h-full lg:overflow-y-auto overflow-x-hidden p-8">
+                    <div className="p-4 sm:p-8">
                         <DeviceManager />
                     </div>
                 )}
