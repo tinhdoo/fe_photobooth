@@ -40,6 +40,7 @@ const AdminLogin = () => {
                 action: 'login',
                 username: username.trim(),
                 password,
+                remember: rememberMe, // tick -> token sống 30 ngày; không tick -> 12h
             });
             const { token, role, display_name, username: serverUsername } = res.data || {};
             if (!token) throw new Error('Phản hồi không hợp lệ');

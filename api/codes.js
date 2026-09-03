@@ -1,5 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
-import { requireAuth, hashPassword, verifyPassword, signToken } from '../lib/auth.js';
+import { requireAuth, hashPassword, verifyPassword, signToken, REMEMBER_TTL_SECONDS } from '../lib/auth.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -365,6 +365,9 @@ async function login(req, res, supabase) {
     // Username trong DB luôn là chữ thường (createStaff ép lower) -> tra cứu cũng hạ chữ thường
     // để nhân viên gõ hoa/thường lệch vẫn đăng nhập được.
     const username = rawUsername.toLowerCase();
+    // "Ghi nhớ đăng nhập" -> token sống 30 ngày; không tick -> 12h (mặc định của signToken).
+    const remember = req.body?.remember === true || req.body?.remember === 'true';
+    const ttl = remember ? REMEMBER_TTL_SECONDS : undefined;
 
     // 1) Tài khoản trong DB.
     const { data, error } = await supabase
@@ -379,7 +382,7 @@ async function login(req, res, supabase) {
         if (!verifyPassword(password, data.password_hash)) {
             return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
         }
-        const token = signToken({ u: data.username, r: data.role });
+        const token = signToken({ u: data.username, r: data.role }, ttl);
         return json(res, 200, {
             token,
             username: data.username,
@@ -393,7 +396,7 @@ async function login(req, res, supabase) {
     const envUser = globalThis.process?.env?.ADMIN_USERNAME;
     const envPass = globalThis.process?.env?.ADMIN_PASSWORD;
     if (envUser && envPass && username === String(envUser).trim().toLowerCase() && password === envPass) {
-        const token = signToken({ u: username, r: 'admin' });
+        const token = signToken({ u: username, r: 'admin' }, ttl);
         return json(res, 200, { token, username, display_name: 'Quản trị', role: 'admin' });
     }
 

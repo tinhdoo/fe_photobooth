@@ -900,41 +900,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                             )}
                                         </div>
 
-                                        {/* Mobile Upload Flow */}
-                                        <div className="bg-gradient-to-br from-[#f4fbec] to-[#eef7e6] p-6 sm:p-7 rounded-3xl border border-[#dcebcf] shadow-lg shadow-green-200/30 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
-                                            <div className="flex items-center gap-3 pb-1">
-                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#6aa84f]/15 text-2xl">📱</div>
-                                                <div>
-                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Tải trực tuyến</h4>
-                                                    <p className="text-xs font-semibold text-[#6aa84f]">Khách tải ảnh về qua điện thoại</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="group">
-                                                <label className="block text-xs font-bold text-[#e63946] mb-2">
-                                                    Giá mỗi phiên tải
-                                                </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="mobile_price" value={configs.mobile_price} onChange={handleChange} className="block w-full rounded-2xl border-[#dcebcf] bg-white/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="group">
-                                                <label className="block text-xs font-bold text-[#e63946] mb-2">
-                                                    Giá bản in thêm
-                                                </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="mobile_print_price" value={configs.mobile_print_price} onChange={handleChange} className="block w-full rounded-2xl border-[#dcebcf] bg-white/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         {/* Cân chỉnh ảnh in */}
                                         {isLocalAdmin && (
                                             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm col-span-1 md:col-span-2">
@@ -1020,7 +985,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                                             <input
                                                 type="datetime-local"
                                                 value={priceScheduleForm.run_at}
@@ -1030,8 +995,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                             {[
                                                 ['price', 'Giá chụp'],
                                                 ['print_price', 'In thêm'],
-                                                ['mobile_price', 'Mobile'],
-                                                ['mobile_print_price', 'Mobile in thêm'],
                                             ].map(([key, label]) => (
                                                 <input
                                                     key={key}
@@ -1081,10 +1044,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                             <span className="whitespace-nowrap">Chụp: <strong className="text-gray-700">{Number(item.price || 0).toLocaleString('vi-VN')}đ</strong></span>
                                                             <span className="text-gray-300">•</span>
                                                             <span className="whitespace-nowrap">In: <strong className="text-gray-700">{Number(item.print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">Mobile: <strong className="text-gray-700">{Number(item.mobile_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">Mb in: <strong className="text-gray-700">{Number(item.mobile_print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
                                                         </div>
                                                     </div>
                                                     <div className="flex justify-end w-full sm:w-auto border-t sm:border-0 pt-2 sm:pt-0">
@@ -1129,17 +1088,6 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                 </label>
                                                 <input type="number" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
                                             </div>
-                                        </div>
-
-                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Thời gian 1 phiên tải ảnh điện thoại (giây)
-                                                </label>
-                                                <input type="number" name="mobile_session_timeout" value={configs.mobile_session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                                <p className="text-xs text-gray-400 mt-2">Dành riêng cho khách tự upload ảnh từ thiết bị cá nhân.</p>
-                                            </div>
-
                                         </div>
                                     </div>
                                 </div>
