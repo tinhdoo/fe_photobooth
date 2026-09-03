@@ -849,7 +849,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}
-                                        <div className="bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
+                                        <div className="col-span-1 md:col-span-2 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
                                             <div className="flex items-center gap-3 pb-1">
                                                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#354f52]/10 text-2xl">📸</div>
                                                 <div>
@@ -858,26 +858,28 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                 </div>
                                             </div>
 
-                                            <div className="group">
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Giá mỗi lượt chụp
-                                                </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                                <div className="group">
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                        Giá mỗi lượt chụp
+                                                    </label>
+                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                        <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            <div className="group">
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Giá bản in thêm
-                                                </label>
-                                                <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                    <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                        <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                                <div className="group">
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                        Giá bản in thêm
+                                                    </label>
+                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                        <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
