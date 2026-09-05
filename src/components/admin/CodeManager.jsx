@@ -129,6 +129,7 @@ const CodeManager = () => {
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([{ value: 70000, quantity: 1 }]);
     const [expiresAt, setExpiresAt] = useState('');
+    const [showExpiry, setShowExpiry] = useState(false); // hạn dùng: mặc định ẩn, bấm mới mở
     const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
     const [exportPrompt, setExportPrompt] = useState({ show: false, codes: [] });
     // Trạng thái luồng "Lấy mã" của nhân viên
@@ -441,15 +442,18 @@ const CodeManager = () => {
                                                 min="1" max="100"
                                             />
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeRow(index)}
-                                            disabled={rows.length === 1}
-                                            className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                                            title="Xóa dòng"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
+                                        {/* Chỉ hiện khi có từ 2 dòng. Một dòng thì nút này luôn mờ,
+                                            bấm không được, mà vẫn ăn mất chỗ của ô mệnh giá. */}
+                                        {rows.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRow(index)}
+                                                className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all shrink-0"
+                                                title="Xóa dòng"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -462,8 +466,30 @@ const CodeManager = () => {
                             </button>
                         </div>
 
+                        {/* Hạn dùng: mặc định ẨN. Chú thích cũ ghi "để trống nếu vĩnh viễn"
+                            -> bỏ trống mới là thường lệ, nên bày sẵn ô datetime chỉ tổ chật chỗ. */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Ngày hết hạn</label>
+                            {!showExpiry ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowExpiry(true)}
+                                    className="flex items-center gap-1.5 py-1 text-sm font-semibold text-gray-500 hover:text-[#e63946] transition-colors"
+                                >
+                                    <Clock size={16} /> Đặt hạn dùng
+                                    <span className="text-xs font-normal text-gray-400">· mặc định vĩnh viễn</span>
+                                </button>
+                            ) : (
+                            <>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-semibold text-gray-700">Ngày hết hạn</label>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowExpiry(false); setExpiresAt(''); }}
+                                    className="text-xs font-semibold text-gray-400 hover:text-[#e63946]"
+                                >
+                                    Bỏ hạn
+                                </button>
+                            </div>
                             <div className="relative w-full max-w-full overflow-hidden">
                                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
@@ -474,7 +500,9 @@ const CodeManager = () => {
                                     min={getMinDateTime()}
                                 />
                             </div>
-                            <p className="text-xs text-gray-400 mt-1 ml-1">Áp dụng cho tất cả mã. Để trống nếu mã có hiệu lực vĩnh viễn</p>
+                            <p className="text-xs text-gray-400 mt-1 ml-1">Áp dụng cho tất cả mã trong lần tạo này.</p>
+                            </>
+                            )}
                         </div>
 
                         <button
@@ -496,7 +524,7 @@ const CodeManager = () => {
 
                 {/* --- 2. CODES LIST --- */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
-                    <div className="p-5 md:p-6 border-b border-gray-100 bg-gray-50/50 space-y-3">
+                    <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50 space-y-2.5">
                         <div className="flex justify-between items-center">
                             <div>
                                 <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã đã lấy' : 'Danh sách mã'}</h3>
@@ -535,7 +563,7 @@ const CodeManager = () => {
                                         key={f.key}
                                         type="button"
                                         onClick={() => setStatusFilter(f.key)}
-                                        className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                        className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
                                     >
                                         {f.label}
                                     </button>
@@ -543,27 +571,29 @@ const CodeManager = () => {
                             </div>
                         </div>
 
-                        {/* Lọc theo mệnh giá. Chỉ hiện khi có từ 2 mệnh giá trở lên -> một mệnh
-                            giá thì hàng nút này chẳng lọc được gì, chỉ tổ chật chỗ. */}
+                        {/* Mệnh giá phải là hàng RIÊNG. Đã thử gộp chung hàng với trạng thái: đo
+                            trên khổ 390px thì 267px bị đẩy ra ngoài màn -> đúng nhóm nút này bị
+                            khuất hết, phải vuốt ngang mới thấy. Gộp chỉ tiết kiệm ~38px, không
+                            đáng. Bù lại bằng cách bóp nhỏ chip (py-1.5, text-[11px]) trên điện thoại. */}
                         {denomOptions.length > 1 && (
                             <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
-                                <button
-                                    type="button"
-                                    onClick={() => setValueFilter('all')}
-                                    className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${valueFilter === 'all' ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
-                                >
-                                    Mọi giá
-                                </button>
-                                {denomOptions.map((v) => (
-                                    <button
-                                        key={v}
-                                        type="button"
-                                        onClick={() => setValueFilter(String(v))}
-                                        className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${String(valueFilter) === String(v) ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
-                                    >
-                                        {denomLabel(v)}
-                                    </button>
-                                ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setValueFilter('all')}
+                                            className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${valueFilter === 'all' ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                        >
+                                            Mọi giá
+                                        </button>
+                                        {denomOptions.map((v) => (
+                                            <button
+                                                key={v}
+                                                type="button"
+                                                onClick={() => setValueFilter(String(v))}
+                                                className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${String(valueFilter) === String(v) ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                            >
+                                                {denomLabel(v)}
+                                            </button>
+                                        ))}
                             </div>
                         )}
                     </div>
@@ -574,48 +604,56 @@ const CodeManager = () => {
                             <div className="p-8 text-center text-gray-400 italic">{codes.length === 0 ? (staffOnly ? 'Bạn chưa lấy mã nào.' : 'Chưa có dữ liệu.') : 'Không có mã khớp bộ lọc.'}</div>
                         ) : (
                             filteredCodes.map((code) => (
-                                <div key={code.id} className="p-4 hover:bg-gray-50 transition-colors">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="font-mono text-lg font-bold text-[#1a1a2e] tracking-wide">{code.code}</span>
-                                            </div>
-                                            <div className="text-emerald-600 font-bold text-base">
-                                                {formatCurrency(code.value)}
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <StatusBadge code={code} />
-                                            <button
-                                                onClick={() => copyToClipboard(code.code)}
-                                                className="p-2 bg-blue-50 text-blue-600 rounded-lg active:bg-blue-100"
-                                            >
-                                                <Copy size={18} />
-                                            </button>
-                                        </div>
+                                <div key={code.id} className="p-4 transition-colors">
+                                    {/* Dòng 1: mã + trạng thái. Mã là thứ phải đọc để đọc cho khách
+                                        nên cho to hẳn (text-2xl) và giãn chữ để không nhầm 0/O, 1/l. */}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-mono text-2xl font-bold text-[#1a1a2e] tracking-widest leading-none">{code.code}</span>
+                                        <StatusBadge code={code} />
                                     </div>
 
-                                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                        <div className="flex items-center gap-1.5 min-w-fit">
-                                            <Calendar size={12} />
-                                            <span>Tạo: {new Date(code.created_at).toLocaleDateString('vi-VN')}</span>
-                                        </div>
+                                    {/* Dòng 2: mệnh giá + nút chép. Chỉ icon, nhưng ô bấm vuông
+                                        44x44 (h-11 w-11) — bản cũ 38x40 là dưới ngưỡng ngón tay. */}
+                                    <div className="mt-2 flex items-center justify-between gap-3">
+                                        <span className="text-emerald-600 font-bold text-lg leading-none">{formatCurrency(code.value)}</span>
+                                        <button
+                                            onClick={() => copyToClipboard(code.code)}
+                                            aria-label={`Chép mã ${code.code}`}
+                                            title="Chép mã"
+                                            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 active:bg-blue-100 active:scale-95 transition-all"
+                                        >
+                                            <Copy size={20} />
+                                        </button>
+                                    </div>
+
+                                    {/* Dòng 3: thông tin phụ. Bỏ khung xám + viền của bản cũ — nó
+                                        làm thẻ nặng mắt mà chẳng thêm thông tin gì. */}
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Calendar size={13} />
+                                            {new Date(code.created_at).toLocaleDateString('vi-VN')}
+                                        </span>
                                         {code.claimed_by && (
-                                            <div className="flex items-center gap-1.5 min-w-fit">
-                                                <User size={12} />
-                                                <span>{code.claimed_by_name || code.claimed_by}</span>
-                                            </div>
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <User size={13} />
+                                                {code.claimed_by_name || code.claimed_by}
+                                            </span>
                                         )}
                                         {code.used_session_id && (
-                                            <a href={`/album/${code.used_session_id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-blue-600 min-w-fit">
-                                                <Hash size={12} />
+                                            <a
+                                                href={`/album/${code.used_session_id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 -my-1.5 py-1.5 font-semibold text-blue-600"
+                                            >
+                                                <Hash size={13} />
                                                 <span className="font-mono">{String(code.used_session_id).slice(0, 8)}…</span>
                                             </a>
                                         )}
                                     </div>
 
                                     {/* Ghi chú "dùng làm gì" — nhân viên tự điền sau khi dùng */}
-                                    <div className="mt-2">
+                                    <div className="mt-2.5">
                                         <NoteCell code={code} onSave={saveNote} canEdit={canEditNote(code)} />
                                     </div>
                                 </div>
