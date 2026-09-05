@@ -478,8 +478,103 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                     </button>
                 </div>
 
-                {/* TOP (Mobile) / RIGHT (Desktop): Preview */}
-                <div className="flex-1 md:w-3/5 lg:w-2/3 bg-[#1a1a2e] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
+                {/* TRÁI: thiết lập cho CẢ KHUNG. Trước đây mọi thứ dồn về một bảng bên phải
+                    nên bảng dài quá khung, phải cuộn mới tới được nút Lưu. */}
+                <div className="w-full md:w-[264px] md:shrink-0 order-2 md:order-1 bg-white md:border-r border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
+                    <div className="hidden md:flex justify-between items-center mb-5">
+                        <h2 className="text-xl font-bold text-[#1a1a2e]">Điều chỉnh</h2>
+                        <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 space-y-5">
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-[10px] md:text-xs text-blue-700">
+                            <b>Cách dùng:</b> bấm vào một ô ảnh để chọn · kéo giữa ô để di chuyển · kéo góc để phóng to / thu nhỏ · kéo tay cầm phía trên để xoay.
+                        </div>
+
+                        {/* Global Config */}
+                        <label className="flex flex-col gap-1">
+                            <span className="flex items-baseline justify-between gap-2">
+                                <span className="text-xs text-gray-600 font-bold uppercase tracking-wider">Bo góc mọi ô</span>
+                                {/* Thanh trượt cũ KHÔNG hiện số -> kéo mà không biết đang ở mức nào. */}
+                                <span className="text-xs font-bold text-[#e63946] tabular-nums">{config.borderRadius} px</span>
+                            </span>
+                            <input
+                                type="range" min="0" max="100"
+                                value={config.borderRadius}
+                                onChange={e => setConfig({ ...config, borderRadius: parseInt(e.target.value) })}
+                                className="w-full h-2 bg-gray-200 rounded-lg accent-[#e63946]"
+                            />
+                            <span className="text-[10px] text-gray-500 leading-snug">0 = góc vuông, kéo sang phải cho tròn dần. Áp cho tất cả ô cùng lúc.</span>
+                        </label>
+
+                        <hr className="border-gray-100" />
+
+                            {/* Chọn kiểu ô ảnh: lỗ trong suốt (mặc định) hoặc dò theo màu */}
+                            <div className="space-y-3 rounded-xl border border-gray-200 p-3">
+                                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Kiểu ô ảnh</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={() => switchMode('transparent')}
+                                        className={`py-2 rounded-lg text-xs font-bold border transition-colors ${detectMode === 'transparent' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        Lỗ trong suốt
+                                    </button>
+                                    <button
+                                        onClick={() => switchMode('color')}
+                                        className={`py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${detectMode === 'color' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        <Palette size={14} /> Theo màu
+                                    </button>
+                                </div>
+
+                                {detectMode === 'color' && (
+                                    <div className="space-y-3 pt-1">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="color"
+                                                value={markerColor}
+                                                onChange={(e) => setMarkerColor(e.target.value)}
+                                                className="h-9 w-11 rounded-lg border border-gray-300 bg-white p-0.5 cursor-pointer"
+                                                title="Màu đánh dấu ô"
+                                            />
+                                            <button
+                                                onClick={() => setSampling((s) => !s)}
+                                                className={`flex-1 py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${sampling ? 'bg-amber-500 text-white border-amber-500 animate-pulse' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                            >
+                                                <Pipette size={14} /> {sampling ? 'Chạm vào ô…' : 'Hút màu từ ảnh'}
+                                            </button>
+                                        </div>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Dung sai màu: {tolerance}</span>
+                                            <input
+                                                type="range" min="0" max="100"
+                                                value={tolerance}
+                                                onChange={(e) => setTolerance(parseInt(e.target.value))}
+                                                className="w-full h-2 bg-gray-200 rounded-lg accent-purple-600"
+                                            />
+                                        </label>
+                                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                                            Tô vùng đặt ảnh bằng 1 màu độc (mặc định hồng). Sau khi dò, phần mềm tự đục lỗ trong suốt; chi tiết trang trí màu khác vẫn giữ nguyên trên ảnh.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={handleAutoDetect} disabled={busy} className="w-full py-3 border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl flex items-center justify-center gap-2 text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed">
+                                {busy ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />} Tự động phát hiện
+                            </button>
+
+                            <button onClick={resetGrid} className="w-full py-3 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2 text-sm font-bold">
+                                <RefreshCw size={18} /> Đặt lại vị trí
+                            </button>
+                    </div>
+                </div>
+
+                {/* GIỮA: ảnh xem trước. Không đặt bề rộng cố định -> ăn hết chỗ còn lại
+                    giữa hai bảng điều khiển hai bên. */}
+                <div className="flex-1 min-w-0 order-1 md:order-2 bg-[#1a1a2e] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
                     <div className="relative h-full w-full flex items-center justify-center">
                         <div
                             ref={containerRef}
@@ -590,38 +685,10 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                     </div>
                 </div>
 
-                {/* BOTTOM (Mobile) / LEFT (Desktop): Controls */}
-                <div className="w-full md:w-2/5 lg:w-1/3 bg-white md:border-r border-gray-200 p-4 md:p-6 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none">
-                    <div className="hidden md:flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-[#1a1a2e]">Điều chỉnh</h2>
-                        <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="flex-1 space-y-6 pb-20 md:pb-0">
-                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-[10px] md:text-xs text-blue-700">
-                            <b>Cách dùng:</b> bấm vào một ô ảnh để chọn · kéo giữa ô để di chuyển · kéo góc để phóng to / thu nhỏ · kéo tay cầm phía trên để xoay.
-                        </div>
-
-                        {/* Global Config */}
-                        <label className="flex flex-col gap-1">
-                            <span className="flex items-baseline justify-between gap-2">
-                                <span className="text-xs text-gray-600 font-bold uppercase tracking-wider">Bo góc mọi ô</span>
-                                {/* Thanh trượt cũ KHÔNG hiện số -> kéo mà không biết đang ở mức nào. */}
-                                <span className="text-xs font-bold text-[#e63946] tabular-nums">{config.borderRadius} px</span>
-                            </span>
-                            <input
-                                type="range" min="0" max="100"
-                                value={config.borderRadius}
-                                onChange={e => setConfig({ ...config, borderRadius: parseInt(e.target.value) })}
-                                className="w-full h-2 bg-gray-200 rounded-lg accent-[#e63946]"
-                            />
-                            <span className="text-[10px] text-gray-500 leading-snug">0 = góc vuông, kéo sang phải cho tròn dần. Áp cho tất cả ô cùng lúc.</span>
-                        </label>
-
-                        <hr className="border-gray-100" />
-
+                {/* PHẢI: chỉ những gì thuộc Ô ĐANG CHỌN. */}
+                <div className="w-full md:w-[330px] md:shrink-0 order-3 bg-white md:border-l border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
+                    <h2 className="hidden md:block text-sm font-bold uppercase tracking-wider text-gray-500 mb-4">Ô đang chọn</h2>
+                    <div className="flex-1 space-y-5 pb-20 md:pb-0">
                         {/* Bulk Multi-Select Editor */}
                         {selectedBoxIndices.length > 0 ? (
                             (() => {
@@ -637,9 +704,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                                 {isMulti ? `Đang chọn ${selectedBoxIndices.length} ô` : `Ảnh #${primaryIdx + 1}`}
                                             </h3>
                                         </div>
-                                        {/* HAI DÃY cạnh nhau. Trước đây xếp một dãy dọc nên bảng dài
-                                            quá khung, phải kéo xuống mới thấy hết các ô xoay. */}
-                                        <div className="grid md:grid-cols-2 gap-x-5 gap-y-5">
+                                        <div className="space-y-5">
                                         <div className="space-y-2">
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Vị trí &amp; kích thước <span className="font-normal normal-case tracking-normal text-gray-400">— theo % khổ khung</span></p>
                                         <div className="grid grid-cols-2 gap-3">
@@ -748,65 +813,6 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                     <Clipboard size={16} /> Dán
                                 </button>
                             </div>
-
-                            {/* Chọn kiểu ô ảnh: lỗ trong suốt (mặc định) hoặc dò theo màu */}
-                            <div className="space-y-3 rounded-xl border border-gray-200 p-3">
-                                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Kiểu ô ảnh</span>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={() => switchMode('transparent')}
-                                        className={`py-2 rounded-lg text-xs font-bold border transition-colors ${detectMode === 'transparent' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-                                    >
-                                        Lỗ trong suốt
-                                    </button>
-                                    <button
-                                        onClick={() => switchMode('color')}
-                                        className={`py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${detectMode === 'color' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-                                    >
-                                        <Palette size={14} /> Theo màu
-                                    </button>
-                                </div>
-
-                                {detectMode === 'color' && (
-                                    <div className="space-y-3 pt-1">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={markerColor}
-                                                onChange={(e) => setMarkerColor(e.target.value)}
-                                                className="h-9 w-11 rounded-lg border border-gray-300 bg-white p-0.5 cursor-pointer"
-                                                title="Màu đánh dấu ô"
-                                            />
-                                            <button
-                                                onClick={() => setSampling((s) => !s)}
-                                                className={`flex-1 py-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1 transition-colors ${sampling ? 'bg-amber-500 text-white border-amber-500 animate-pulse' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-                                            >
-                                                <Pipette size={14} /> {sampling ? 'Chạm vào ô…' : 'Hút màu từ ảnh'}
-                                            </button>
-                                        </div>
-                                        <label className="flex flex-col gap-1">
-                                            <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Dung sai màu: {tolerance}</span>
-                                            <input
-                                                type="range" min="0" max="100"
-                                                value={tolerance}
-                                                onChange={(e) => setTolerance(parseInt(e.target.value))}
-                                                className="w-full h-2 bg-gray-200 rounded-lg accent-purple-600"
-                                            />
-                                        </label>
-                                        <p className="text-[10px] text-gray-400 leading-relaxed">
-                                            Tô vùng đặt ảnh bằng 1 màu độc (mặc định hồng). Sau khi dò, phần mềm tự đục lỗ trong suốt; chi tiết trang trí màu khác vẫn giữ nguyên trên ảnh.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <button onClick={handleAutoDetect} disabled={busy} className="w-full py-3 border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl flex items-center justify-center gap-2 text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed">
-                                {busy ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />} Tự động phát hiện
-                            </button>
-
-                            <button onClick={resetGrid} className="w-full py-3 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2 text-sm font-bold">
-                                <RefreshCw size={18} /> Đặt lại vị trí
-                            </button>
 
                             <button onClick={handleSave} disabled={busy} className="w-full py-4 bg-[#e63946] text-white rounded-xl font-bold hover:bg-[#c1121f] flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 disabled:opacity-60 disabled:cursor-not-allowed">
                                 {busy ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} Lưu cấu hình
