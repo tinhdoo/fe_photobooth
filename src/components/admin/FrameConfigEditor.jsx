@@ -479,7 +479,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                 </div>
 
                 {/* TOP (Mobile) / RIGHT (Desktop): Preview */}
-                <div className="flex-1 md:w-3/4 bg-[#1a1a2e] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
+                <div className="flex-1 md:w-3/5 lg:w-2/3 bg-[#1a1a2e] flex flex-col items-center justify-center relative overflow-hidden select-none p-2 md:p-10 min-h-[350px] md:min-h-0">
                     <div className="relative h-full w-full flex items-center justify-center">
                         <div
                             ref={containerRef}
@@ -591,7 +591,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                 </div>
 
                 {/* BOTTOM (Mobile) / LEFT (Desktop): Controls */}
-                <div className="w-full md:w-1/4 bg-white md:border-r border-gray-200 p-4 md:p-6 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none">
+                <div className="w-full md:w-2/5 lg:w-1/3 bg-white md:border-r border-gray-200 p-4 md:p-6 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none">
                     <div className="hidden md:flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-[#1a1a2e]">Điều chỉnh</h2>
                         <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
@@ -601,18 +601,23 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
                     <div className="flex-1 space-y-6 pb-20 md:pb-0">
                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-[10px] md:text-xs text-blue-700">
-                            Nhấp vào hộp ảnh để chọn. Kéo để di chuyển. Kéo góc để thay đổi kích thước. Kéo tay cầm trên để xoay.
+                            <b>Cách dùng:</b> bấm vào một ô ảnh để chọn · kéo giữa ô để di chuyển · kéo góc để phóng to / thu nhỏ · kéo tay cầm phía trên để xoay.
                         </div>
 
                         {/* Global Config */}
                         <label className="flex flex-col gap-1">
-                            <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Bo góc toàn bộ (px)</span>
+                            <span className="flex items-baseline justify-between gap-2">
+                                <span className="text-xs text-gray-600 font-bold uppercase tracking-wider">Bo góc mọi ô</span>
+                                {/* Thanh trượt cũ KHÔNG hiện số -> kéo mà không biết đang ở mức nào. */}
+                                <span className="text-xs font-bold text-[#e63946] tabular-nums">{config.borderRadius} px</span>
+                            </span>
                             <input
                                 type="range" min="0" max="100"
                                 value={config.borderRadius}
                                 onChange={e => setConfig({ ...config, borderRadius: parseInt(e.target.value) })}
                                 className="w-full h-2 bg-gray-200 rounded-lg accent-[#e63946]"
                             />
+                            <span className="text-[10px] text-gray-500 leading-snug">0 = góc vuông, kéo sang phải cho tròn dần. Áp cho tất cả ô cùng lúc.</span>
                         </label>
 
                         <hr className="border-gray-100" />
@@ -632,29 +637,38 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                                 {isMulti ? `Đang chọn ${selectedBoxIndices.length} ô` : `Ảnh #${primaryIdx + 1}`}
                                             </h3>
                                         </div>
+                                        {/* HAI DÃY cạnh nhau. Trước đây xếp một dãy dọc nên bảng dài
+                                            quá khung, phải kéo xuống mới thấy hết các ô xoay. */}
+                                        <div className="grid md:grid-cols-2 gap-x-5 gap-y-5">
+                                        <div className="space-y-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Vị trí &amp; kích thước <span className="font-normal normal-case tracking-normal text-gray-400">— theo % khổ khung</span></p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {/* Only show XY if single select */}
                                             {!isMulti && (
                                                 <>
-                                                    <label className="text-[10px] md:text-xs font-bold text-gray-400">
-                                                        X (%) <input type="number" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.x)} onChange={e => handleBoxChange(primaryIdx, 'x', e.target.value)} />
+                                                    <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                        Cách trái <span className="text-gray-400">(X)</span>
+                                                        <input type="number" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.x)} onChange={e => handleBoxChange(primaryIdx, 'x', e.target.value)} />
                                                     </label>
-                                                    <label className="text-[10px] md:text-xs font-bold text-gray-400">
-                                                        Y (%) <input type="number" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.y)} onChange={e => handleBoxChange(primaryIdx, 'y', e.target.value)} />
+                                                    <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                        Cách trên <span className="text-gray-400">(Y)</span>
+                                                        <input type="number" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.y)} onChange={e => handleBoxChange(primaryIdx, 'y', e.target.value)} />
                                                     </label>
                                                 </>
                                             )}
 
-                                            <label className="text-[10px] md:text-xs font-bold text-gray-400">
-                                                W (%) <input type="number" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.width)} onChange={e => {
+                                            <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                Chiều rộng <span className="text-gray-400">(W)</span>
+                                                <input type="number" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.width)} onChange={e => {
                                                     const val = e.target.value;
                                                     const newBoxes = [...config.boxes];
                                                     selectedBoxIndices.forEach(idx => newBoxes[idx].width = parseFloat(val) || 0);
                                                     setConfig({ ...config, boxes: newBoxes });
                                                 }} />
                                             </label>
-                                            <label className="text-[10px] md:text-xs font-bold text-gray-400">
-                                                H (%) <input type="number" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.height)} onChange={e => {
+                                            <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                Chiều cao <span className="text-gray-400">(H)</span>
+                                                <input type="number" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.height)} onChange={e => {
                                                     const val = e.target.value;
                                                     const newBoxes = [...config.boxes];
                                                     selectedBoxIndices.forEach(idx => newBoxes[idx].height = parseFloat(val) || 0);
@@ -662,49 +676,61 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                                 }} />
                                             </label>
 
-                                            <label className="text-[10px] md:text-xs font-bold text-gray-400 col-span-2">
-                                                Xoay lưới (°) <input type="number" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.rotation)} onChange={e => {
+                                        </div>
+
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 pt-1">Ảnh dùng cho ô</p>
+                                        <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                            Ô này lấy tấm ảnh nào?
+                                            <select
+                                                className="w-full border border-gray-300 p-2 rounded-lg mt-1 text-gray-800 font-normal"
+                                                value={primaryBox.photoIndex ?? ''}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    const numVal = val === '' ? undefined : Number(val);
+                                                    const newBoxes = [...config.boxes];
+                                                    selectedBoxIndices.forEach(idx => newBoxes[idx].photoIndex = numVal);
+                                                    setConfig({ ...config, boxes: newBoxes });
+                                                }}
+                                            >
+                                                <option value="">Tự động (Theo thứ tự / Lặp lại)</option>
+                                                {Array.from({ length: layoutDef.photoCount || 4 }).map((_, i) => (
+                                                    <option key={i} value={i}>Ảnh chụp số {i + 1}</option>
+                                                ))}
+                                            </select>
+                                            <span className="font-normal text-[10px] text-gray-500 block mt-1 leading-snug">
+                                                Để "Tự động" thì các ô lần lượt lấy ảnh 1, 2, 3… Chọn một tấm cụ thể khi muốn ép ô này luôn lấy đúng tấm đó.
+                                            </span>
+                                        </label>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Xoay</p>
+                                            <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                Xoay cả ô <span className="text-gray-400">(°)</span>
+                                                <input type="number" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.rotation)} onChange={e => {
                                                     const val = e.target.value;
                                                     const newBoxes = [...config.boxes];
                                                     selectedBoxIndices.forEach(idx => newBoxes[idx].rotation = parseFloat(val) || 0);
                                                     setConfig({ ...config, boxes: newBoxes });
                                                 }} />
+                                                <span className="font-normal text-[10px] text-gray-500 block mt-1 leading-snug">Nghiêng NGUYÊN CÁI Ô trên khung — ô và ảnh nghiêng theo nhau.</span>
                                             </label>
 
-                                            <label className="text-[10px] md:text-xs font-bold text-gray-400 col-span-2 mt-2">
-                                                Ảnh ưu tiên (Index):
-                                                <select
-                                                    className="w-full border p-2 rounded-lg mt-1 text-gray-700 font-normal"
-                                                    value={primaryBox.photoIndex ?? ''}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
-                                                        const numVal = val === '' ? undefined : Number(val);
-                                                        const newBoxes = [...config.boxes];
-                                                        selectedBoxIndices.forEach(idx => newBoxes[idx].photoIndex = numVal);
-                                                        setConfig({ ...config, boxes: newBoxes });
-                                                    }}
-                                                >
-                                                    <option value="">Tự động (Theo thứ tự / Lặp lại)</option>
-                                                    {Array.from({ length: layoutDef.photoCount || 4 }).map((_, i) => (
-                                                        <option key={i} value={i}>Ảnh chụp số {i + 1}</option>
-                                                    ))}
-                                                </select>
-                                                <span className="font-normal text-[10px] text-gray-400 block mt-1">
-                                                    (Ép ô chọn lấy chính xác góc ảnh số mấy. Vd: gán tất cả ưu tiên lấy Ảnh 1)
-                                                </span>
-                                            </label>
 
-                                            <label className="text-[10px] md:text-xs font-bold text-gray-400 col-span-2 mt-2">
-                                                Xoay ảnh bên trong (°) <input type="number" step="90" className="w-full border p-2 rounded-lg mt-1" value={Math.round(primaryBox.innerRotation || 0)} onChange={e => {
+                                            <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                                Xoay ảnh BÊN TRONG ô <span className="text-gray-400">(°)</span>
+                                                <input type="number" step="90" className="w-full border border-gray-300 p-2 rounded-lg mt-1 font-normal text-gray-800" value={Math.round(primaryBox.innerRotation || 0)} onChange={e => {
                                                     const val = e.target.value;
                                                     const newBoxes = [...config.boxes];
                                                     selectedBoxIndices.forEach(idx => newBoxes[idx].innerRotation = parseFloat(val) || 0);
                                                     setConfig({ ...config, boxes: newBoxes });
                                                 }} />
-                                                <span className="font-normal text-[10px] text-gray-400 block mt-1">
-                                                    (Dùng khi lỗ template nằm ngang. Ảnh dọc được xoay lấp đầy ô. VD: -90)
+                                                <span className="font-normal text-[10px] text-gray-500 block mt-1 leading-snug">
+                                                    Ô đứng yên, chỉ tấm ảnh bên trong quay. Dùng khi lỗ khung nằm ngang mà ảnh chụp dọc — thường điền -90.
                                                 </span>
                                             </label>
+
+                                        </div>
                                         </div>
                                     </div>
                                 );
