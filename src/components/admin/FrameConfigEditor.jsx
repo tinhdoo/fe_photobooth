@@ -480,7 +480,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
                 {/* TRÁI: thiết lập cho CẢ KHUNG. Trước đây mọi thứ dồn về một bảng bên phải
                     nên bảng dài quá khung, phải cuộn mới tới được nút Lưu. */}
-                <div className="w-full md:w-[264px] md:shrink-0 order-2 md:order-1 bg-white md:border-r border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
+                <div className="w-full md:w-[300px] md:shrink-0 order-2 md:order-1 bg-white md:border-r border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
                     <div className="hidden md:flex justify-between items-center mb-5">
                         <h2 className="text-xl font-bold text-[#1a1a2e]">Điều chỉnh</h2>
                         <button onClick={() => onClose()} className="p-2 hover:bg-gray-100 rounded-full">
@@ -686,9 +686,12 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                 </div>
 
                 {/* PHẢI: chỉ những gì thuộc Ô ĐANG CHỌN. */}
-                <div className="w-full md:w-[330px] md:shrink-0 order-3 bg-white md:border-l border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
+                <div className="w-full md:w-[300px] md:shrink-0 order-3 bg-white md:border-l border-gray-200 p-4 md:p-5 flex flex-col overflow-y-auto max-h-[35vh] md:max-h-none">
                     <h2 className="hidden md:block text-sm font-bold uppercase tracking-wider text-gray-500 mb-4">Ô đang chọn</h2>
-                    <div className="flex-1 space-y-5 pb-20 md:pb-0">
+                    {/* flex-col + gap chứ KHÔNG dùng space-y: selector của space-y (`> * + *`) đè
+                        mất .mt-auto của cụm nút bên dưới -> nút Lưu bị dồn lên đỉnh, chừa khoảng
+                        trống to phía dưới. Dùng gap thì mt-auto mới đẩy được nút xuống đáy. */}
+                    <div className="flex-1 flex flex-col gap-5 pb-20 md:pb-0">
                         {/* Bulk Multi-Select Editor */}
                         {selectedBoxIndices.length > 0 ? (
                             (() => {
@@ -801,7 +804,9 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                 );
                             })()
                         ) : (
-                            <p className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-xl border border-dashed">Hãy chọn một hộp để chỉnh sửa</p>
+                            <div className="flex-1 grid place-items-center rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                                <p className="text-sm text-gray-400">Bấm vào một ô ảnh ở giữa<br />để chỉnh sửa ô đó.</p>
+                            </div>
                         )}
 
                         <div className="mt-auto space-y-3">
