@@ -59,7 +59,7 @@ const FrameManager = () => {
         const timer = setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), timeout);
         return () => clearTimeout(timer);
     }, [notification.show, notification.message, notification.type]);
-    const [activeTab, setActiveTab] = useState('photobooth'); // 'photobooth' | 'upload'
+    const [activeTab, setActiveTab] = useState('photobooth'); // 'photobooth' | 'icons' ('upload' đã ẩn nút)
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const [topFrames, setTopFrames] = useState([]);
     const [topFramesLoading, setTopFramesLoading] = useState(true);
@@ -444,16 +444,10 @@ const FrameManager = () => {
                         >
                             📷 Photobooth
                         </button>
-                        <button
-                            onClick={() => { setActiveTab('upload'); setSelectedLayout(LAYOUTS.find(l => l.isMobileOnly)?.id || LAYOUTS[0].id); }}
-                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
-                                ${activeTab === 'upload'
-                                    ? 'bg-white shadow text-[#e63946]'
-                                    : 'text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            📱 Upload
-                        </button>
+                        {/* Tab "📱 Upload" (khung cho luồng tải ảnh từ điện thoại) đã ẩn: tính năng
+                            tải trực tuyến không còn dùng, xem phần giá đã gỡ khỏi Cài đặt. Khung
+                            isMobileOnly VẪN CÒN trên máy chủ, chỉ là không vào được từ màn này nữa.
+                            Muốn bật lại thì trả nút này về, activeTab === 'upload' vẫn xử lý đủ. */}
                         <button
                             onClick={() => setActiveTab('icons')}
                             className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
