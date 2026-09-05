@@ -144,6 +144,9 @@ const CodeManager = () => {
     // Lọc + tìm kiếm danh sách mã (tiện tra "mã nào đã lấy" mà không phải cuộn).
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // all | stock | claimed | used | expired
+    const [valueFilter, setValueFilter] = useState('all'); // 'all' | mệnh giá cụ thể
+    // Chỉ liệt kê mệnh giá THẬT SỰ có trong danh sách -> không hiện lựa chọn rỗng.
+    const denomOptions = [...new Set(codes.map((c) => Number(c.value) || 0))].sort((a, b) => a - b);
     const codeStatus = (c) => {
         if (c.is_used) return 'used';
         if (c.expires_at && new Date(c.expires_at) < new Date()) return 'expired';
@@ -152,6 +155,7 @@ const CodeManager = () => {
     };
     const filteredCodes = codes.filter((c) => {
         if (statusFilter !== 'all' && codeStatus(c) !== statusFilter) return false;
+        if (valueFilter !== 'all' && (Number(c.value) || 0) !== Number(valueFilter)) return false;
         const q = search.trim().toLowerCase();
         if (!q) return true;
         return String(c.code).toLowerCase().includes(q)
@@ -538,6 +542,30 @@ const CodeManager = () => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Lọc theo mệnh giá. Chỉ hiện khi có từ 2 mệnh giá trở lên -> một mệnh
+                            giá thì hàng nút này chẳng lọc được gì, chỉ tổ chật chỗ. */}
+                        {denomOptions.length > 1 && (
+                            <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setValueFilter('all')}
+                                    className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${valueFilter === 'all' ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                >
+                                    Mọi giá
+                                </button>
+                                {denomOptions.map((v) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => setValueFilter(String(v))}
+                                        className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${String(valueFilter) === String(v) ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                    >
+                                        {denomLabel(v)}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* --- MOBILE VIEW: CARDS --- */}
