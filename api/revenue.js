@@ -489,8 +489,33 @@ export default async function handler(req, res) {
                 return json(res, 200, { success: true, hidden_booths: hidden });
             }
 
+            // Sửa booth của MỘT giao dịch (phiên chụp) khi kiosk gửi nhầm device_id — vd 2026-09-15
+            // phòng 3 gửi mã máy của phòng 1. Chỉ đổi meta_data.device_id, giữ vết sửa để đối chiếu.
+            if (action === 'fix_device') {
+                const sessionId = String(req.body?.session_id || '').trim();
+                const deviceId = String(req.body?.device_id || '').trim();
+                if (!sessionId || !deviceId) return json(res, 400, { error: 'Missing session_id/device_id' });
+                const { data: row, error: rErr } = await supabase
+                    .from('photo_sessions').select('uuid, meta_data').eq('uuid', sessionId).maybeSingle();
+                if (rErr) throw rErr;
+                if (!row) return json(res, 404, { error: 'Session not found' });
+                const meta = (row.meta_data && typeof row.meta_data === 'object') ? row.meta_data : {};
+                const truoc = meta.device_id || null;
+                const fixes = Array.isArray(meta.device_id_fixes) ? meta.device_id_fixes : [];
+                fixes.push({ from: truoc, to: deviceId, at: new Date().toISOString() });
+                const { error: uErr } = await supabase
+                    .from('photo_sessions')
+                    .update({ meta_data: { ...meta, device_id: deviceId, device_id_fixes: fixes } })
+                    .eq('uuid', sessionId);
+                if (uErr) throw uErr;
+                return json(res, 200, { success: true, session_id: sessionId, from: truoc, to: deviceId });
+            }
+
             // Hard reset: xóa THẬT toàn bộ dữ liệu liên quan (mã thanh toán, session,
             // giao dịch QR, upload mobile, ảnh/motion trong storage). Không thể khôi phục.
+            // BẮT BUỘC action='reset' tường minh: trước đây POST thiếu action (kể cả gõ sai tên
+            // action) là xoá sạch doanh thu — quá nguy hiểm khi endpoint này có thêm action khác.
+            if (action !== 'reset') return json(res, 400, { error: 'Unknown action' });
             const deleted = await hardResetRevenueData(supabase);
             const resetAt = await writeRevenueResetAt(supabase);
             await clearBoothReports(supabase);

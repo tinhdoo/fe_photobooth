@@ -391,7 +391,7 @@ const RevenueDashboard = () => {
         setResetError('');
 
         try {
-            await axios.post(apiPath('/api/revenue'), { code: resetCode });
+            await axios.post(apiPath('/api/revenue'), { code: resetCode, action: 'reset' });
 
             setShowResetModal(false);
             setResetCode('');
