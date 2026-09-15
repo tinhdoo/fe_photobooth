@@ -404,7 +404,13 @@ const Settings = ({ forceLocalAdmin = false }) => {
         const printer = hardware?.printer || {};
         const camera = hardware?.camera || {};
         const bill = hardware?.bill || {};
-        const billOk = !bill.enabled || bill.status === 'connected';
+        // Máy đọc tiền kết nối THEO NHU CẦU: lúc rảnh cổng đóng ('idle') là bình thường, không phải lỗi.
+        const billOk = !bill.enabled || bill.status === 'connected' || bill.status === 'idle';
+        const billText = !bill.enabled ? 'Đang tắt'
+            : bill.status === 'connected' ? 'Đã kết nối'
+            : bill.status === 'idle' ? 'Sẵn sàng (mở khi khách chọn tiền mặt)'
+            : bill.status === 'stuck' ? 'Treo — rút cắm lại USB'
+            : 'Mất kết nối';
         const checks = { ...(hardware?.checks || {}), camera: cameraTestOk || Boolean(hardware?.checks?.camera), bill: billOk };
         // Supabase là dịch vụ cloud (không phải phần cứng local) -> không tính vào hardwareOk
         const hardwareOk = Boolean(checks.printer && checks.camera && checks.internet && checks.bill);
@@ -563,7 +569,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 </div>
                                 <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${statusTone(billOk)}`}>
                                     {statusDot(billOk)}
-                                    {!bill.enabled ? 'Đang tắt' : (bill.status === 'connected' ? 'Đã kết nối' : 'Mất kết nối')}
+                                    {billText}
                                 </span>
                             </div>
                             <div className="rounded-2xl bg-[#F8F3E7] p-4 text-sm leading-6 text-[#1a1a2e]">
@@ -573,7 +579,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                 </div>
                                 <div className="mt-3 flex justify-between gap-4">
                                     <span className="font-bold text-gray-500">Tình trạng kết nối</span>
-                                    <span className="text-right font-bold">{bill.status === 'connected' ? 'OK' : 'Lỗi'}</span>
+                                    <span className="text-right font-bold">{billOk ? 'OK' : 'Lỗi'}</span>
                                 </div>
                             </div>
                             <div className="mt-5 flex flex-wrap gap-3">

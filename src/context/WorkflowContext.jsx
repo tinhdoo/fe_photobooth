@@ -283,6 +283,10 @@ export const WorkflowProvider = ({ children }) => {
             }
 
             let activeDeviceId = deviceId;
+            // Danh tính MÁY (hostname, thư mục cài, phiên bản) do backend cục bộ trả về -> gửi kèm nhịp tim
+            // lên cloud. Để trang Doanh thu chỉ ra được "mã máy X đang chạy ở máy nào, từ thư mục nào"
+            // khi hai máy vô tình cùng một device_id (sự cố phòng 3 ghi thành phòng 1, 2026-09-15).
+            let machine = null;
             try {
                 const sysRes = await fetch(apiPath('/api/config/system'));
                 if (sysRes.ok) {
@@ -292,6 +296,7 @@ export const WorkflowProvider = ({ children }) => {
                         localStorage.setItem("device_id", activeDeviceId);
                         localStorage.setItem("DEVICE_ID", activeDeviceId);
                     }
+                    if (sysData.machine && typeof sysData.machine === 'object') machine = sysData.machine;
                 }
             } catch (error) {
                 console.warn("Could not fetch system device_id, using fallback", error);
@@ -320,7 +325,7 @@ export const WorkflowProvider = ({ children }) => {
                     const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'heartbeat', deviceId: activeDeviceId, name: deviceName })
+                        body: JSON.stringify({ action: 'heartbeat', deviceId: activeDeviceId, name: deviceName, machine })
                     });
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();

@@ -23,6 +23,11 @@ const Payment = () => {
     const [qrOrder, setQrOrder] = useState(null);
     const [qrError, setQrError] = useState('');
     const [errorModal, setErrorModal] = useState({ show: false, message: '' });
+    // Trạng thái máy đọc tiền trên màn tiền mặt. Cổng COM chỉ mở KHI khách chọn tiền mặt (kết nối
+    // theo nhu cầu) nên lúc vào màn chưa biết máy có nối được không: null = đang kết nối,
+    // {status:'connected'} = sẵn sàng, {status:'error', message} = lỗi -> khách biết mà đổi sang mã
+    // thay vì đứng nhét tiền vào máy chết (sự cố 2026-09-11).
+    const [billStatus, setBillStatus] = useState(null);
     const qrRequestRef = useRef(0);
     // Refs giữ GIÁ TRỊ MỚI NHẤT cho socket handler. Socket chỉ tạo 1 lần (deps []), nếu đọc
     // trực tiếp method/qrOrder/handlePaymentSuccess trong closure sẽ phải tạo lại socket mỗi lần
@@ -163,6 +168,15 @@ const Payment = () => {
             }
         });
 
+        socket.on('bill_status', (data) => {
+            // Backend emit khi vòng đọc mở được cổng ('connected'), mở thất bại / lỗi giữa chừng
+            // ('error'), hoặc máy đọc tiền đang tắt trong cài đặt ('disabled'). Chỉ quan tâm khi đang
+            // ở màn tiền mặt; ngoài màn đó cổng vốn đã đóng.
+            if (methodRef.current === 'cash' && data && ['connected', 'error', 'disabled'].includes(data.status)) {
+                setBillStatus({ status: data.status, message: data.message || '', port: data.port || '' });
+            }
+        });
+
         // Tạo socket 1 LẦN cho suốt vòng đời bước Thanh toán (deps []): handler đọc qua ref nên
         // luôn thấy method/qrOrder/handlePaymentSuccess mới nhất mà KHÔNG cần dựng lại socket.
         return () => socket.disconnect();
@@ -188,17 +202,89 @@ const Payment = () => {
         }
     }, [cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
 
-    // Máy đọc tiền (LED + cho nhét tiền) CHỈ bật khi đang Ở MÀN "Đưa tiền vào khe":
+    // Gửi trạng thái nhận tiền TUẦN TỰ: một request đang bay tại một thời điểm, xong thì gửi trạng
+    // thái MỚI NHẤT nếu đã đổi. Vì sao: React chạy cleanup (false) rồi effect (true) trong cùng một
+    // nhịp -> hai POST bay song song trên hai kết nối; backend eventlet xử lý theo thứ tự socket sẵn
+    // sàng chứ không theo thứ tự gửi -> có thể "true" chạy trước "false" -> cổng vừa mở đã bị đóng,
+    // khách đứng ở màn tiền mặt mà máy không nhận. Từ khi kết nối theo nhu cầu, false = ĐÓNG CỔNG nên
+    // sai thứ tự là mất hẳn phiên nhận tiền chứ không chỉ tắt LED.
+    const billWantRef = useRef(false);
+    const billInFlightRef = useRef(false);
+    const sendBillAccept = useCallback((want) => {
+        billWantRef.current = want;
+        if (billInFlightRef.current) return;
+        const fire = () => {
+            const value = billWantRef.current;
+            billInFlightRef.current = true;
+            // timeout BẮT BUỘC: Chrome chỉ cho 6 kết nối tới một host. Đã xảy ra thật (2026-09-11): backend
+            // treo ở lệnh ghi serial, 5 request này không bao giờ được trả lời -> cạn 6 slot -> lệnh in của
+            // khách không rời được trình duyệt -> "timeout of 30000ms exceeded". Có timeout thì axios huỷ
+            // request sau 5 s và Chrome trả lại slot, dù backend có kẹt đến đâu.
+            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: value }, { timeout: 5000 })
+                .catch(() => {})
+                .then(() => {
+                    billInFlightRef.current = false;
+                    if (billWantRef.current !== value) fire();
+                });
+        };
+        fire();
+    }, []);
+
+    // Máy đọc tiền (mở cổng + LED + cho nhét tiền) CHỈ bật khi đang Ở MÀN "Đưa tiền vào khe":
     // đã chọn tiền mặt, còn phải trả, và không đang xử lý. Mọi trạng thái khác (mới vào
-    // Payment, màn chọn phương thức, QR, nhập mã, đang xử lý, rời bước) -> chủ động TẮT.
+    // Payment, màn chọn phương thức, QR, nhập mã, đang xử lý, rời bước) -> chủ động TẮT (= đóng cổng).
     useEffect(() => {
         const onCashScreen = method === 'cash' && remainingAmount > 0 && !loading;
-        axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: onCashScreen }).catch(() => {});
+        sendBillAccept(onCashScreen);
         return () => {
             // Rời màn / unmount -> luôn tắt nhận tiền.
-            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: false }).catch(() => {});
+            sendBillAccept(false);
         };
-    }, [method, remainingAmount, loading]);
+    }, [method, remainingAmount, loading, sendBillAccept]);
+
+    // Rời màn tiền mặt -> xoá trạng thái máy đọc tiền, lần vào sau lại bắt đầu từ "Đang kết nối…"
+    // (backend đã đóng cổng, vào lại sẽ mở lại và emit bill_status mới).
+    useEffect(() => {
+        if (method !== 'cash') setBillStatus(null);
+    }, [method]);
+
+    // Dự phòng khi sự kiện bill_status KHÔNG tới (socket đang reconnect, hoặc request mở cổng bị mất):
+    // ở màn tiền mặt mà 3 s vẫn chưa biết trạng thái -> hỏi thẳng /api/bill/status. Backend báo chưa
+    // chạy -> gửi lại lệnh mở. Sau 4 lần (~12 s) vẫn chưa nối được -> báo lỗi để khách quay lại dùng mã
+    // thay vì đứng chờ trước dòng "Đang kết nối…".
+    useEffect(() => {
+        if (method !== 'cash' || billStatus !== null) return undefined;
+        let lan = 0;
+        let huy = false;
+        const timer = setInterval(async () => {
+            lan += 1;
+            try {
+                const { data } = await axios.get(`${LOCAL_API_URL}/api/bill/status`, { timeout: 3000 });
+                if (huy) return;
+                if (data?.enabled === false) {
+                    setBillStatus({ status: 'disabled', message: 'máy đọc tiền đang tắt trong cài đặt', port: data.port || '' });
+                    return;
+                }
+                if (data?.status === 'connected') {
+                    setBillStatus({ status: 'connected', message: '', port: data.port || '' });
+                    return;
+                }
+                if (data?.status === 'stuck') {
+                    // Driver máy đọc tiền kẹt (backend từ chối mở cổng để không rò worker in ảnh):
+                    // báo lỗi ngay, gửi lại lệnh mở cũng vô ích.
+                    setBillStatus({ status: 'error', message: 'máy đọc tiền treo — dùng mã hoặc rút cắm lại USB', port: data.port || '' });
+                    return;
+                }
+                if (data?.running === false && billWantRef.current) sendBillAccept(true);
+            } catch (e) {
+                // backend không trả lời -> để lần sau
+            }
+            if (!huy && lan >= 4) {
+                setBillStatus({ status: 'error', message: 'không kết nối được máy đọc tiền', port: '' });
+            }
+        }, 3000);
+        return () => { huy = true; clearInterval(timer); };
+    }, [method, billStatus, sendBillAccept]);
 
     useEffect(() => {
         if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;
@@ -404,6 +490,20 @@ const Payment = () => {
             <p className="text-2xl font-bold" style={{ color: primaryTextColor }}>
                 {formatVnd(cashInserted)} / {formatVnd(remainingAmount)}
             </p>
+            {billStatus?.status === 'error' || billStatus?.status === 'disabled' ? (
+                <div className="max-w-md text-center">
+                    <p className="text-base font-semibold text-red-700">
+                        {billStatus.status === 'disabled' ? 'Máy đọc tiền đang tắt' : 'Máy đọc tiền lỗi'} — bấm Quay lại và dùng mã
+                    </p>
+                    {billStatus.message ? (
+                        <p className="mt-1 break-words text-xs text-red-700 opacity-70">{billStatus.message}</p>
+                    ) : null}
+                </div>
+            ) : (
+                <p className="text-base font-semibold opacity-70" style={{ color: secondaryTextColor }}>
+                    {billStatus?.status === 'connected' ? 'Máy đọc tiền sẵn sàng' : 'Đang kết nối máy đọc tiền…'}
+                </p>
+            )}
         </div>
     );
 

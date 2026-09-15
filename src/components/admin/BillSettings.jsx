@@ -37,7 +37,9 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                     state: data.status,
                     message: data.status === 'connected'
                         ? `Đã kết nối ${data.port || ''}`.trim()
-                        : `Lỗi: ${data.message || 'Không xác định'}`
+                        : data.status === 'disabled'
+                            ? 'Đang tắt'
+                            : `Lỗi: ${data.message || 'Không xác định'}`
                 });
             }
         });
@@ -100,13 +102,19 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
             const localId = statusRes.data?.device_id || getDeviceId();
             setCurrentDeviceId(localId);
             setSelectedDeviceId((prev) => prev || localId);
+            // Kết nối theo nhu cầu: 'idle' = cổng đóng lúc rảnh, sẽ mở khi khách chọn tiền mặt (bình thường).
+            const st = statusRes.data?.status || 'disconnected';
             setStatus({
-                state: statusRes.data?.status || 'disconnected',
-                message: statusRes.data?.status === 'connected'
+                state: st,
+                message: st === 'connected'
                     ? `Đã kết nối ${statusRes.data?.port || ''}`.trim()
-                    : statusRes.data?.enabled
-                        ? 'Chưa kết nối'
-                        : 'Đang tắt'
+                    : st === 'idle'
+                        ? 'Sẵn sàng (mở khi khách chọn tiền mặt)'
+                        : st === 'stuck'
+                            ? `Treo (${statusRes.data?.serial_io_pending || '?'} lệnh không trả về) — rút cắm lại USB`
+                            : statusRes.data?.enabled
+                                ? 'Chưa kết nối'
+                                : 'Đang tắt'
             });
             setDevices(Array.isArray(devicesRes.data) ? devicesRes.data : []);
             fetchPorts();
@@ -239,7 +247,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
         return <div className="p-8 text-center text-gray-500">Đang tải danh sách thiết bị...</div>;
     }
 
-    const statusIsConnected = status.state === 'connected';
+    const statusIsConnected = status.state === 'connected' || status.state === 'idle';
 
     return (
         <div className="mx-auto max-w-6xl space-y-6 animate-fadeIn">

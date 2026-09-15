@@ -168,6 +168,20 @@ const RevenueDashboard = () => {
     };
 
     const boothReport = (id) => devicesMap.get(id)?.report || null;
+    // Danh sách MÁY (hostname) đã gửi nhịp tim với device_id này, mới nhất trước. >= 2 máy = hai máy
+    // đang dùng chung một mã -> doanh thu của chúng bị gộp, phải tách (đổi device_id.txt ở một máy).
+    const boothMachines = (id) => {
+        const m = devicesMap.get(id)?.machines;
+        if (!m || typeof m !== 'object') return [];
+        return Object.entries(m)
+            .map(([hostname, v]) => ({ hostname, ...(v || {}) }))
+            .sort((a, b) => new Date(b.last_seen || 0) - new Date(a.last_seen || 0));
+    };
+    const fmtSeen = (iso) => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+    };
 
     // Gộp theo từng booth. total = DOANH THU THẬT (tiền mặt + QR), voucher tách riêng KHÔNG cộng
     // vào total. Mã một phần: phần voucher vào cột voucher, phần còn lại vào tiền mặt/QR.
@@ -856,6 +870,21 @@ const RevenueDashboard = () => {
                                                 <p className="mt-0.5 text-xs font-bold text-[#1a1a2e]">{formatCurrency(b.code)}</p>
                                             </div>
                                         </div>
+                                        {boothMachines(b.device_id).length > 0 && (
+                                            <div className={`mt-2.5 border-t pt-2.5 text-[11px] ${boothMachines(b.device_id).length > 1 ? 'border-red-200' : 'border-gray-100'}`}>
+                                                {boothMachines(b.device_id).length > 1 && (
+                                                    <p className="mb-1 rounded-lg bg-red-50 px-2 py-1 font-bold text-red-600">
+                                                        ⚠ {boothMachines(b.device_id).length} máy đang dùng chung mã này — doanh thu bị gộp. Cần đổi mã ở một máy.
+                                                    </p>
+                                                )}
+                                                {boothMachines(b.device_id).map((m) => (
+                                                    <p key={m.hostname} className="truncate font-mono text-gray-500" title={`${m.hostname} · ${m.install_dir || ''} · v${m.version || '?'} · thấy lần cuối ${fmtSeen(m.last_seen)}`}>
+                                                        🖥 <span className="font-bold text-[#1a1a2e]">{m.hostname}</span> · v{m.version || '?'} · {fmtSeen(m.last_seen)}
+                                                        {m.install_dir ? <span className="text-gray-400"> · {m.install_dir}</span> : null}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        )}
                                         {boothReport(b.device_id) && (
                                             <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-2.5 text-[11px] font-bold text-gray-500">
                                                 <span>🧻 Giấy còn: <span className="text-[#1a1a2e]">{boothReport(b.device_id).paper_remaining != null ? `${boothReport(b.device_id).paper_remaining} tấm` : '--'}</span></span>
