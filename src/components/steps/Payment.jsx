@@ -35,6 +35,9 @@ const Payment = () => {
     const methodRef = useRef(method);
     const qrOrderCodeRef = useRef(qrOrder?.code);
     const handlePaymentSuccessRef = useRef(null);
+    // Vết byte máy đọc tiền của phiên tiền mặt (backend gửi kèm money_inserted). Lưu vào phiên chụp để
+    // sự cố đếm tiền sau này đọc được từ cloud (meta cash_trace) thay vì đoán.
+    const cashTraceRef = useRef(null);
     // Chốt CHỐNG GỌI TRÙNG handlePaymentSuccess. Một giao dịch có thể bị kích hoạt nhiều lần từ
     // nhiều nguồn (QR: Supabase realtime + poll 2.5s + socket SePay; tiền mặt: nhiều tờ dồn dập)
     // -> nếu không chặn sẽ gọi nextStep() nhiều lần / lặp API voucher lỗi. Chỉ mở lại khi khách
@@ -93,6 +96,7 @@ const Payment = () => {
                 if (activeVoucher.id) updateSessionData('paymentCodeId', activeVoucher.id);
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
+            if (cashInserted > 0 && cashTraceRef.current) updateSessionData('cashTrace', cashTraceRef.current);
             if (extraData.orderCode) updateSessionData('sepayOrderCode', extraData.orderCode);
             nextStep();
         }, 500);
@@ -127,6 +131,7 @@ const Payment = () => {
             setCode('');
             setMethod(null);
             setCashInserted(0);
+            cashTraceRef.current = null;
             setQrOrder(null);
             setQrError('');
 
@@ -159,6 +164,7 @@ const Payment = () => {
             // Không tự nhảy sang 'cash' từ màn khác -> tránh nhận tiền ngoài bước này.
             if (methodRef.current === 'cash') {
                 setCashInserted((prev) => prev + data.amount);
+                if (Array.isArray(data.trace)) cashTraceRef.current = data.trace;
             }
         });
 
@@ -410,6 +416,7 @@ const Payment = () => {
             setLoading(false);
             setMethod(null);
             setCashInserted(0);
+            cashTraceRef.current = null;
             setQrOrder(null);
             setQrError('');
         } else {

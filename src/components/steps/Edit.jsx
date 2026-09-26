@@ -1094,6 +1094,12 @@ const Edit = () => {
                         cut_mode: cutMode,
                         print_quantity: selectedPrintQuantity,
                         printer_copies: printerCopies,
+                        // Số tiền mặt máy ĐẾM ĐƯỢC cho phiên này. Gửi lên cloud để đối chiếu với giá
+                        // gói: nhận 100.000 cho gói 90.000 = máy đếm trùng tờ tiền (sự cố 2026-09-22),
+                        // nhìn trang Doanh thu là biết, không phải ra booth xem lịch sử tiền mặt.
+                        cash_inserted: sessionData.cashInserted || 0,
+                        // Vết byte máy đọc tiền: [ms, mã, hành động] (xem BillValidatorService._ghi_vet).
+                        cash_trace: sessionData.cashTrace || undefined,
                         payment_code: sessionData.paymentCode || null,
                         payment_code_value: sessionData.paymentCodeValue || null,
                         payment_code_applied: sessionData.paymentCodeApplied || null,
