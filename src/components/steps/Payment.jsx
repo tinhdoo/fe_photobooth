@@ -28,6 +28,11 @@ const Payment = () => {
     // {status:'connected'} = sẵn sàng, {status:'error', message} = lỗi -> khách biết mà đổi sang mã
     // thay vì đứng nhét tiền vào máy chết (sự cố 2026-09-11).
     const [billStatus, setBillStatus] = useState(null);
+    // Tờ tiền ĐANG CHỜ CHỐT (backend nhận tiền bất đồng bộ): máy vừa nhận mã mệnh giá, tiền CHỈ được
+    // cộng khi máy báo tờ đã vào thùng (hoặc hẹn giờ hết). null | {amount, status:'dang_nhan'|'tra_lai'}.
+    // Trong lúc 'dang_nhan' khoá nút Quay lại và không tự sang bước chụp -> không bao giờ tính một tờ
+    // chưa chắc chắn (sự cố đếm trùng 2026-09-22/25).
+    const [billPending, setBillPending] = useState(null);
     const qrRequestRef = useRef(0);
     // Refs giữ GIÁ TRỊ MỚI NHẤT cho socket handler. Socket chỉ tạo 1 lần (deps []), nếu đọc
     // trực tiếp method/qrOrder/handlePaymentSuccess trong closure sẽ phải tạo lại socket mỗi lần
@@ -164,7 +169,19 @@ const Payment = () => {
             // Không tự nhảy sang 'cash' từ màn khác -> tránh nhận tiền ngoài bước này.
             if (methodRef.current === 'cash') {
                 setCashInserted((prev) => prev + data.amount);
+                setBillPending(null);
                 if (Array.isArray(data.trace)) cashTraceRef.current = data.trace;
+            }
+        });
+
+        socket.on('bill_pending', (data) => {
+            // dang_nhan: đã ACK, chờ máy xác nhận tờ vào thùng; tra_lai: máy trả tờ ra, chờ khách nhét
+            // lại; huy: bỏ tờ đó (không cộng). Tiền được cộng qua money_inserted.
+            if (methodRef.current !== 'cash' || !data) return;
+            if (data.status === 'dang_nhan' || data.status === 'tra_lai') {
+                setBillPending({ amount: data.amount || 0, status: data.status });
+            } else {
+                setBillPending(null);
             }
         });
 
@@ -203,10 +220,21 @@ const Payment = () => {
         // lo (nhét nhiều tờ dồn dập cũng chỉ chạy 1 lần). !loading + !errorModal.show: không tự chạy
         // khi đang xử lý hoặc đang hiện modal lỗi; khi khách bấm Đóng (errorModal.show -> false) effect
         // chạy lại -> thử lại có chủ đích, không lặp vô hạn.
-        if (method === 'cash' && !loading && !errorModal.show && remainingAmount > 0 && cashInserted >= remainingAmount) {
+        // Còn tờ đang chờ chốt -> đợi nó (cộng vào hoặc bị bỏ) rồi mới đi tiếp, kẻo tờ đó rơi ra ngoài
+        // tổng tiền của lượt.
+        const dangNhan = billPending?.status === 'dang_nhan';
+        if (method === 'cash' && !loading && !errorModal.show && !dangNhan && remainingAmount > 0 && cashInserted >= remainingAmount) {
             handlePaymentSuccess('cash');
         }
-    }, [cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
+    }, [billPending, cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
+
+    // Lưới an toàn: backend luôn chốt tờ trong ≤ 10 s (hẹn giờ). Mất sự kiện (socket reconnect) thì sau
+    // 15 s mở khoá nút Quay lại, không để khách kẹt ở màn tiền mặt.
+    useEffect(() => {
+        if (!billPending) return undefined;
+        const t = setTimeout(() => setBillPending(null), 15000);
+        return () => clearTimeout(t);
+    }, [billPending]);
 
     // Gửi trạng thái nhận tiền TUẦN TỰ: một request đang bay tại một thời điểm, xong thì gửi trạng
     // thái MỚI NHẤT nếu đã đổi. Vì sao: React chạy cleanup (false) rồi effect (true) trong cùng một
@@ -251,7 +279,10 @@ const Payment = () => {
     // Rời màn tiền mặt -> xoá trạng thái máy đọc tiền, lần vào sau lại bắt đầu từ "Đang kết nối…"
     // (backend đã đóng cổng, vào lại sẽ mở lại và emit bill_status mới).
     useEffect(() => {
-        if (method !== 'cash') setBillStatus(null);
+        if (method !== 'cash') {
+            setBillStatus(null);
+            setBillPending(null);
+        }
     }, [method]);
 
     // Dự phòng khi sự kiện bill_status KHÔNG tới (socket đang reconnect, hoặc request mở cổng bị mất):
@@ -410,6 +441,7 @@ const Payment = () => {
     };
 
     const goBack = () => {
+        if (method === 'cash' && billPending?.status === 'dang_nhan') return;
         if (method) {
             qrRequestRef.current += 1;
             processingRef.current = false;
@@ -497,7 +529,16 @@ const Payment = () => {
             <p className="text-2xl font-bold" style={{ color: primaryTextColor }}>
                 {formatVnd(cashInserted)} / {formatVnd(remainingAmount)}
             </p>
-            {billStatus?.status === 'error' || billStatus?.status === 'disabled' ? (
+            {billPending?.status === 'dang_nhan' ? (
+                <p className="flex items-center gap-2 text-lg font-semibold" style={{ color: primaryTextColor }}>
+                    <Loader2 size={22} className="animate-spin" />
+                    Đang nhận tờ {formatVnd(billPending.amount)}… vui lòng chờ
+                </p>
+            ) : billPending?.status === 'tra_lai' ? (
+                <p className="max-w-md text-center text-lg font-semibold text-red-700">
+                    Máy trả lại tờ {formatVnd(billPending.amount)} — vui lòng nhét lại tờ tiền
+                </p>
+            ) : billStatus?.status === 'error' || billStatus?.status === 'disabled' ? (
                 <div className="max-w-md text-center">
                     <p className="text-base font-semibold text-red-700">
                         {billStatus.status === 'disabled' ? 'Máy đọc tiền đang tắt' : 'Máy đọc tiền lỗi'} — bấm Quay lại và dùng mã
@@ -667,7 +708,8 @@ const Payment = () => {
             <button
                 type="button"
                 onClick={goBack}
-                className="absolute left-6 top-6 z-10 flex items-center gap-2 rounded-full bg-white/80 px-6 py-3 font-bold shadow-sm backdrop-blur"
+                disabled={method === 'cash' && billPending?.status === 'dang_nhan'}
+                className="absolute left-6 top-6 z-10 flex items-center gap-2 rounded-full bg-white/80 px-6 py-3 font-bold shadow-sm backdrop-blur disabled:opacity-40"
                 style={{ color: primaryTextColor }}
             >
                 <ArrowLeft size={24} />
