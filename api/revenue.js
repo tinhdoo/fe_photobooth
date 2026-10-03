@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { requireActiveAdmin, verifyAccountPassword } from '../lib/auth.js';
 
 function isMissingTable(error) {
     return /Could not find the table|schema cache|does not exist/i.test(error?.message || '');
@@ -478,8 +479,12 @@ export default async function handler(req, res) {
     try {
         const supabase = getSupabaseAdmin();
 
+        // Mọi thao tác ở đây (xem doanh thu, ẩn booth, sửa booth của giao dịch, xoá doanh thu) chỉ cho
+        // admin đã đăng nhập. Mã 8686 viết cứng đã bỏ (2026-10-03).
+        const admin = await requireActiveAdmin(req, res, supabase);
+        if (!admin) return undefined;
+
         if (req.method === 'POST') {
-            if (req.body?.code !== '8686') return json(res, 403, { error: 'Invalid reset code' });
 
             const action = String(req.body?.action || '').trim();
             if (action === 'hide_booth') {
@@ -516,6 +521,11 @@ export default async function handler(req, res) {
             // BẮT BUỘC action='reset' tường minh: trước đây POST thiếu action (kể cả gõ sai tên
             // action) là xoá sạch doanh thu — quá nguy hiểm khi endpoint này có thêm action khác.
             if (action !== 'reset') return json(res, 400, { error: 'Unknown action' });
+            // Xoá vĩnh viễn -> bắt nhập lại mật khẩu đăng nhập của chính admin này.
+            if (!(await verifyAccountPassword(supabase, admin.u, req.body?.password))) {
+                return json(res, 403, { error: 'Sai mật khẩu.' });
+            }
+            console.warn(`Revenue HARD RESET by ${admin.u}`);
             const deleted = await hardResetRevenueData(supabase);
             const resetAt = await writeRevenueResetAt(supabase);
             await clearBoothReports(supabase);

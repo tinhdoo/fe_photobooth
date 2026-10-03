@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle } from 'lucide-react';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
+import { authHeader } from '../../utils/auth';
 
 const DeviceManager = () => {
     const [devices, setDevices] = useState([]);
@@ -13,7 +14,7 @@ const DeviceManager = () => {
     const fetchDevices = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/api/devices');
+            const res = await axios.get('/api/devices', { headers: authHeader() });
             setDevices(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Failed to fetch devices:", error);
@@ -70,7 +71,7 @@ const DeviceManager = () => {
     const toggleMode = async (device) => {
         const newMode = device.mode === 'event' ? 'payment' : 'event';
         try {
-            await axios.put('/api/devices', { id: device.id, mode: newMode });
+            await axios.put('/api/devices', { id: device.id, mode: newMode }, { headers: authHeader() });
             fetchDevices();
         } catch (error) {
             console.error("Failed to update mode:", error);
@@ -84,7 +85,7 @@ const DeviceManager = () => {
 
     const saveName = async (id) => {
         try {
-            await axios.put('/api/devices', { id, name: editName });
+            await axios.put('/api/devices', { id, name: editName }, { headers: authHeader() });
             setEditingId(null);
             fetchDevices();
         } catch (error) {
@@ -95,7 +96,7 @@ const DeviceManager = () => {
     const confirmDelete = async () => {
         if (!deleteTarget) return;
         try {
-            await axios.delete('/api/devices', { data: { id: deleteTarget.id } });
+            await axios.delete('/api/devices', { data: { id: deleteTarget.id }, headers: authHeader() });
             setDeleteTarget(null);
             fetchDevices();
         } catch (error) {

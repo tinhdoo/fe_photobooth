@@ -1,5 +1,6 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 import { deleteR2Object } from '../lib/r2.js';
+import { requireActiveAdmin } from '../lib/auth.js';
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
@@ -354,6 +355,10 @@ export default async function handler(req, res) {
                 }
                 return json(res, 200, normalizeSession(data));
             }
+
+            // DANH SÁCH lượt chụp (kèm mã album của khách) chỉ cho admin. Album từng khách (?id=) vẫn
+            // công khai ở trên — khách mở bằng mã trong QR.
+            if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
 
             const { data, error } = await supabase
                 .from('photo_sessions')

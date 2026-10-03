@@ -4,6 +4,7 @@ import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, C
 import { io } from "socket.io-client";
 
 import { CLOUD_API_URL } from '../../config/api';
+import { authHeader } from '../../utils/auth';
 const apiPath = (path) => `${CLOUD_API_URL}${path}`;
 
 // --- Voucher (mã thanh toán) KHÔNG tính vào doanh thu ---
@@ -61,9 +62,8 @@ const RevenueDashboard = () => {
     const [paymentMethod, setPaymentMethod] = useState('');
 
     const [showResetModal, setShowResetModal] = useState(false);
-    const [resetCode, setResetCode] = useState('');
+    const [resetPassword, setResetPassword] = useState('');
     const [hideTarget, setHideTarget] = useState(null);     // device_id đang chờ ẩn
-    const [hidePassword, setHidePassword] = useState('');
     const [hideError, setHideError] = useState('');
     const [hideLoading, setHideLoading] = useState(false);
     const [resetLoading, setResetLoading] = useState(false);
@@ -102,7 +102,7 @@ const RevenueDashboard = () => {
 
     // Lấy danh sách booth (để map device_id -> tên booth)
     const fetchDevices = () => {
-        axios.get(apiPath('/api/devices'))
+        axios.get(apiPath('/api/devices'), { headers: authHeader() })
             .then((res) => setDevices(Array.isArray(res.data) ? res.data : []))
             .catch(() => {});
     };
@@ -118,7 +118,7 @@ const RevenueDashboard = () => {
         const row = devices.find((dv) => dv.device_id === deviceId);
         try {
             if (row?.id) {
-                await axios.put(apiPath('/api/devices'), { id: row.id, name });
+                await axios.put(apiPath('/api/devices'), { id: row.id, name }, { headers: authHeader() });
             } else {
                 await axios.post(apiPath('/api/devices'), { action: 'heartbeat', device_id: deviceId, name });
             }
@@ -129,26 +129,23 @@ const RevenueDashboard = () => {
         setEditingDevice(null);
     };
 
-    // Ẩn 1 booth khỏi bảng doanh thu (cần mật khẩu 8686). Không xóa dữ liệu — chỉ lọc khỏi
-    // thống kê; có thể khôi phục bằng cách bỏ device_id khỏi hidden_booths trên cloud.
+    // Ẩn 1 booth khỏi bảng doanh thu (chỉ admin đã đăng nhập — server kiểm). Không xóa dữ liệu — chỉ
+    // lọc khỏi thống kê; có thể khôi phục bằng cách bỏ device_id khỏi hidden_booths trên cloud.
     const hideBooth = (deviceId) => {
         setHideTarget(deviceId);
-        setHidePassword('');
         setHideError('');
     };
 
     const confirmHideBooth = async () => {
         if (!hideTarget) return;
-        if (hidePassword !== '8686') { setHideError('Sai mật khẩu.'); return; }
         setHideLoading(true);
         try {
-            await axios.post(apiPath('/api/revenue'), { code: hidePassword, action: 'hide_booth', device_id: hideTarget });
+            await axios.post(apiPath('/api/revenue'), { action: 'hide_booth', device_id: hideTarget }, { headers: authHeader() });
             setHideTarget(null);
-            setHidePassword('');
             fetchRevenue();
             fetchDevices();
         } catch (e) {
-            setHideError(e?.response?.status === 403 ? 'Sai mật khẩu.' : (e?.response?.data?.error || 'Ẩn booth thất bại.'));
+            setHideError(e?.response?.data?.error || 'Ẩn booth thất bại.');
         } finally {
             setHideLoading(false);
         }
@@ -252,7 +249,7 @@ const RevenueDashboard = () => {
             if (paymentMethod) params.paymentMethod = paymentMethod;
 
             console.log("Fetching revenue with params:", params);
-            const res = await axios.get(apiPath('/api/revenue'), { params });
+            const res = await axios.get(apiPath('/api/revenue'), { params, headers: authHeader() });
             const data = res.data && typeof res.data === 'object' ? res.data : {};
             setStats({
                 totalRevenue: Number(data.totalRevenue || 0),
@@ -382,8 +379,8 @@ const RevenueDashboard = () => {
     );
 
     const handleResetRevenue = async () => {
-        if (resetCode !== '8686') {
-            setResetError('Mã xác nhận không đúng');
+        if (!resetPassword) {
+            setResetError('Nhập mật khẩu đăng nhập để xác nhận.');
             return;
         }
 
@@ -391,18 +388,18 @@ const RevenueDashboard = () => {
         setResetError('');
 
         try {
-            await axios.post(apiPath('/api/revenue'), { code: resetCode, action: 'reset' });
+            await axios.post(apiPath('/api/revenue'), { action: 'reset', password: resetPassword }, { headers: authHeader() });
 
             setShowResetModal(false);
-            setResetCode('');
+            setResetPassword('');
 
             fetchRevenue();
             fetchDevices();
 
             setNotification('Đã reset doanh thu thành công');
             setTimeout(() => setNotification(null), 3000);
-        } catch {
-            setResetError('Reset thất bại');
+        } catch (e) {
+            setResetError(e?.response?.data?.error || 'Reset thất bại');
         } finally {
             setResetLoading(false);
         }
@@ -1067,7 +1064,7 @@ const RevenueDashboard = () => {
                         </h3>
 
                         <p className="text-gray-500 text-sm mb-5">
-                            Nhập mã xác nhận để <span className="font-semibold text-[#1a1a2e]">XÓA VĨNH VIỄN</span> toàn bộ dữ liệu:
+                            Nhập mật khẩu đăng nhập của bạn để <span className="font-semibold text-[#1a1a2e]">XÓA VĨNH VIỄN</span> toàn bộ dữ liệu:
                             mã thanh toán (kể cả voucher chưa dùng), session, ảnh, motion và giao dịch QR — khỏi database và storage.
                             <br />
                             <span className="text-red-500 font-semibold">
@@ -1077,9 +1074,10 @@ const RevenueDashboard = () => {
 
                         <input
                             type="password"
-                            placeholder="Nhập mã xác nhận"
-                            value={resetCode}
-                            onChange={(e) => setResetCode(e.target.value)}
+                            placeholder="Mật khẩu đăng nhập"
+                            autoComplete="current-password"
+                            value={resetPassword}
+                            onChange={(e) => setResetPassword(e.target.value)}
                             className="w-full border border-gray-200 rounded-xl p-3 mb-3 outline-none focus:ring-2 focus:ring-red-200"
                         />
 
@@ -1091,7 +1089,7 @@ const RevenueDashboard = () => {
                             <button
                                 onClick={() => {
                                     setShowResetModal(false);
-                                    setResetCode('');
+                                    setResetPassword('');
                                     setResetError('');
                                 }}
                                 className="flex-1 py-3 rounded-xl bg-gray-100 font-semibold"
@@ -1122,19 +1120,7 @@ const RevenueDashboard = () => {
                             Ẩn booth <span className="font-bold text-[#1a1a2e]">"{boothName(hideTarget)}"</span> khỏi bảng doanh thu.
                             <br />
                             <span className="text-gray-400">Dữ liệu vẫn được giữ trên cloud, có thể khôi phục.</span>
-                            <br />
-                            Nhập mật khẩu để xác nhận.
                         </p>
-
-                        <input
-                            type="password"
-                            placeholder="Nhập mật khẩu"
-                            value={hidePassword}
-                            autoFocus
-                            onChange={(e) => setHidePassword(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && confirmHideBooth()}
-                            className="w-full border border-gray-200 rounded-xl p-3 mb-3 outline-none focus:ring-2 focus:ring-red-200"
-                        />
 
                         {hideError && (
                             <p className="text-red-500 text-sm mb-3">{hideError}</p>
@@ -1142,7 +1128,7 @@ const RevenueDashboard = () => {
 
                         <div className="flex gap-3">
                             <button
-                                onClick={() => { setHideTarget(null); setHidePassword(''); setHideError(''); }}
+                                onClick={() => { setHideTarget(null); setHideError(''); }}
                                 className="flex-1 py-3 rounded-xl bg-gray-100 font-semibold"
                             >
                                 Hủy

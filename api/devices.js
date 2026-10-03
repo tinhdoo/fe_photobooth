@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
+import { requireActiveAdmin } from '../lib/auth.js';
 
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
@@ -122,8 +123,17 @@ export default async function handler(req, res) {
                 updated_at: new Date().toISOString(),
             };
 
-            if (typeof req.body?.name === 'string') updates.name = req.body.name.trim();
-            if (typeof req.body?.mode === 'string') updates.mode = req.body.mode;
+            const hasName = typeof req.body?.name === 'string';
+            const mode = req.body?.mode;
+            if (mode !== undefined && mode !== 'event' && mode !== 'payment') {
+                return json(res, 400, { error: 'Invalid mode' });
+            }
+            // Đổi TÊN booth: chỉ admin. Đổi CHẾ ĐỘ (event/payment) vẫn mở: nút gạt trên kiosk ở booth
+            // (bản 0.0.19 trở về trước) gửi PUT này không có token, chặn thì chế độ bị nhịp tim kéo về.
+            if (hasName && !(await requireActiveAdmin(req, res, supabase))) return undefined;
+
+            if (hasName) updates.name = req.body.name.trim();
+            if (typeof mode === 'string') updates.mode = mode;
 
             const { data, error } = await supabase
                 .from('devices')
@@ -137,6 +147,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'DELETE') {
+            if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
             const id = req.body?.id || req.query?.id;
             if (!id) return json(res, 400, { error: 'Missing device id' });
 
@@ -153,6 +164,9 @@ export default async function handler(req, res) {
             res.setHeader('Allow', 'GET,POST,PUT,DELETE');
             return json(res, 405, { error: 'Method not allowed' });
         }
+
+        // Danh sách booth (kèm báo cáo tiền mặt, tên máy, thư mục cài) chỉ cho admin.
+        if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
 
         const { data, error } = await supabase
             .from('devices')

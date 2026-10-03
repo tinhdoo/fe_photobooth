@@ -4,6 +4,7 @@ import { Banknote, Clock, Monitor, Power, RefreshCw, Save } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getDeviceId } from '../../utils/deviceId';
 import { isLocalHost } from '../../utils/runtime';
+import { authHeader } from '../../utils/auth';
 
 const defaultHexCodes = ['40', '41', '42', '43', '44', '45', '46', '47'];
 
@@ -96,7 +97,7 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
         try {
             const [statusRes, devicesRes] = await Promise.all([
                 axios.get('/api/bill/status'),
-                axios.get('/api/devices')
+                axios.get('/api/devices', { headers: authHeader() })
             ]);
 
             const localId = statusRes.data?.device_id || getDeviceId();
