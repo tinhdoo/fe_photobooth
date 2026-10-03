@@ -116,6 +116,12 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'PUT') {
+            // Đổi tên / chế độ booth: CHỈ admin. Chế độ 'event' = khách bỏ qua thanh toán, nên trước đây để
+            // mở (cho nút gạt trên kiosk, gửi không token) là ai biết id cũng bật được chụp miễn phí.
+            // Từ 2026-10-03 đổi chế độ ở trang Cài đặt trên cloud; nút gạt trên booth (<= 0.0.19) bị
+            // từ chối và nhịp tim kéo booth về chế độ trên cloud trong <= 60 s.
+            if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
+
             const id = req.body?.id || req.query?.id;
             if (!id) return json(res, 400, { error: 'Missing device id' });
 
@@ -128,9 +134,6 @@ export default async function handler(req, res) {
             if (mode !== undefined && mode !== 'event' && mode !== 'payment') {
                 return json(res, 400, { error: 'Invalid mode' });
             }
-            // Đổi TÊN booth: chỉ admin. Đổi CHẾ ĐỘ (event/payment) vẫn mở: nút gạt trên kiosk ở booth
-            // (bản 0.0.19 trở về trước) gửi PUT này không có token, chặn thì chế độ bị nhịp tim kéo về.
-            if (hasName && !(await requireActiveAdmin(req, res, supabase))) return undefined;
 
             if (hasName) updates.name = req.body.name.trim();
             if (typeof mode === 'string') updates.mode = mode;
