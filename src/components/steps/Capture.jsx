@@ -118,13 +118,17 @@ const Capture = () => {
     const lastRecoveryAtRef = useRef(0);         // lần cuối chạy phục hồi (đừng nhồi liên tục)
     const [hasLiveFrame, setHasLiveFrame] = useState(false); // để re-render mở đếm ngược khi có hình
     const [liveStalled, setLiveStalled] = useState(false);   // để hiện overlay "Đang kết nối lại"
+    // Đứng hình QUÁ LÂU (máy ảnh không tự hồi) -> overlay đổi sang hướng dẫn nhân viên. Sự cố 2026-10-04:
+    // kiosk quay vòng "Đang kết nối lại máy ảnh" mãi, không ai biết phải tắt/bật máy ảnh.
+    const stallFromRef = useRef(0);
+    const [stallLau, setStallLau] = useState(false);
     const [wsReconnectToken, setWsReconnectToken] = useState(0); // bump -> effect /ws chạy lại (reconnect)
     // Ghi nhận 1 frame live view vừa tới (gọi ở onLoad của <img> live view). Dùng ref chặn setState
     // thừa vì onLoad bắn ~30 lần/s.
     const markLiveFrame = () => {
         lastFrameAtRef.current = Date.now();
         if (!hasLiveFrameRef.current) { hasLiveFrameRef.current = true; setHasLiveFrame(true); }
-        if (stalledRef.current) { stalledRef.current = false; setLiveStalled(false); }
+        if (stalledRef.current) { stalledRef.current = false; setLiveStalled(false); setStallLau(false); }
     };
     // Còn mounted không -> chặn các setTimeout sau khi chụp (advance/countdown) chạy MUỘN sau khi
     // đã rời bước (vd hết giờ -> nextStep tự động unmount Capture) -> tránh nextStep() thừa gây
@@ -474,7 +478,8 @@ const Capture = () => {
             const now = Date.now();
             if (shootingRef.current) { lastFrameAtRef.current = now; return; } // đang chụp -> EVF tắt là bình thường
             if (now - lastFrameAtRef.current < STALL_MS) return;                 // vẫn có hình -> ổn
-            if (!stalledRef.current) { stalledRef.current = true; setLiveStalled(true); }
+            if (!stalledRef.current) { stalledRef.current = true; stallFromRef.current = now; setLiveStalled(true); }
+            if (now - stallFromRef.current > 20000) setStallLau(true);
             if (now - lastRecoveryAtRef.current < RECOVER_EVERY_MS) return;
             lastRecoveryAtRef.current = now;
             // Ép middleware bật lại EVF (EnsureSessionOpen + StartLiveView) rồi dựng lại /ws.
@@ -857,8 +862,12 @@ const Capture = () => {
                     {cameraMode === 'canon' && liveStalled && !cameraError && (
                         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/70 text-white">
                             <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-white/30 border-t-white" />
-                            <p className="text-xl font-serif">Đang kết nối lại máy ảnh...</p>
-                            <p className="mt-1 text-sm text-white/70">Vui lòng đợi giây lát</p>
+                            <p className="text-xl font-serif">{stallLau ? 'Máy ảnh chưa phản hồi' : 'Đang kết nối lại máy ảnh...'}</p>
+                            <p className="mt-1 max-w-md text-center text-sm text-white/70">
+                                {stallLau
+                                    ? 'Nhân viên: tắt rồi bật lại máy ảnh và kiểm tra cáp USB. Có hình lại là tự chụp tiếp.'
+                                    : 'Vui lòng đợi giây lát'}
+                            </p>
                         </div>
                     )}
 
