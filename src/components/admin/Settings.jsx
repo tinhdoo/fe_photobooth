@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Zap, DollarSign } from 'lucide-react';
 import DeviceManager from './DeviceManager';
+import BoothModeInfo from './BoothModeInfo';
 import { isLocalHost } from '../../utils/runtime';
 import { useWorkflow } from '../../context/WorkflowContext';
 
 const Settings = ({ forceLocalAdmin = false }) => {
     const isLocalAdmin = isLocalHost() || forceLocalAdmin;
-    const { isEventMode, toggleEventMode } = useWorkflow();
+    const { isEventMode } = useWorkflow();
     const [activeTab, setActiveTab] = useState('general');
     const [configs, setConfigs] = useState({
         price: '60000',
@@ -53,22 +54,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
     const [hardwareLoading, setHardwareLoading] = useState(false);
     const [testLoading, setTestLoading] = useState(null);
     const [cameraTestOk, setCameraTestOk] = useState(false);
-    // Đổi chế độ (Trả phí/Sự kiện) cần mật khẩu -> tránh gạt nhầm sang miễn phí.
-    const [modePrompt, setModePrompt] = useState(false);
-    const [modePw, setModePw] = useState('');
-    const [modeErr, setModeErr] = useState('');
-    const modePassword = String(configs.mode_switch_password || '').trim() || String(configs.staff_pin || '8888');
-    const submitModePassword = () => {
-        if (String(modePw) !== modePassword) {
-            setModeErr('Mật khẩu không đúng.');
-            setModePw('');
-            return;
-        }
-        setModePrompt(false);
-        setModePw('');
-        setModeErr('');
-        toggleEventMode();
-    };
+    const [modeInfo, setModeInfo] = useState(false); // modal báo chế độ tính tiền (đổi trên cloud)
 
     useEffect(() => {
         fetchConfigs();
@@ -763,7 +749,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     Chế độ hoạt động:
                                                 </span>
                                                 <button
-                                                    onClick={() => { setModePw(''); setModeErr(''); setModePrompt(true); }}
+                                                    onClick={() => setModeInfo(true)}
+                                                    title="Chế độ tính tiền (đổi trên trang quản trị cloud)"
                                                     className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all shadow-sm flex items-center gap-2 ${
                                                         isEventMode
                                                             ? 'bg-purple-500 text-white hover:bg-purple-600'
@@ -780,78 +767,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                         )}
                                     </div>
 
-                                    {isLocalAdmin && (
-                                        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                                            <label className="block text-xs font-bold text-amber-800 mb-2">
-                                                🔒 Mật khẩu đổi chế độ (Trả phí ↔ Sự kiện)
-                                            </label>
-                                            <input
-                                                type="text"
-                                                name="mode_switch_password"
-                                                value={configs.mode_switch_password ?? ''}
-                                                onChange={handleChange}
-                                                placeholder="Để trống = tạm dùng PIN nhân viên"
-                                                className="block w-full max-w-xs rounded-xl border-amber-200 py-2.5 px-4 text-sm focus:border-amber-500"
-                                            />
-                                            <p className="mt-2 text-xs text-amber-700/80">
-                                                Phải nhập mật khẩu này mới chuyển được sang Sự kiện (miễn phí) — chặn gạt nhầm. Đổi xong nhớ bấm <b>Lưu</b>.
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {modePrompt && (
-                                        <div
-                                            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-6"
-                                            onClick={() => setModePrompt(false)}
-                                        >
-                                            <div
-                                                className="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <div className="mb-4 flex items-center gap-3">
-                                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-                                                        <Zap size={22} />
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="text-lg font-black text-[#1a1a2e]">Đổi chế độ tính tiền</h3>
-                                                        <p className="text-sm font-semibold text-gray-500">
-                                                            Chuyển sang {isEventMode ? '“Trả phí”' : '“Sự kiện” (miễn phí)'} — nhập mật khẩu
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <input
-                                                    type="password"
-                                                    autoFocus
-                                                    value={modePw}
-                                                    onChange={(e) => { setModeErr(''); setModePw(e.target.value); }}
-                                                    onKeyDown={(e) => { if (e.key === 'Enter') submitModePassword(); }}
-                                                    placeholder="Mật khẩu đổi chế độ"
-                                                    className="mb-3 h-13 w-full rounded-xl border border-gray-200 px-4 py-3 text-center text-xl font-bold tracking-widest focus:border-amber-500 outline-none"
-                                                />
-                                                {modeErr && (
-                                                    <div className="mb-3 rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-center text-sm font-bold text-red-600">
-                                                        {modeErr}
-                                                    </div>
-                                                )}
-                                                <div className="flex gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setModePrompt(false)}
-                                                        className="h-12 flex-1 rounded-xl bg-gray-100 text-sm font-black text-gray-600 active:scale-95"
-                                                    >
-                                                        Hủy
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={submitModePassword}
-                                                        className="h-12 flex-1 rounded-xl bg-[#e63946] text-sm font-black text-white active:scale-95"
-                                                    >
-                                                        Xác nhận
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {modeInfo && <BoothModeInfo isEventMode={isEventMode} onClose={() => setModeInfo(false)} />}
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Kiosk Flow */}

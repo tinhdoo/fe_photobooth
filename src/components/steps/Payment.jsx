@@ -33,6 +33,9 @@ const Payment = () => {
     // Trong lúc 'dang_nhan' khoá nút Quay lại và không tự sang bước chụp -> không bao giờ tính một tờ
     // chưa chắc chắn (sự cố đếm trùng 2026-09-22/25).
     const [billPending, setBillPending] = useState(null);
+    // Khách đã nhét tiền mà bấm Quay lại ở màn chọn phương thức (rời bước Thanh toán) -> hỏi lại, vì
+    // rời bước là mất số tiền đó trên màn hình.
+    const [xacNhanRoi, setXacNhanRoi] = useState(false);
     const qrRequestRef = useRef(0);
     // Refs giữ GIÁ TRỊ MỚI NHẤT cho socket handler. Socket chỉ tạo 1 lần (deps []), nếu đọc
     // trực tiếp method/qrOrder/handlePaymentSuccess trong closure sẽ phải tạo lại socket mỗi lần
@@ -57,6 +60,8 @@ const Payment = () => {
     const printQuantity = sessionData.printQuantity || 1;
     const voucherValue = Math.min(voucher?.value || 0, price);
     const remainingAmount = Math.max(price - voucherValue, 0);
+    // Còn thiếu sau khi trừ mã VÀ tiền mặt đã nhét (tiền mặt được giữ khi khách đổi phương thức).
+    const conLai = Math.max(remainingAmount - cashInserted, 0);
     const cashProgressTotal = remainingAmount || price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
@@ -70,8 +75,11 @@ const Payment = () => {
         // Đã có một lượt xử lý đang chạy (hoặc lỗi chưa được khách bấm Đóng) -> bỏ qua lời gọi trùng.
         if (processingRef.current) return;
         processingRef.current = true;
-        const activeVoucher = extraData.voucher || voucher;
-        const activeVoucherValue = Math.min(activeVoucher?.value || 0, price);
+        // Mã chỉ che PHẦN CÒN THIẾU sau tiền mặt đã nhét -> doanh thu tiền mặt (giá − phần mã) khớp đúng
+        // số tiền trong thùng. Tiền mặt đã đủ cả giá thì KHÔNG dùng mã (mã còn nguyên cho khách).
+        const nhapMa = extraData.voucher || voucher;
+        const activeVoucherValue = Math.max(Math.min(nhapMa?.value || 0, price - cashInserted), 0);
+        const activeVoucher = activeVoucherValue > 0 ? nhapMa : null;
         setLoading(true);
         setTimeout(async () => {
             if (activeVoucher?.id && !activeVoucher.used) {
@@ -99,6 +107,11 @@ const Payment = () => {
                 updateSessionData('paymentCodeApplied', activeVoucherValue);
                 // Lưu ID mã đã dùng -> Edit sẽ gắn nó với sessionId (album) để biết "mã dùng cho lượt nào".
                 if (activeVoucher.id) updateSessionData('paymentCodeId', activeVoucher.id);
+            } else if (nhapMa) {
+                // Đã nhập mã nhưng tiền mặt đủ -> không dùng mã: xoá dấu mã applyCode đã ghi trước.
+                updateSessionData('paymentCode', null);
+                updateSessionData('paymentCodeValue', null);
+                updateSessionData('paymentCodeApplied', null);
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
             if (cashInserted > 0 && cashTraceRef.current) updateSessionData('cashTrace', cashTraceRef.current);
@@ -135,13 +148,13 @@ const Payment = () => {
             updateSessionData('paymentCodeApplied', Math.min(res.data.value, price));
             setCode('');
             setMethod(null);
-            setCashInserted(0);
-            cashTraceRef.current = null;
+            // GIỮ tiền mặt đã nhét (trước đây đặt về 0 -> khách mất số tiền đó). Mã + tiền mặt đủ giá
+            // -> xong luôn ('code+cash'), mã chỉ che phần còn thiếu.
             setQrOrder(null);
             setQrError('');
 
-            if (res.data.value >= price) {
-                handlePaymentSuccess('code', { voucher: appliedVoucher });
+            if (res.data.value + cashInserted >= price) {
+                handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code', { voucher: appliedVoucher });
             }
         } catch (error) {
             setErrorModal({
@@ -165,13 +178,12 @@ const Payment = () => {
         });
 
         socket.on('money_inserted', (data) => {
-            // CHỈ ghi nhận tiền khi đang ở đúng màn nhận tiền mặt (đã chọn 'cash').
-            // Không tự nhảy sang 'cash' từ màn khác -> tránh nhận tiền ngoài bước này.
-            if (methodRef.current === 'cash') {
-                setCashInserted((prev) => prev + data.amount);
-                setBillPending(null);
-                if (Array.isArray(data.trace)) cashTraceRef.current = data.trace;
-            }
+            // Cổng máy đọc tiền CHỈ mở ở màn tiền mặt, nên mọi money_inserted là tiền khách nhét ở bước
+            // này — kể cả tờ được chốt ngay SAU khi khách rời màn tiền mặt (stop() chốt tờ đang chờ).
+            // Ghi nhận ở mọi màn của bước Thanh toán: tiền đã nhận được GIỮ khi khách đổi phương thức.
+            setCashInserted((prev) => prev + (Number(data?.amount) || 0));
+            setBillPending(null);
+            if (Array.isArray(data?.trace)) cashTraceRef.current = data.trace;
         });
 
         socket.on('bill_pending', (data) => {
@@ -222,8 +234,11 @@ const Payment = () => {
         // chạy lại -> thử lại có chủ đích, không lặp vô hạn.
         // Còn tờ đang chờ chốt -> đợi nó (cộng vào hoặc bị bỏ) rồi mới đi tiếp, kẻo tờ đó rơi ra ngoài
         // tổng tiền của lượt.
+        // Cả ở màn chọn phương thức (tờ chốt muộn sau khi khách rời màn tiền mặt, hoặc mã + tiền mặt đủ
+        // giá mà lần dùng mã trước bị lỗi) — không chạy ở màn QR / nhập mã.
         const dangNhan = billPending?.status === 'dang_nhan';
-        if (method === 'cash' && !loading && !errorModal.show && !dangNhan && remainingAmount > 0 && cashInserted >= remainingAmount) {
+        const choTienMat = method === 'cash' || !method;
+        if (choTienMat && !loading && !errorModal.show && !dangNhan && cashInserted > 0 && cashInserted >= remainingAmount) {
             handlePaymentSuccess('cash');
         }
     }, [billPending, cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
@@ -423,7 +438,7 @@ const Payment = () => {
 
     const methods = useMemo(() => [
         { id: 'cash', icon: Banknote, label: 'Tiền mặt' },
-        { id: 'qr', icon: QrCode, label: 'Chuyển khoản' },
+        { id: 'qr', icon: QrCode, label: 'Chuyển khoản' },  // tắt khi đã nhét tiền mặt (xem selectMethod)
         { id: 'code', icon: Hash, label: voucher ? 'Mã đã áp dụng' : 'Nhập mã' }
     ], [voucher]);
 
@@ -433,6 +448,9 @@ const Payment = () => {
 
     const selectMethod = (selectedMethod) => {
         if (selectedMethod === 'code' && voucher) return;
+        // Đã nhét tiền mặt -> không cho chuyển khoản (đơn QR tạo theo cả phần còn lại, không trừ tiền mặt):
+        // trả nốt bằng tiền mặt hoặc mã.
+        if (selectedMethod === 'qr' && cashInserted > 0) return;
         setMethod(selectedMethod);
         if (selectedMethod !== 'qr') {
             setQrOrder(null);
@@ -447,10 +465,11 @@ const Payment = () => {
             processingRef.current = false;
             setLoading(false);
             setMethod(null);
-            setCashInserted(0);
-            cashTraceRef.current = null;
+            // GIỮ tiền mặt + vết byte: khách quay lại để nhập mã thì số tiền đã nhét vẫn được tính.
             setQrOrder(null);
             setQrError('');
+        } else if (cashInserted > 0) {
+            setXacNhanRoi(true);
         } else {
             prevStep();
         }
@@ -461,15 +480,23 @@ const Payment = () => {
             <h2 className="mb-2 text-5xl font-bold tracking-tight" style={{ color: secondaryTextColor }}>{formatVnd(price)}</h2>
             <div className="my-4 h-px w-full" style={{ backgroundColor: `${primaryTextColor}26` }} />
             <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Số lượng: {printQuantity}</p>
-            {voucher && (
-                <div className="mt-5 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
-                    <div className="flex justify-between">
-                        <span>Mã {voucher.code}</span>
-                        <strong>-{formatVnd(voucherValue)}</strong>
-                    </div>
-                    <div className="mt-2 flex justify-between text-lg">
+            {(voucher || cashInserted > 0) && (
+                <div className="mt-5 space-y-2 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
+                    {voucher && (
+                        <div className="flex justify-between">
+                            <span>Mã {voucher.code}</span>
+                            <strong>-{formatVnd(voucherValue)}</strong>
+                        </div>
+                    )}
+                    {cashInserted > 0 && (
+                        <div className="flex justify-between">
+                            <span>Tiền mặt đã nhận</span>
+                            <strong>-{formatVnd(cashInserted)}</strong>
+                        </div>
+                    )}
+                    <div className="flex justify-between text-lg">
                         <span>Còn lại</span>
-                        <strong>{formatVnd(remainingAmount)}</strong>
+                        <strong>{formatVnd(conLai)}</strong>
                     </div>
                 </div>
             )}
@@ -487,7 +514,7 @@ const Payment = () => {
             <div className="mb-10 flex w-full max-w-lg items-center gap-4 opacity-80">
                 <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
                 <span className="whitespace-nowrap text-lg font-semibold italic" style={{ color: primaryTextColor }}>
-                    {remainingAmount > 0 ? 'Chọn phương thức' : 'Mã đã thanh toán đủ'}
+                    {remainingAmount <= 0 ? 'Mã đã thanh toán đủ' : cashInserted > 0 ? 'Trả nốt bằng tiền mặt hoặc mã' : 'Chọn phương thức'}
                 </span>
                 <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
             </div>
@@ -495,7 +522,7 @@ const Payment = () => {
             <div className="grid w-full max-w-3xl grid-cols-3 gap-6">
                 {methods.map((item) => {
                     const Icon = item.icon;
-                    const disabled = item.id === 'code' && Boolean(voucher);
+                    const disabled = (item.id === 'code' && Boolean(voucher)) || (item.id === 'qr' && cashInserted > 0);
                     return (
                         <button
                             type="button"
@@ -719,6 +746,33 @@ const Payment = () => {
             <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
                 {renderContent()}
             </div>
+
+            {xacNhanRoi && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="mx-4 w-full max-w-md rounded-3xl bg-white/95 p-8 text-center shadow-2xl">
+                        <h3 className="mb-4 text-2xl font-bold" style={{ color: secondaryTextColor }}>Bạn đã nhét {formatVnd(cashInserted)}</h3>
+                        <p className="mb-8 text-lg" style={{ color: primaryTextColor }}>
+                            Quay lại bây giờ sẽ huỷ số tiền này. Bạn có thể nhét tiếp hoặc nhập mã để trả phần còn lại.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setXacNhanRoi(false)}
+                                className="flex-1 rounded-full bg-[#987351] px-6 py-3 font-bold text-white shadow-lg"
+                            >
+                                Ở lại thanh toán
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setXacNhanRoi(false); prevStep(); }}
+                                className="flex-1 rounded-full bg-gray-200 px-6 py-3 font-bold text-gray-700"
+                            >
+                                Vẫn quay lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {errorModal.show && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
