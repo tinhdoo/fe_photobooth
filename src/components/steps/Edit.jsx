@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useWorkflow, setPendingMediaUpload } from '../../context/WorkflowContext';
 import axios from 'axios';
 import { drawImageCover } from '../../utils/canvasUtils';
-import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2, Move } from 'lucide-react';
+import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2, Move, ChevronLeft, ChevronRight } from 'lucide-react';
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 import { getDeviceId } from '../../utils/deviceId';
@@ -328,10 +328,16 @@ const Edit = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(frames.length / ITEMS_PER_PAGE);
-    const displayedFrames = frames.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
+    // Kẹp trang: danh sách khung ngắn lại (tải lại) thì không đứng ở trang trống.
+    const trangKhung = Math.min(currentPage, Math.max(totalPages - 1, 0));
+    const displayedFrames = frames.slice(trangKhung * ITEMS_PER_PAGE, (trangKhung + 1) * ITEMS_PER_PAGE);
+    // Nút chuyển trang khung / sticker: tròn, nền trắng, mũi tên đậm -> dễ thấy và dễ bấm trên màn cảm
+    // ứng (trước đây là ký tự ‹ › mảnh). Chỉ hiện khi có từ 2 trang trở lên.
+    const NUT_TRANG_KHUNG = 'flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#7B5E43]/30 bg-white/95 text-[#7B5E43] shadow-lg transition-transform active:scale-90';
+    const NUT_TRANG_STICKER = 'flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#7B5E43]/30 bg-white/95 text-[#7B5E43] shadow-md transition-transform active:scale-90';
 
-    const nextPage = () => setCurrentPage((prev) => (prev + 1) % totalPages);
-    const prevPage = () => setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages);
+    const nextPage = () => setCurrentPage((prev) => (Math.min(prev, totalPages - 1) + 1) % totalPages);
+    const prevPage = () => setCurrentPage((prev) => (Math.min(prev, totalPages - 1) - 1 + totalPages) % totalPages);
 
     // Vuốt cảm ứng kéo trái/phải để đổi trang frame (vẫn giữ mũi tên ‹ ›). dragged: chặn chọn
     // nhầm frame khi thả tay sau khi vuốt.
@@ -1538,7 +1544,11 @@ const Edit = () => {
                         ) : (
                             // 1 HÀNG + mũi tên ‹ › phân trang (giống chọn frame), nút vuông giữ nguyên.
                             <div className="flex items-center justify-center gap-2">
-                                <button type="button" onClick={prevStickerPage} disabled={totalStickerPages <= 1} className="shrink-0 p-1 text-3xl font-bold text-[#7B5E43] disabled:opacity-20">‹</button>
+                                {totalStickerPages > 1 && (
+                                    <button type="button" onClick={prevStickerPage} aria-label="Trang sticker trước" className={NUT_TRANG_STICKER}>
+                                        <ChevronLeft size={30} strokeWidth={3} />
+                                    </button>
+                                )}
                                 <div className="flex flex-1 justify-center gap-2.5">
                                     {displayedStickers.map((icon) => (
                                         <button
@@ -1552,7 +1562,11 @@ const Edit = () => {
                                         </button>
                                     ))}
                                 </div>
-                                <button type="button" onClick={nextStickerPage} disabled={totalStickerPages <= 1} className="shrink-0 p-1 text-3xl font-bold text-[#7B5E43] disabled:opacity-20">›</button>
+                                {totalStickerPages > 1 && (
+                                    <button type="button" onClick={nextStickerPage} aria-label="Trang sticker sau" className={NUT_TRANG_STICKER}>
+                                        <ChevronRight size={30} strokeWidth={3} />
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1565,7 +1579,11 @@ const Edit = () => {
                         onTouchMove={onFrameSwipeMove}
                         onTouchEnd={onFrameSwipeEnd}
                     >
-                        <button onClick={prevPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#7B5E43] text-4xl font-bold p-2">‹</button>
+                        {totalPages > 1 && (
+                            <button type="button" onClick={prevPage} aria-label="Trang khung trước" className={NUT_TRANG_KHUNG}>
+                                <ChevronLeft size={44} strokeWidth={3} />
+                            </button>
+                        )}
                         <div className="grid grid-cols-5 grid-rows-2 gap-4 min-h-[208px]">
                             {displayedFrames.map((frame) => (
                                 <motion.div key={frame.id} onClick={() => { if (frameSwipeRef.current.dragged) return; handleSelectFrame(frame); }}
@@ -1578,7 +1596,11 @@ const Edit = () => {
                                 </motion.div>
                             ))}
                         </div>
-                        <button onClick={nextPage} disabled={totalPages <= 1} className="disabled:opacity-20 text-[#7B5E43] text-4xl font-bold p-2">›</button>
+                        {totalPages > 1 && (
+                            <button type="button" onClick={nextPage} aria-label="Trang khung sau" className={NUT_TRANG_KHUNG}>
+                                <ChevronRight size={44} strokeWidth={3} />
+                            </button>
+                        )}
                     </div>
 
                     <motion.button
