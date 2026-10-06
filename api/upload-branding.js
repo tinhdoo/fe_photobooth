@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { requireActiveAdmin } from '../lib/auth.js';
 
 export const config = {
     api: {
@@ -119,6 +120,10 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {
+        // Đổi hình nền ghi thẳng vào cấu hình cloud mà mọi booth kéo về -> CHỈ admin đã đăng nhập
+        // (trước 2026-10-06 mở cho bất kỳ ai, như POST /api/config).
+        if (!(await requireActiveAdmin(req, res, getSupabaseAdmin()))) return undefined;
+
         const isJson = String(req.headers['content-type'] || '').includes('application/json');
         if (isJson) {
             const body = await parseJson(req);

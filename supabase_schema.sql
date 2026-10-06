@@ -22,6 +22,9 @@ create index if not exists payments_status_idx on payments (status);
 
 alter table payments enable row level security;
 
+-- Kiosk <= 0.0.21 đọc thẳng trạng thái đơn QR bằng khoá anon nên còn cần policy này. Từ 0.0.22 kiosk hỏi
+-- qua GET /api/sepay-orders?code= -> khi MỌI booth đã lên >= 0.0.22 thì xoá policy (chỉ giữ dòng drop):
+-- ai có khoá anon (nằm trong mã trang web) đều đọc được toàn bộ đơn chuyển khoản.
 drop policy if exists "payments_public_read_status" on payments;
 create policy "payments_public_read_status"
 on payments
@@ -146,12 +149,9 @@ create index if not exists photo_sessions_expires_at_idx on photo_sessions (expi
 
 alter table photo_sessions enable row level security;
 
+-- KHÔNG cho anon đọc (2026-10-06): trình duyệt không đọc thẳng bảng này — album khách đi qua
+-- GET /api/sessions?id= (service role). Policy đọc công khai cũ để lộ mọi album, số tiền, meta.
 drop policy if exists "photo_sessions_public_read" on photo_sessions;
-create policy "photo_sessions_public_read"
-on photo_sessions
-for select
-to anon
-using (true);
 
 -- Photo sessions are inserted/updated server-side through Vercel API using
 -- SUPABASE_SERVICE_ROLE_KEY.
@@ -203,3 +203,13 @@ exception
   when duplicate_object then null;
   when undefined_object then null;
 end $$;
+
+-- Đếm số lần thử SAI theo IP (nhập mã thanh toán, đăng nhập) — lib/rateLimit.js. Không policy:
+-- chỉ service role (Vercel API) đọc/ghi. Cron dọn mã hằng ngày xoá dòng đã hết hạn.
+create table if not exists rate_limits (
+  key text primary key,
+  count integer not null default 0,
+  reset_at timestamptz not null
+);
+
+alter table rate_limits enable row level security;

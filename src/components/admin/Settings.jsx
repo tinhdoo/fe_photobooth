@@ -4,7 +4,13 @@ import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIco
 import DeviceManager from './DeviceManager';
 import BoothModeInfo from './BoothModeInfo';
 import { isLocalHost } from '../../utils/runtime';
+import { authHeader } from '../../utils/auth';
 import { useWorkflow } from '../../context/WorkflowContext';
+
+// Cloud chỉ cho admin đã đăng nhập lưu cấu hình (từ 2026-10-06). Lỗi quyền -> nói rõ, không chỉ "Lỗi".
+const loiLuuCauHinh = (error, macDinh) => ([401, 403].includes(error?.response?.status)
+    ? 'Không có quyền lưu: đăng nhập lại bằng tài khoản admin trên trang quản lý cloud.'
+    : macDinh);
 
 const Settings = ({ forceLocalAdmin = false }) => {
     const isLocalAdmin = isLocalHost() || forceLocalAdmin;
@@ -142,11 +148,11 @@ const Settings = ({ forceLocalAdmin = false }) => {
         setSaving(true);
         setMessage(null);
         try {
-            await axios.post('/api/config', configs);
+            await axios.post('/api/config', configs, { headers: authHeader() });
             setMessage({ type: 'success', text: 'Cài đặt đã được lưu thành công!' });
         } catch (error) {
             console.error("Error saving configs:", error);
-            setMessage({ type: 'error', text: 'Lỗi khi lưu cài đặt.' });
+            setMessage({ type: 'error', text: loiLuuCauHinh(error, 'Lỗi khi lưu cài đặt.') });
         } finally {
             setSaving(false);
             // Auto hide message
@@ -172,10 +178,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
     const persistPriceSchedule = async (schedule) => {
         setPriceSchedule(schedule);
         try {
-            await axios.post('/api/config', { price_schedule: JSON.stringify(schedule) });
+            await axios.post('/api/config', { price_schedule: JSON.stringify(schedule) }, { headers: authHeader() });
         } catch (error) {
             console.error('Lưu lịch giá thất bại:', error);
-            setMessage({ type: 'error', text: 'Lưu lịch giá thất bại, thử lại.' });
+            setMessage({ type: 'error', text: loiLuuCauHinh(error, 'Lưu lịch giá thất bại, thử lại.') });
         }
     };
 

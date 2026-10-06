@@ -4,7 +4,13 @@ import toast from 'react-hot-toast';
 import { useWorkflow } from '../../context/WorkflowContext';
 
 import { API_URL, CLOUD_API_URL } from '../../config/api';
+import { authHeader } from '../../utils/auth';
 const apiPath = (path) => `${CLOUD_API_URL || API_URL}${path}`;
+// Hình nền / màu chữ ghi lên cấu hình cloud mà MỌI booth kéo về -> cloud chỉ nhận từ admin đã đăng nhập
+// (từ 2026-10-06). Trang này mở trên booth (không có token cloud) thì báo rõ phải làm ở đâu.
+const loiQuyen = (status, macDinh) => ([401, 403].includes(status)
+    ? 'Không có quyền: đổi hình nền / màu chữ trên trang quản lý cloud (tomatophotobooth.vercel.app/admin) sau khi đăng nhập admin.'
+    : macDinh);
 
 const pageBackgrounds = [
     { id: 'source-selection', label: 'Chọn nguồn ảnh (source-selection)' },
@@ -92,13 +98,13 @@ const BrandingSettings = () => {
     const saveConfigs = async (payload, successMessage = 'Đã cập nhật cấu hình.') => {
         const response = await fetch(apiPath('/api/config'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
             body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-            throw new Error(data.error || `Không thể lưu cấu hình (${response.status}).`);
+            throw new Error(loiQuyen(response.status, data.error || `Không thể lưu cấu hình (${response.status}).`));
         }
 
         applyConfigs?.(data);
@@ -123,7 +129,7 @@ const BrandingSettings = () => {
         try {
             const prepareResponse = await fetch(apiPath('/api/upload-branding'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeader() },
                 body: JSON.stringify({
                     action: 'prepare',
                     key,
@@ -134,7 +140,7 @@ const BrandingSettings = () => {
             const prepared = await prepareResponse.json().catch(() => ({}));
 
             if (!prepareResponse.ok) {
-                throw new Error(prepared.error || `Không thể chuẩn bị upload (${prepareResponse.status}).`);
+                throw new Error(loiQuyen(prepareResponse.status, prepared.error || `Không thể chuẩn bị upload (${prepareResponse.status}).`));
             }
 
             showLoading(`Đang gửi ${file.name} lên Supabase...`);
@@ -159,7 +165,7 @@ const BrandingSettings = () => {
             showLoading('Đang lưu cấu hình background...');
             const finalizeResponse = await fetch(apiPath('/api/upload-branding'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeader() },
                 body: JSON.stringify({
                     action: 'finalize',
                     key,
@@ -169,7 +175,7 @@ const BrandingSettings = () => {
             const data = await finalizeResponse.json().catch(() => ({}));
 
             if (!finalizeResponse.ok) {
-                throw new Error(data.error || `Không thể lưu cấu hình (${finalizeResponse.status}).`);
+                throw new Error(loiQuyen(finalizeResponse.status, data.error || `Không thể lưu cấu hình (${finalizeResponse.status}).`));
             }
 
             const nextConfig = { [key]: data.url };

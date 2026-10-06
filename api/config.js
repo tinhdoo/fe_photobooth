@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
+import { requireActiveAdmin } from '../lib/auth.js';
 
 const DEFAULT_CONFIG = {
     price: 60000,
@@ -93,6 +94,10 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
+            // Lưu cấu hình CHỈ admin đã đăng nhập. Booth tự kéo giá, lịch giá, thời gian phiên, hình nền
+            // từ đây (CLOUD_SYNC_KEYS) -> trước 2026-10-06 ai cũng POST được là đổi giá / hình nền của MỌI
+            // booth. GET vẫn mở (booth đọc không có token).
+            if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
             const current = await readConfig(supabase, bucket);
             const next = {
                 ...current,

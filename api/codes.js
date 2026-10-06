@@ -2,6 +2,7 @@ import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/
 import {
     requireAuth, requireActiveAdmin, checkAccount, hashPassword, verifyPassword, signToken, REMEMBER_TTL_SECONDS,
 } from '../lib/auth.js';
+import { clientIp, lockedSeconds, recordFailure, cleanupRateLimits } from '../lib/rateLimit.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -78,10 +79,25 @@ async function generateCodes(req, res, supabase) {
     return json(res, 201, created);
 }
 
+// Kiosk kiểm mã KHÔNG đăng nhập (booth không có token) -> giới hạn số lần nhập mã KHÔNG TỒN TẠI theo IP.
+// Trước 2026-10-06 không giới hạn: mã 6 số, vài trăm mã trong kho -> trung bình vài nghìn lần thử là trúng
+// một mã còn hạn. Các booth cùng cửa hàng chung một IP -> ngưỡng đủ rộng cho khách gõ nhầm.
+const CODE_FAIL_LIMIT = 15;
+const CODE_FAIL_WINDOW_MS = 15 * 60 * 1000;
+
 async function validateCode(req, res, supabase) {
     const code = String(req.body?.code || '').trim().toUpperCase();
     if (!code) {
         return json(res, 400, { valid: false, message: 'Vui lòng nhập mã thanh toán.' });
+    }
+
+    const rateKey = `code:${clientIp(req)}`;
+    const khoa = await lockedSeconds(supabase, rateKey, CODE_FAIL_LIMIT);
+    if (khoa > 0) {
+        return json(res, 429, {
+            valid: false,
+            message: `Nhập sai mã quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(khoa / 60)} phút.`,
+        });
     }
 
     const { data, error } = await supabase
@@ -91,7 +107,10 @@ async function validateCode(req, res, supabase) {
         .maybeSingle();
 
     if (error) throw error;
-    if (!data) return json(res, 404, { valid: false, message: 'Mã thanh toán không tồn tại.' });
+    if (!data) {
+        await recordFailure(supabase, rateKey, CODE_FAIL_WINDOW_MS);
+        return json(res, 404, { valid: false, message: 'Mã thanh toán không tồn tại.' });
+    }
     if (data.is_used) return json(res, 400, { valid: false, message: 'Mã thanh toán đã được sử dụng.' });
     if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
         return json(res, 400, { valid: false, message: 'Mã thanh toán đã hết hạn.' });
@@ -319,6 +338,8 @@ async function cleanupPaymentCodes(req, res, supabase) {
 
     if (expiredError) throw expiredError;
 
+    await cleanupRateLimits(supabase);
+
     return json(res, 200, {
         success: true,
         retention_days: PAYMENT_CODE_RETENTION_DAYS,
@@ -344,6 +365,9 @@ const publicAccount = (row) => ({
     created_at: row.created_at,
 });
 
+const LOGIN_FAIL_LIMIT = 10;
+const LOGIN_FAIL_WINDOW_MS = 15 * 60 * 1000;
+
 async function login(req, res, supabase) {
     const rawUsername = String(req.body?.username || '').trim();
     const password = String(req.body?.password || '');
@@ -357,6 +381,18 @@ async function login(req, res, supabase) {
     const remember = req.body?.remember === true || req.body?.remember === 'true';
     const ttl = remember ? REMEMBER_TTL_SECONDS : undefined;
 
+    // Giới hạn đăng nhập SAI theo IP (trước 2026-10-06 thử mật khẩu không giới hạn, mật khẩu nhân viên
+    // tối thiểu chỉ 6 ký tự).
+    const rateKey = `login:${clientIp(req)}`;
+    const khoa = await lockedSeconds(supabase, rateKey, LOGIN_FAIL_LIMIT);
+    if (khoa > 0) {
+        return json(res, 429, { error: `Đăng nhập sai quá nhiều lần. Thử lại sau ${Math.ceil(khoa / 60)} phút.` });
+    }
+    const saiMatKhau = async () => {
+        await recordFailure(supabase, rateKey, LOGIN_FAIL_WINDOW_MS);
+        return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
+    };
+
     // 1) Tài khoản trong DB.
     const { data, error } = await supabase
         .from('staff_accounts')
@@ -367,9 +403,7 @@ async function login(req, res, supabase) {
 
     if (data) {
         if (!data.active) return json(res, 403, { error: 'Tài khoản đã bị khóa.' });
-        if (!verifyPassword(password, data.password_hash)) {
-            return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
-        }
+        if (!verifyPassword(password, data.password_hash)) return saiMatKhau();
         const token = signToken({ u: data.username, r: data.role }, ttl);
         return json(res, 200, {
             token,
@@ -388,7 +422,7 @@ async function login(req, res, supabase) {
         return json(res, 200, { token, username, display_name: 'Quản trị', role: 'admin' });
     }
 
-    return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
+    return saiMatKhau();
 }
 
 async function listStaff(req, res, supabase) {
