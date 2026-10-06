@@ -6,7 +6,6 @@ import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
 import { errorMessage } from '../../utils/errorMessage';
-import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
 import { API_URL, CLOUD_API_URL } from '../../config/api';
@@ -51,6 +50,31 @@ const Payment = () => {
     // -> nếu không chặn sẽ gọi nextStep() nhiều lần / lặp API voucher lỗi. Chỉ mở lại khi khách
     // ĐÓNG modal lỗi (thử lại có chủ đích), còn khi thành công thì giữ khoá tới lúc rời bước.
     const processingRef = useRef(false);
+    // ĐANG XỬ LÝ thanh toán thành công (từ lúc gọi handlePaymentSuccess tới khi sang bước chụp, hoặc tới
+    // khi báo lỗi): hiện màn "Đang xử lý" + chặn Quay lại. Không dùng chung cờ loading: nhập mã đủ giá
+    // thì applyCode đặt loading=false ngay sau đó (React gộp hai lần đặt) -> trước 0.0.22 màn chọn phương
+    // thức vẫn bấm được, khách Quay lại đúng lúc -> mã bị dùng mà lượt chụp không tính.
+    const [dangXuLy, setDangXuLy] = useState(false);
+    const dangXuLyRef = useRef(false);
+    const datXuLy = useCallback((value) => {
+        dangXuLyRef.current = value;
+        setDangXuLy(value);
+    }, []);
+    // Mã LƯỢT riêng gửi kèm lệnh dùng mã: lần dùng trước thành công mà mất phản hồi thì gửi lại vẫn được
+    // cloud báo thành công (thay vì "đã được sử dụng" lặp mãi). Edit sau đó gắn mã với album thật.
+    const luotIdRef = useRef(null);
+    if (!luotIdRef.current) {
+        if (window.crypto?.randomUUID) {
+            luotIdRef.current = window.crypto.randomUUID();
+        } else {
+            const b = new Uint8Array(16);
+            window.crypto.getRandomValues(b);
+            b[6] = (b[6] & 0x0f) | 0x40;
+            b[8] = (b[8] & 0x3f) | 0x80;
+            const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+            luotIdRef.current = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+        }
+    }
     // Ref tới <img> live view MJPEG (pre-warm) -> để NGẮT kết nối khi rời bước Thanh toán. Giống
     // GetReady: chỉ gỡ <img> (React unmount) KHÔNG đủ đóng luồng MJPEG -> kết nối sống dai tích tụ
     // tới trần ~6/host + cạn thread middleware -> ĐƠ (và giữ EVF nóng). Phải gán blank-GIF để đóng.
@@ -80,16 +104,25 @@ const Payment = () => {
         const nhapMa = extraData.voucher || voucher;
         const activeVoucherValue = Math.max(Math.min(nhapMa?.value || 0, price - cashInserted), 0);
         const activeVoucher = activeVoucherValue > 0 ? nhapMa : null;
+        datXuLy(true);
         setLoading(true);
         setTimeout(async () => {
             if (activeVoucher?.id && !activeVoucher.used) {
                 try {
-                    await axios.post(`${CLOUD_API_URL}/api/codes`, { action: 'use', id: activeVoucher.id });
+                    await axios.post(`${CLOUD_API_URL}/api/codes`, {
+                        action: 'use',
+                        id: activeVoucher.id,
+                        session_id: luotIdRef.current,
+                    }, { timeout: 15000 });
                     setVoucher((prev) => prev?.id === activeVoucher.id ? { ...prev, used: true } : prev);
                 } catch (error) {
                     setLoading(false);
+                    datXuLy(false);
+                    // boMa: cho khách BỎ mã này để trả phần còn lại bằng cách khác (mã hết hạn / bị dùng ở
+                    // lượt khác) — trước 0.0.22 không có lối ra: bấm Đóng là thử lại, lỗi lại, mãi mãi.
                     setErrorModal({
                         show: true,
+                        boMa: true,
                         message: errorMessage(error, 'Không thể sử dụng mã thanh toán. Vui lòng thử lại.')
                     });
                     return;
@@ -107,18 +140,21 @@ const Payment = () => {
                 updateSessionData('paymentCodeApplied', activeVoucherValue);
                 // Lưu ID mã đã dùng -> Edit sẽ gắn nó với sessionId (album) để biết "mã dùng cho lượt nào".
                 if (activeVoucher.id) updateSessionData('paymentCodeId', activeVoucher.id);
-            } else if (nhapMa) {
-                // Đã nhập mã nhưng tiền mặt đủ -> không dùng mã: xoá dấu mã applyCode đã ghi trước.
+            } else {
+                // Không dùng mã (tiền mặt đủ cả giá, hoặc khách đã bỏ mã): xoá mọi dấu mã còn sót trong phiên.
+                // Trước 0.0.22 applyCode ghi mã vào phiên ngay lúc kiểm tra; khách rời bước Thanh toán rồi
+                // quay lại trả tiền mặt thì phiên vẫn mang payment_code_applied cũ -> doanh thu bị trừ oan.
                 updateSessionData('paymentCode', null);
                 updateSessionData('paymentCodeValue', null);
                 updateSessionData('paymentCodeApplied', null);
+                updateSessionData('paymentCodeId', null);
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
             if (cashInserted > 0 && cashTraceRef.current) updateSessionData('cashTrace', cashTraceRef.current);
             if (extraData.orderCode) updateSessionData('sepayOrderCode', extraData.orderCode);
             nextStep();
         }, 500);
-    }, [cashInserted, finalPaymentMethod, method, nextStep, price, updateSessionData, voucher]);
+    }, [cashInserted, datXuLy, finalPaymentMethod, method, nextStep, price, updateSessionData, voucher]);
 
     // Cập nhật ref mỗi render để socket handler (tạo 1 lần) luôn thấy giá trị hiện tại.
     methodRef.current = method;
@@ -142,10 +178,8 @@ const Payment = () => {
                 value: res.data.value,
                 used: false
             };
+            // Mã chỉ ghi vào phiên khi thanh toán XONG (handlePaymentSuccess), không ghi lúc kiểm tra.
             setVoucher(appliedVoucher);
-            updateSessionData('paymentCode', code);
-            updateSessionData('paymentCodeValue', res.data.value);
-            updateSessionData('paymentCodeApplied', Math.min(res.data.value, price));
             setCode('');
             setMethod(null);
             // GIỮ tiền mặt đã nhét (trước đây đặt về 0 -> khách mất số tiền đó). Mã + tiền mặt đủ giá
@@ -283,13 +317,13 @@ const Payment = () => {
     // đã chọn tiền mặt, còn phải trả, và không đang xử lý. Mọi trạng thái khác (mới vào
     // Payment, màn chọn phương thức, QR, nhập mã, đang xử lý, rời bước) -> chủ động TẮT (= đóng cổng).
     useEffect(() => {
-        const onCashScreen = method === 'cash' && remainingAmount > 0 && !loading;
+        const onCashScreen = method === 'cash' && remainingAmount > 0 && !loading && !dangXuLy;
         sendBillAccept(onCashScreen);
         return () => {
             // Rời màn / unmount -> luôn tắt nhận tiền.
             sendBillAccept(false);
         };
-    }, [method, remainingAmount, loading, sendBillAccept]);
+    }, [method, remainingAmount, loading, dangXuLy, sendBillAccept]);
 
     // Rời màn tiền mặt -> xoá trạng thái máy đọc tiền, lần vào sau lại bắt đầu từ "Đang kết nối…"
     // (backend đã đóng cổng, vào lại sẽ mở lại và emit bill_status mới).
@@ -374,57 +408,31 @@ const Payment = () => {
     useEffect(() => {
         if (method !== 'qr' || !qrOrder?.code) return undefined;
 
-        if (!isSupabaseBrowserConfigured || !supabase) {
-            setQrError('Chưa cấu hình VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY cho kiosk.');
-            return undefined;
-        }
-
+        // Hỏi trạng thái đơn QR qua API cloud mỗi 2.5 s. Trước 0.0.22 kiosk đọc THẲNG bảng payments bằng
+        // khoá anon (realtime + poll) -> bảng phải cho đọc công khai, ai có khoá anon trong mã trang web là
+        // đọc hết đơn. Realtime vốn hay không subscribe được trên mạng booth (chặn WebSocket) nên poll
+        // 2.5 s mới là đường chính từ trước; socket 'sepay_payment_success' bên trên vẫn giữ.
         let stopped = false;
-        let realtimeReady = false;
-        let channel = null;
-
+        let dangHoi = false;
         const checkStatus = async () => {
+            if (dangHoi) return;
+            dangHoi = true;
             try {
-                const { data, error } = await supabase
-                    .from('payments')
-                    .select('status')
-                    .eq('code', qrOrder.code)
-                    .single();
-
-                if (error) throw error;
+                const { data } = await axios.get(`${CLOUD_API_URL}/api/sepay-orders`, {
+                    params: { code: qrOrder.code },
+                    timeout: 8000,
+                });
                 if (!stopped && data?.status === 'paid') {
                     handlePaymentSuccess('qr', { orderCode: qrOrder.code });
                 }
             } catch (error) {
-                console.warn('Supabase payment status check failed:', error.message);
+                console.warn('QR payment status check failed:', error.message);
+            } finally {
+                dangHoi = false;
             }
         };
 
-        channel = supabase
-            .channel(`payment-status-${qrOrder.code}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'payments',
-                    filter: `code=eq.${qrOrder.code}`
-                },
-                (payload) => {
-                    if (!stopped && payload.new?.status === 'paid') {
-                        handlePaymentSuccess('qr', { orderCode: qrOrder.code });
-                    }
-                }
-            )
-            .subscribe((status) => {
-                realtimeReady = status === 'SUBSCRIBED';
-            });
-
         checkStatus();
-        // Poll Supabase đều đặn 2.5s LÀM LƯỚI AN TOÀN, kể cả khi realtime đã subscribe.
-        // Mạng booth hay chặn WebSocket (socket.io đã phải ép 'polling') -> realtime nhiều khi
-        // không subscribe được; nếu chỉ dựa realtime + fallback 10s thì xác nhận SePay chờ rất
-        // lâu. 2.5s đủ nhanh để chốt tiền, không phụ thuộc realtime.
         const interval = setInterval(() => {
             if (document.visibilityState !== 'visible') return;
             checkStatus();
@@ -432,7 +440,6 @@ const Payment = () => {
         return () => {
             stopped = true;
             clearInterval(interval);
-            if (channel && supabase) supabase.removeChannel(channel);
         };
     }, [handlePaymentSuccess, method, qrOrder?.code]);
 
@@ -459,6 +466,8 @@ const Payment = () => {
     };
 
     const goBack = () => {
+        // Đang chốt thanh toán (mã đang được dùng / đơn đã trả) -> không cho rời: hẹn giờ sẽ sang bước chụp.
+        if (dangXuLyRef.current) return;
         if (method === 'cash' && billPending?.status === 'dang_nhan') return;
         if (method) {
             qrRequestRef.current += 1;
@@ -703,22 +712,19 @@ const Payment = () => {
         );
     };
 
-    if (loading && method && method !== 'qr') {
-        return (
-            <div
-                className="flex h-full flex-col items-center justify-center gap-4 bg-[#FFF8E7] bg-cover bg-center font-serif"
-                style={{ backgroundImage: configs?.['bg_payment-wait'] ? `url('${configs['bg_payment-wait']}')` : 'none' }}
-            >
-                <Loader2 size={64} className="animate-spin" style={{ color: primaryTextColor }} />
-                <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Đang xử lý thanh toán...</p>
-            </div>
-        );
-    }
+    // Màn "Đang xử lý": chốt thanh toán (mọi phương thức) hoặc đang kiểm mã / tạo đơn tiền mặt. Vẽ TRONG
+    // khung chính chứ không return sớm: return sớm gỡ <img> live view ẩn bên dưới mà không ngắt luồng
+    // MJPEG (mỗi lần nhập mã sai lại mở thêm một kết nối tới máy ảnh -> chạm trần 6 kết nối của Chrome).
+    const hienXuLy = dangXuLy || (loading && method && method !== 'qr');
 
     return (
         <div
             className="relative flex min-h-full w-full flex-col items-center justify-center bg-[#FFF8E7] bg-cover bg-center p-8 font-serif"
-            style={{ backgroundImage: configs?.['bg_payment'] ? `url('${configs['bg_payment']}')` : 'none' }}
+            style={{
+                backgroundImage: hienXuLy
+                    ? (configs?.['bg_payment-wait'] ? `url('${configs['bg_payment-wait']}')` : 'none')
+                    : (configs?.['bg_payment'] ? `url('${configs['bg_payment']}')` : 'none'),
+            }}
         >
             {/* Pre-warm live view Canon (EVF) ngay từ bước thanh toán: mở sẵn luồng MJPEG để khi
                 vào bước chụp live view đã ra hình -> video motion ảnh ĐẦU không bị trống. Ẩn nhưng
@@ -732,6 +738,13 @@ const Payment = () => {
                     style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }}
                 />
             )}
+            {hienXuLy ? (
+                <div className="flex flex-col items-center justify-center gap-4">
+                    <Loader2 size={64} className="animate-spin" style={{ color: primaryTextColor }} />
+                    <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Đang xử lý thanh toán...</p>
+                </div>
+            ) : (
+            <>
             <button
                 type="button"
                 onClick={goBack}
@@ -773,6 +786,8 @@ const Payment = () => {
                     </div>
                 </div>
             )}
+            </>
+            )}
 
             {errorModal.show && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -781,18 +796,44 @@ const Payment = () => {
                             <div className="mb-4 text-6xl text-red-500">!</div>
                             <h3 className="mb-4 text-2xl font-bold" style={{ color: secondaryTextColor }}>Lỗi thanh toán</h3>
                             <p className="mb-8 text-lg" style={{ color: primaryTextColor }}>{errorModal.message}</p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // Mở lại khoá để lượt thanh toán sau (thử lại) được phép chạy.
-                                    processingRef.current = false;
-                                    setErrorModal({ show: false, message: '' });
-                                    setCode('');
-                                }}
-                                className="rounded-full bg-[#D5B895] px-8 py-3 font-bold text-white shadow-lg"
-                            >
-                                Đóng
-                            </button>
+                            <div className="flex flex-wrap justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        // Mở lại khoá để lượt thanh toán sau (thử lại) được phép chạy.
+                                        processingRef.current = false;
+                                        setErrorModal({ show: false, message: '' });
+                                        setCode('');
+                                        // Mã (+ tiền mặt) đủ giá mà lần dùng mã lỗi -> "Thử lại" dùng mã lại ngay
+                                        // (trước 0.0.22 mã đủ giá + Đóng thì không gì chạy lại, khách đứng mãi).
+                                        // Mã + QR thì vòng hỏi trạng thái đơn tự gọi lại.
+                                        if (errorModal.boMa && voucher && method !== 'qr'
+                                            && voucher.value + cashInserted >= price) {
+                                            handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code');
+                                        }
+                                    }}
+                                    className="rounded-full bg-[#D5B895] px-8 py-3 font-bold text-white shadow-lg"
+                                >
+                                    {errorModal.boMa && voucher ? 'Thử lại' : 'Đóng'}
+                                </button>
+                                {errorModal.boMa && voucher && method !== 'qr' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            // Bỏ mã không dùng được: tiền mặt đã nhét vẫn giữ, khách trả phần còn
+                                            // lại bằng tiền mặt / chuyển khoản / mã khác.
+                                            processingRef.current = false;
+                                            setVoucher(null);
+                                            setMethod(null);
+                                            setErrorModal({ show: false, message: '' });
+                                            setCode('');
+                                        }}
+                                        className="rounded-full bg-gray-200 px-8 py-3 font-bold text-gray-700"
+                                    >
+                                        Bỏ mã, trả cách khác
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -157,7 +157,7 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 });
 
 const Edit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs, isEventMode } = useWorkflow();
+    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const captureRef = useRef(null);
     // --- STATE ---
@@ -1112,8 +1112,11 @@ const Edit = () => {
                         photos: photosArr,
                         // Sự kiện (miễn phí) KHÔNG thu tiền -> ghi amount=0, method='event' để KHÔNG bị
                         // tính thành doanh thu tiền mặt ảo. Trả phí -> theo phương thức/giá thực.
-                        payment_method: isEventMode ? 'event' : (sessionData.paymentMethod || 'cash'),
-                        amount: isEventMode ? 0 : (sessionData.printPrice || 60000),
+                        // Dựa vào việc lượt này ĐÃ TRẢ (bước Thanh toán xong), không dựa chế độ đang bật:
+                        // cloud đổi Event/Payment giữa lượt (nhịp tim 60 s) từng làm khách sự kiện thành
+                        // doanh thu ảo, hoặc khách đã trả thành 0đ.
+                        payment_method: sessionData.paymentStatus === 'completed' ? (sessionData.paymentMethod || 'cash') : 'event',
+                        amount: sessionData.paymentStatus === 'completed' ? (sessionData.printPrice || 60000) : 0,
                         session_id: sessionId, // Gửi UUID frontend xuống backend để lưu
                         meta_data: metaData,
                     });

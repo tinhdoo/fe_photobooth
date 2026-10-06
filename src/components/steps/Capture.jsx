@@ -658,6 +658,11 @@ const Capture = () => {
                         console.error("Failed to mirror Canon photo, using original:", mirrorError);
                     }
 
+                    // Đã rời bước chụp trong lúc chờ (hết giờ phiên -> tự sang Review/Edit): ảnh về MUỘN
+                    // không được ghi vào phiên nữa — trước 0.0.22 nó ghi đè danh sách ảnh lúc Edit đang
+                    // ghép/in -> ảnh in và ảnh tải lên lệch nhau.
+                    if (!mountedRef.current) return;
+
                     // Lưu dạng object {url, videoUrl} để motion chảy xuống bước Edit/upload
                     const canonPhoto = { id: crypto.randomUUID(), url: finalUrl, videoUrl };
 
@@ -721,6 +726,7 @@ const Capture = () => {
                         console.error("Failed to mirror Hot Folder photo, using original:", mirrorError);
                     }
 
+                    if (!mountedRef.current) return; // đã rời bước chụp: bỏ ảnh về muộn (như Canon)
                     const count = applyCapture(finalUrl);
                     setLatestPhoto(finalUrl);
 

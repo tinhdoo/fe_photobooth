@@ -162,7 +162,8 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
             setConfig({
                 port: data.bill_port || 'COM3',
                 baudrate: parseInt(data.bill_baudrate, 10) || 9600,
-                enabled: data.bill_enabled === 'true'
+                // Booth <= 0.0.21 lưu 'True' (str của bool Python) -> so không phân biệt hoa thường.
+                enabled: String(data.bill_enabled).toLowerCase() === 'true'
             });
 
             try {
