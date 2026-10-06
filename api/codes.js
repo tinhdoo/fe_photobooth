@@ -1,5 +1,7 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
-import { requireAuth, hashPassword, verifyPassword, signToken, REMEMBER_TTL_SECONDS } from '../lib/auth.js';
+import {
+    requireAuth, requireActiveAdmin, checkAccount, hashPassword, verifyPassword, signToken, REMEMBER_TTL_SECONDS,
+} from '../lib/auth.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -35,7 +37,7 @@ async function insertOneCode(supabase, value, expiresAt, createdBy) {
 
 async function generateCodes(req, res, supabase) {
     // CHỈ admin được tạo mã (mã = tiền). Chặn nhân viên / người lạ tự mint mã.
-    const admin = guardAdmin(req, res);
+    const admin = await requireActiveAdmin(req, res, supabase);
     if (!admin) return undefined;
     const expiresAt = req.body?.expires_at || null;
     const createdBy = admin.u;
@@ -137,26 +139,20 @@ async function markCodeUsed(req, res, supabase) {
     return json(res, 200, { success: true, code: data });
 }
 
-// Xác thực + đảm bảo tài khoản CHƯA bị khóa (kiểm tra trực tiếp DB, không tin mỗi token).
-// -> Khóa tài khoản có hiệu lực NGAY, không phải chờ token 12h hết hạn.
-// Admin bootstrap (env) không có trong DB -> luôn hợp lệ.
+// Xác thực + đảm bảo tài khoản còn tồn tại và CHƯA bị khóa (kiểm tra trực tiếp DB, không tin mỗi
+// token) -> khóa / xoá tài khoản có hiệu lực NGAY. Quyền (admin/staff) trả về lấy theo DB.
 async function requireActiveUser(req, res, supabase) {
     const claims = requireAuth(req);
     if (!claims) {
         json(res, 401, { success: false, message: 'Chưa đăng nhập hoặc phiên đã hết hạn.' });
         return null;
     }
-    const { data, error } = await supabase
-        .from('staff_accounts')
-        .select('active')
-        .eq('username', claims.u)
-        .maybeSingle();
-    if (error) throw error;
-    if (data && data.active === false) {
-        json(res, 403, { success: false, message: 'Tài khoản đã bị khóa.' });
+    const account = await checkAccount(supabase, claims);
+    if (!account.claims) {
+        json(res, account.status, { success: false, message: account.message });
         return null;
     }
-    return claims;
+    return account.claims;
 }
 
 // Số lượng mã còn trong kho theo mệnh giá — CHỈ trả count, KHÔNG lộ chuỗi mã.
@@ -342,20 +338,6 @@ const publicAccount = (row) => ({
     created_at: row.created_at,
 });
 
-// Chặn quyền admin cho thao tác quản lý. Trả claims nếu OK, ngược lại đã tự gửi lỗi -> null.
-function guardAdmin(req, res) {
-    const claims = requireAuth(req);
-    if (!claims) {
-        json(res, 401, { error: 'Chưa đăng nhập hoặc phiên đã hết hạn.' });
-        return null;
-    }
-    if (claims.r !== 'admin') {
-        json(res, 403, { error: 'Chỉ admin mới được thao tác.' });
-        return null;
-    }
-    return claims;
-}
-
 async function login(req, res, supabase) {
     const rawUsername = String(req.body?.username || '').trim();
     const password = String(req.body?.password || '');
@@ -404,7 +386,7 @@ async function login(req, res, supabase) {
 }
 
 async function listStaff(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const { data, error } = await supabase
         .from('staff_accounts')
         .select('*')
@@ -414,7 +396,7 @@ async function listStaff(req, res, supabase) {
 }
 
 async function createStaff(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const username = String(req.body?.username || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const displayName = String(req.body?.display_name || '').trim() || username;
@@ -441,7 +423,7 @@ async function createStaff(req, res, supabase) {
 }
 
 async function toggleStaff(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const id = String(req.body?.id || '').trim();
     const active = Boolean(req.body?.active);
     if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
@@ -457,7 +439,7 @@ async function toggleStaff(req, res, supabase) {
 }
 
 async function resetStaffPassword(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const id = String(req.body?.id || '').trim();
     const password = String(req.body?.password || '');
     if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
@@ -474,7 +456,7 @@ async function resetStaffPassword(req, res, supabase) {
 }
 
 async function renameStaff(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const id = String(req.body?.id || '').trim();
     const displayName = String(req.body?.display_name || '').trim();
     if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
@@ -492,7 +474,7 @@ async function renameStaff(req, res, supabase) {
 }
 
 async function deleteStaff(req, res, supabase) {
-    if (!guardAdmin(req, res)) return undefined;
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
     const id = String(req.body?.id || '').trim();
     if (!id) return json(res, 400, { error: 'Thiếu ID tài khoản.' });
 
