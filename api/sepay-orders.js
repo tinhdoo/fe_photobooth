@@ -9,8 +9,34 @@ function randomCode() {
     return code;
 }
 
+// Kiosk (từ 0.0.22) hỏi trạng thái đơn QR qua đây thay vì đọc thẳng bảng payments bằng khoá anon —
+// để bỏ được quyền đọc công khai của bảng (ai có khoá anon trong mã trang web là đọc hết đơn).
+// Chỉ trả trạng thái của đúng một mã.
+async function getOrderStatus(req, res) {
+    const code = String(req.query?.code || '').trim();
+    if (!/^[A-Za-z0-9]{6,32}$/.test(code)) return json(res, 400, { error: 'Invalid code' });
+
+    const { data, error } = await getSupabaseAdmin()
+        .from('payments')
+        .select('code, status, paid_at')
+        .eq('code', code)
+        .maybeSingle();
+    if (error) throw error;
+    res.setHeader('Cache-Control', 'no-store');
+    if (!data) return json(res, 404, { error: 'Payment not found' });
+    return json(res, 200, { code: data.code, status: data.status, paid_at: data.paid_at });
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
+    if (req.method === 'GET') {
+        try {
+            return await getOrderStatus(req, res);
+        } catch (error) {
+            console.error('Get Sepay order status failed:', error);
+            return json(res, 500, { error: error.message || 'Get Sepay order status failed' });
+        }
+    }
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {

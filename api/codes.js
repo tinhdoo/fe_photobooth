@@ -120,6 +120,12 @@ async function markCodeUsed(req, res, supabase) {
 
     if (fetchError) throw fetchError;
     if (!current) return json(res, 404, { success: false, message: 'Mã thanh toán không tồn tại.' });
+    // Gửi lại của CHÍNH lượt đã dùng mã (kiosk 0.0.22 gửi session_id = mã lượt riêng): lần trước đã
+    // dùng thành công nhưng mất phản hồi (mạng chập chờn) -> báo thành công, không bắt khách kẹt ở lỗi
+    // "đã được sử dụng" mãi (khách có thể đã nhét tiền mặt phần còn lại).
+    if (current.is_used && sessionId && current.used_session_id === sessionId) {
+        return json(res, 200, { success: true, code: current });
+    }
     if (current.is_used) return json(res, 400, { success: false, message: 'Mã thanh toán đã được sử dụng.' });
     if (current.expires_at && new Date(current.expires_at).getTime() < Date.now()) {
         return json(res, 400, { success: false, message: 'Mã thanh toán đã hết hạn.' });
