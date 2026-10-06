@@ -192,7 +192,13 @@ const RevenueDashboard = () => {
             const applied = voucherApplied(tx);
             const real = realRevenue(tx);
             b.code += applied;                                   // voucher (không tính doanh thu)
-            if (m.includes('qr') || m.includes('sepay')) b.qr += real;
+            const coQr = m.includes('qr') || m.includes('sepay');
+            if (coQr && m.includes('cash')) {
+                // Tiền mặt + QR (booth 0.0.23): phần tiền mặt = số máy đếm được, còn lại là QR.
+                const tienMat = Math.min(Math.max(Number(tx.cash_inserted) || 0, 0), real);
+                b.cash += tienMat;
+                b.qr += real - tienMat;
+            } else if (coQr) b.qr += real;
             else if (!m.includes('code') || m.includes('cash')) b.cash += real; // pure 'code' -> real=0
             b.total += real;                                     // doanh thu thật = cash + qr
             b.count += 1;
@@ -336,6 +342,8 @@ const RevenueDashboard = () => {
         if (method === 'code') return 'Mã thanh toán';
         if (method === 'code+cash') return 'Mã + tiền mặt';
         if (method === 'code+qr') return 'Mã + QR';
+        if (method === 'cash+qr') return 'Tiền mặt + QR';
+        if (method === 'code+cash+qr') return 'Mã + tiền mặt + QR';
         return tx.payment_method || 'Không xác định';
     };
 

@@ -1104,6 +1104,10 @@ const Edit = () => {
                         payment_code_value: sessionData.paymentCodeValue || null,
                         payment_code_applied: sessionData.paymentCodeApplied || null,
                         sepay_order_code: sessionData.sepayOrderCode || null,
+                        // Lượt trả bằng 2 đơn QR trở lên (hiếm, 0.0.23) -> cloud ghép đủ các đơn vào lượt này.
+                        sepay_order_codes: sessionData.sepayOrderCodes || undefined,
+                        // Tiền chuyển khoản thực nhận (0.0.23) — lớn hơn phần còn thiếu = khách trả thừa.
+                        qr_paid: sessionData.qrPaid || undefined,
                     };
                     const buildSessionPayload = (photosArr) => ({
                         layout_id: layout.id || 'strip_4',

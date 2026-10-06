@@ -36,6 +36,8 @@ function methodLabel(method) {
     if (value === 'code') return 'Mã thanh toán';
     if (value === 'code+cash') return 'Mã + tiền mặt';
     if (value === 'code+qr') return 'Mã + QR';
+    if (value === 'cash+qr') return 'Tiền mặt + QR';
+    if (value === 'code+cash+qr') return 'Mã + tiền mặt + QR';
     return method || 'Không xác định';
 }
 
@@ -89,7 +91,12 @@ function normalizeSessionTransaction(session, source = 'session') {
         payment_code: paymentCode,
         payment_code_value: meta.payment_code_value || meta.paymentCodeValue || null,
         payment_code_applied: meta.payment_code_applied || meta.paymentCodeApplied || null,
+        // Tiền mặt máy đếm được cho lượt -> trang Doanh thu tách phần tiền mặt của lượt trả kết hợp
+        // (tiền mặt + QR, từ booth 0.0.23).
+        cash_inserted: toNumber(meta.cash_inserted),
         sepay_order_code: sepayCode,
+        // Mọi đơn QR của lượt (hiếm khi > 1) -> mergeTransactions ghép đủ, không tính đơn nào thành giao dịch riêng.
+        sepay_order_codes: Array.isArray(meta.sepay_order_codes) ? meta.sepay_order_codes.map(String) : [],
         method_label: methodLabel(paymentMethod),
         detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
         source,
@@ -444,6 +451,7 @@ function mergeTransactions(payments, dbSessions, storageSessions) {
         const key = String(tx.id);
         bySession.set(key, tx);
         if (tx.sepay_order_code) bySepayCode.set(String(tx.sepay_order_code), key);
+        (tx.sepay_order_codes || []).forEach((code) => bySepayCode.set(String(code), key));
     });
 
     payments.forEach((payment) => {

@@ -21,6 +21,13 @@ const Payment = () => {
     const [voucher, setVoucher] = useState(null);
     const [qrOrder, setQrOrder] = useState(null);
     const [qrError, setQrError] = useState('');
+    // MỌI đơn chuyển khoản đã tạo trong bước Thanh toán này {code, amount, paid, order}, được theo dõi tới
+    // khi rời bước — kể cả khi khách đã bấm Quay lại. Trước 0.0.23 Quay lại là bỏ theo dõi đơn: khách quét
+    // + chuyển rồi Quay lại, chọn lại thì booth tạo đơn MỚI -> khoản chuyển đầu không được tính, khách có
+    // thể trả hai lần. Giờ chọn lại chuyển khoản thì hiện lại đúng đơn cũ (cùng số tiền).
+    const donQrRef = useRef([]);
+    // Các đơn ĐÃ TRẢ {code, amount}: tiền chuyển khoản đã nhận, cộng chung với tiền mặt + mã.
+    const [donDaTra, setDonDaTra] = useState([]);
     const [errorModal, setErrorModal] = useState({ show: false, message: '' });
     // Trạng thái máy đọc tiền trên màn tiền mặt. Cổng COM chỉ mở KHI khách chọn tiền mặt (kết nối
     // theo nhu cầu) nên lúc vào màn chưa biết máy có nối được không: null = đang kết nối,
@@ -40,8 +47,7 @@ const Payment = () => {
     // trực tiếp method/qrOrder/handlePaymentSuccess trong closure sẽ phải tạo lại socket mỗi lần
     // cộng tiền -> disconnect/reconnect liên tục -> có thể MẤT tờ tiền nhét đúng lúc reconnect.
     const methodRef = useRef(method);
-    const qrOrderCodeRef = useRef(qrOrder?.code);
-    const handlePaymentSuccessRef = useRef(null);
+    const cashRef = useRef(0);
     // Vết byte máy đọc tiền của phiên tiền mặt (backend gửi kèm money_inserted). Lưu vào phiên chụp để
     // sự cố đếm tiền sau này đọc được từ cloud (meta cash_trace) thay vì đoán.
     const cashTraceRef = useRef(null);
@@ -84,26 +90,40 @@ const Payment = () => {
     const printQuantity = sessionData.printQuantity || 1;
     const voucherValue = Math.min(voucher?.value || 0, price);
     const remainingAmount = Math.max(price - voucherValue, 0);
-    // Còn thiếu sau khi trừ mã VÀ tiền mặt đã nhét (tiền mặt được giữ khi khách đổi phương thức).
-    const conLai = Math.max(remainingAmount - cashInserted, 0);
-    const cashProgressTotal = remainingAmount || price;
+    // Tiền chuyển khoản đã nhận (các đơn QR đã trả).
+    const qrDaTra = donDaTra.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    // Còn thiếu sau khi trừ mã, tiền mặt đã nhét VÀ chuyển khoản đã nhận (tiền được giữ khi khách đổi
+    // phương thức).
+    const conLai = Math.max(remainingAmount - cashInserted - qrDaTra, 0);
+    // Phần tiền mặt cần nhét (màn tiền mặt): sau mã và chuyển khoản.
+    const mucTienMat = Math.max(remainingAmount - qrDaTra, 0);
+    const cashProgressTotal = mucTienMat || price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 
-    const finalPaymentMethod = useCallback((baseMethod, activeVoucher = voucher) => {
-        if (!activeVoucher) return baseMethod;
-        return baseMethod === 'code' ? 'code' : `code+${baseMethod}`;
-    }, [voucher]);
+    // Đánh dấu một đơn QR của bước này đã trả (từ vòng hỏi trạng thái hoặc socket SePay). Mỗi đơn chỉ
+    // cộng một lần.
+    const danhDauDaTra = useCallback((maDon) => {
+        const don = donQrRef.current.find((d) => d.code === maDon);
+        if (!don || don.paid) return;
+        don.paid = true;
+        setDonDaTra((prev) => [...prev, { code: don.code, amount: don.amount }]);
+    }, []);
 
     const handlePaymentSuccess = useCallback((baseMethod, extraData = {}) => {
         // Đã có một lượt xử lý đang chạy (hoặc lỗi chưa được khách bấm Đóng) -> bỏ qua lời gọi trùng.
         if (processingRef.current) return;
         processingRef.current = true;
-        // Mã chỉ che PHẦN CÒN THIẾU sau tiền mặt đã nhét -> doanh thu tiền mặt (giá − phần mã) khớp đúng
-        // số tiền trong thùng. Tiền mặt đã đủ cả giá thì KHÔNG dùng mã (mã còn nguyên cho khách).
+        // Mã chỉ che PHẦN CÒN THIẾU sau tiền mặt + chuyển khoản -> doanh thu tiền mặt / QR khớp đúng số
+        // tiền thu được. Tiền mặt + chuyển khoản đã đủ cả giá thì KHÔNG dùng mã (mã còn nguyên cho khách).
         const nhapMa = extraData.voucher || voucher;
-        const activeVoucherValue = Math.max(Math.min(nhapMa?.value || 0, price - cashInserted), 0);
+        const activeVoucherValue = Math.max(Math.min(nhapMa?.value || 0, price - cashInserted - qrDaTra), 0);
         const activeVoucher = activeVoucherValue > 0 ? nhapMa : null;
+        // Phương thức = các nguồn tiền THỰC SỰ dùng, theo thứ tự code, cash, qr: 'cash', 'qr', 'code',
+        // 'code+cash', 'code+qr', và từ 0.0.23 'cash+qr', 'code+cash+qr' (trang Doanh thu tách phần tiền
+        // mặt theo cash_inserted).
+        const phuongThuc = [activeVoucher && 'code', cashInserted > 0 && 'cash', qrDaTra > 0 && 'qr']
+            .filter(Boolean).join('+') || baseMethod || method || 'cash';
         datXuLy(true);
         setLoading(true);
         setTimeout(async () => {
@@ -130,7 +150,7 @@ const Payment = () => {
             }
 
             setLoading(false);
-            updateSessionData('paymentMethod', finalPaymentMethod(baseMethod || method, activeVoucher));
+            updateSessionData('paymentMethod', phuongThuc);
             updateSessionData('paymentStatus', 'completed');
             updateSessionData('paymentTotal', price);
             updateSessionData('paymentPaidAmount', price);
@@ -151,15 +171,41 @@ const Payment = () => {
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
             if (cashInserted > 0 && cashTraceRef.current) updateSessionData('cashTrace', cashTraceRef.current);
-            if (extraData.orderCode) updateSessionData('sepayOrderCode', extraData.orderCode);
+            if (donDaTra.length) {
+                updateSessionData('sepayOrderCode', donDaTra[0].code);
+                // Số tiền chuyển khoản THỰC nhận (có thể hơn phần còn thiếu: khách trả đơn cũ sau khi đã nhét
+                // thêm tiền mặt) -> đối soát hoàn tiền thừa từ trang Doanh thu.
+                updateSessionData('qrPaid', qrDaTra);
+                // Hiếm: trả bằng HAI đơn (vd bỏ mã sau khi đã chuyển một phần) -> cloud ghép đủ các đơn vào
+                // lượt này, không tính đơn thứ hai thành giao dịch riêng.
+                if (donDaTra.length > 1) updateSessionData('sepayOrderCodes', donDaTra.map((d) => d.code));
+            }
             nextStep();
         }, 500);
-    }, [cashInserted, datXuLy, finalPaymentMethod, method, nextStep, price, updateSessionData, voucher]);
+    }, [cashInserted, datXuLy, donDaTra, method, nextStep, price, qrDaTra, updateSessionData, voucher]);
 
     // Cập nhật ref mỗi render để socket handler (tạo 1 lần) luôn thấy giá trị hiện tại.
     methodRef.current = method;
-    qrOrderCodeRef.current = qrOrder?.code;
-    handlePaymentSuccessRef.current = handlePaymentSuccess;
+    cashRef.current = cashInserted;
+
+    // Đối chiếu tiền mặt với sổ của backend theo mã lượt: money_inserted bị lỡ (socket nối lại đúng lúc
+    // chốt tờ) thì tờ đó vẫn được cộng. Chỉ TĂNG, không bao giờ giảm số trên màn hình.
+    const doiChieuTienMat = useCallback(async () => {
+        try {
+            const { data } = await axios.get(`${LOCAL_API_URL}/api/bill/status`, {
+                params: { luot: luotIdRef.current },
+                timeout: 3000,
+            });
+            const tong = Number(data?.tong_luot);
+            if (!Number.isFinite(tong) || tong <= cashRef.current) return;
+            console.warn(`[Payment] doi chieu tien mat: man hinh ${cashRef.current}, backend ${tong} -> lay ${tong}`);
+            cashRef.current = tong;
+            setCashInserted((prev) => Math.max(prev, tong));
+            setBillPending(null);
+        } catch (e) {
+            // backend chưa trả lời -> lần sau
+        }
+    }, []);
 
     const applyCode = async () => {
         if (code.length !== 6 || voucher || loading) return;
@@ -187,7 +233,7 @@ const Payment = () => {
             setQrOrder(null);
             setQrError('');
 
-            if (res.data.value + cashInserted >= price) {
+            if (res.data.value + cashInserted + qrDaTra >= price) {
                 handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code', { voucher: appliedVoucher });
             }
         } catch (error) {
@@ -201,9 +247,10 @@ const Payment = () => {
     };
 
     useEffect(() => {
+        // KHÔNG giới hạn số lần nối lại: trước 0.0.23 là 5 lần -> backend khởi động lại lâu hơn ~15 s thì
+        // socket bỏ cuộc vĩnh viễn, khách nhét tiền mà màn hình không bao giờ cộng.
         const socket = io('/', {
             transports: ['polling'],
-            reconnectionAttempts: 5,
             auth: { deviceId: getDeviceId() }
         });
 
@@ -211,11 +258,29 @@ const Payment = () => {
             console.warn('Socket connection error:', err.message);
         });
 
+        // Mỗi lần (nối lại) được -> đối chiếu tiền mặt: tờ chốt trong lúc mất kết nối không bị bỏ sót.
+        socket.on('connect', () => {
+            doiChieuTienMat();
+        });
+
         socket.on('money_inserted', (data) => {
             // Cổng máy đọc tiền CHỈ mở ở màn tiền mặt, nên mọi money_inserted là tiền khách nhét ở bước
             // này — kể cả tờ được chốt ngay SAU khi khách rời màn tiền mặt (stop() chốt tờ đang chờ).
             // Ghi nhận ở mọi màn của bước Thanh toán: tiền đã nhận được GIỮ khi khách đổi phương thức.
-            setCashInserted((prev) => prev + (Number(data?.amount) || 0));
+            const luot = data?.luot;
+            if (luot && luot !== luotIdRef.current) {
+                // Tờ của một lượt thanh toán KHÁC (backend gắn mã lượt từ lệnh mở cổng) -> không cộng.
+                console.warn('[Payment] money_inserted cua luot khac -> bo qua', data?.amount);
+                return;
+            }
+            const tong = Number(data?.tong_luot);
+            if (luot && Number.isFinite(tong)) {
+                // Backend gửi TỔNG của lượt -> lấy tổng (đã gồm cả tờ lỡ sự kiện trước đó, nếu có).
+                cashRef.current = Math.max(cashRef.current, tong);
+                setCashInserted((prev) => Math.max(prev, tong));
+            } else {
+                setCashInserted((prev) => prev + (Number(data?.amount) || 0));
+            }
             setBillPending(null);
             if (Array.isArray(data?.trace)) cashTraceRef.current = data.trace;
         });
@@ -232,9 +297,8 @@ const Payment = () => {
         });
 
         socket.on('sepay_payment_success', (data) => {
-            if (data.order_code && data.order_code === qrOrderCodeRef.current) {
-                handlePaymentSuccessRef.current?.('qr', { orderCode: data.order_code });
-            }
+            // Mọi đơn của bước này (không chỉ đơn đang hiện); việc chuyển bước do effect "đủ tiền" lo.
+            if (data?.order_code) danhDauDaTra(data.order_code);
         });
 
         socket.on('bill_status', (data) => {
@@ -246,10 +310,10 @@ const Payment = () => {
             }
         });
 
-        // Tạo socket 1 LẦN cho suốt vòng đời bước Thanh toán (deps []): handler đọc qua ref nên
-        // luôn thấy method/qrOrder/handlePaymentSuccess mới nhất mà KHÔNG cần dựng lại socket.
+        // Tạo socket 1 LẦN cho suốt vòng đời bước Thanh toán (deps ổn định): handler đọc qua ref nên
+        // luôn thấy method / số tiền mới nhất mà KHÔNG cần dựng lại socket.
         return () => socket.disconnect();
-    }, []);
+    }, [danhDauDaTra, doiChieuTienMat]);
 
     // NGẮT luồng MJPEG /liveview khi rời bước Thanh toán (gán blank-GIF, giống GetReady) -> tránh
     // kết nối sống dai tích tụ gây đơ + giữ EVF nóng. Chạy 1 lần, đóng ở cleanup.
@@ -269,21 +333,34 @@ const Payment = () => {
         // Còn tờ đang chờ chốt -> đợi nó (cộng vào hoặc bị bỏ) rồi mới đi tiếp, kẻo tờ đó rơi ra ngoài
         // tổng tiền của lượt.
         // Cả ở màn chọn phương thức (tờ chốt muộn sau khi khách rời màn tiền mặt, hoặc mã + tiền mặt đủ
-        // giá mà lần dùng mã trước bị lỗi) — không chạy ở màn QR / nhập mã.
+        // giá mà lần dùng mã trước bị lỗi) — tiền mặt không chạy ở màn QR / nhập mã. Chuyển khoản đã
+        // nhận thì chạy ở MỌI màn: đơn QR được theo dõi cả khi khách đã Quay lại (0.0.23).
         const dangNhan = billPending?.status === 'dang_nhan';
         const choTienMat = method === 'cash' || !method;
-        if (choTienMat && !loading && !errorModal.show && !dangNhan && cashInserted > 0 && cashInserted >= remainingAmount) {
-            handlePaymentSuccess('cash');
+        const daTra = cashInserted + qrDaTra;
+        if ((choTienMat || qrDaTra > 0) && !loading && !errorModal.show && !dangNhan && daTra > 0 && daTra >= remainingAmount) {
+            handlePaymentSuccess(qrDaTra > 0 ? 'qr' : 'cash');
         }
-    }, [billPending, cashInserted, errorModal.show, handlePaymentSuccess, loading, method, remainingAmount]);
+    }, [billPending, cashInserted, errorModal.show, handlePaymentSuccess, loading, method, qrDaTra, remainingAmount]);
 
     // Lưới an toàn: backend luôn chốt tờ trong ≤ 10 s (hẹn giờ). Mất sự kiện (socket reconnect) thì sau
-    // 15 s mở khoá nút Quay lại, không để khách kẹt ở màn tiền mặt.
+    // 15 s mở khoá nút Quay lại (và đối chiếu với sổ backend), không để khách kẹt ở màn tiền mặt.
     useEffect(() => {
         if (!billPending) return undefined;
-        const t = setTimeout(() => setBillPending(null), 15000);
+        const t = setTimeout(() => {
+            setBillPending(null);
+            doiChieuTienMat();
+        }, 15000);
         return () => clearTimeout(t);
-    }, [billPending]);
+    }, [billPending, doiChieuTienMat]);
+
+    // Ở màn tiền mặt: đối chiếu định kỳ với sổ backend (rẻ: không đụng cổng COM) — lưới an toàn cho mọi
+    // money_inserted bị lỡ mà socket không hề báo mất kết nối.
+    useEffect(() => {
+        if (method !== 'cash') return undefined;
+        const t = setInterval(doiChieuTienMat, 5000);
+        return () => clearInterval(t);
+    }, [method, doiChieuTienMat]);
 
     // Gửi trạng thái nhận tiền TUẦN TỰ: một request đang bay tại một thời điểm, xong thì gửi trạng
     // thái MỚI NHẤT nếu đã đổi. Vì sao: React chạy cleanup (false) rồi effect (true) trong cùng một
@@ -303,7 +380,7 @@ const Payment = () => {
             // treo ở lệnh ghi serial, 5 request này không bao giờ được trả lời -> cạn 6 slot -> lệnh in của
             // khách không rời được trình duyệt -> "timeout of 30000ms exceeded". Có timeout thì axios huỷ
             // request sau 5 s và Chrome trả lại slot, dù backend có kẹt đến đâu.
-            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: value }, { timeout: 5000 })
+            axios.post(`${LOCAL_API_URL}/api/bill/accept`, { accepting: value, luot: luotIdRef.current }, { timeout: 5000 })
                 .catch(() => {})
                 .then(() => {
                     billInFlightRef.current = false;
@@ -316,14 +393,16 @@ const Payment = () => {
     // Máy đọc tiền (mở cổng + LED + cho nhét tiền) CHỈ bật khi đang Ở MÀN "Đưa tiền vào khe":
     // đã chọn tiền mặt, còn phải trả, và không đang xử lý. Mọi trạng thái khác (mới vào
     // Payment, màn chọn phương thức, QR, nhập mã, đang xử lý, rời bước) -> chủ động TẮT (= đóng cổng).
+    // Còn phải trả = conLai (sau mã, tiền mặt, chuyển khoản): đủ tiền thì đóng cổng ngay, không nhận thừa.
+    const conPhaiTra = conLai > 0;
     useEffect(() => {
-        const onCashScreen = method === 'cash' && remainingAmount > 0 && !loading && !dangXuLy;
+        const onCashScreen = method === 'cash' && conPhaiTra && !loading && !dangXuLy;
         sendBillAccept(onCashScreen);
         return () => {
             // Rời màn / unmount -> luôn tắt nhận tiền.
             sendBillAccept(false);
         };
-    }, [method, remainingAmount, loading, dangXuLy, sendBillAccept]);
+    }, [method, conPhaiTra, loading, dangXuLy, sendBillAccept]);
 
     // Rời màn tiền mặt -> xoá trạng thái máy đọc tiền, lần vào sau lại bắt đầu từ "Đang kết nối…"
     // (backend đã đóng cổng, vào lại sẽ mở lại và emit bill_status mới).
@@ -372,21 +451,46 @@ const Payment = () => {
         return () => { huy = true; clearInterval(timer); };
     }, [method, billStatus, sendBillAccept]);
 
+    // Đơn đang hiện không còn khớp số tiền phải chuyển (vd vừa nhận một khoản chuyển khác) -> bỏ hiện,
+    // effect bên dưới hiện đơn đúng số tiền (đơn cũ vẫn được theo dõi).
     useEffect(() => {
-        if (method !== 'qr' || qrOrder || qrError || remainingAmount <= 0) return;
+        if (qrOrder && Number(qrOrder.amount) !== conLai) setQrOrder(null);
+    }, [qrOrder, conLai]);
+
+    useEffect(() => {
+        if (method !== 'qr' || qrOrder || qrError || conLai <= 0) return undefined;
+
+        // Khách Quay lại rồi chọn lại chuyển khoản: còn đơn CHƯA TRẢ đúng số tiền này -> hiện lại đơn đó
+        // (khách có thể đã quét / đang chuyển theo nội dung cũ), không tạo đơn mới.
+        const donCu = donQrRef.current.find((d) => !d.paid && d.amount === conLai);
+        if (donCu) {
+            setQrOrder(donCu.order);
+            return undefined;
+        }
 
         let cancelled = false;
         const requestId = qrRequestRef.current + 1;
         qrRequestRef.current = requestId;
+        const soTien = conLai;
 
         const createOrder = async () => {
             setLoading(true);
             try {
                 const res = await axios.post(`${CLOUD_API_URL}/api/sepay-orders`, {
-                    amount: remainingAmount,
+                    amount: soTien,
                     session_id: sessionData?.sessionId || sessionData?.uuid || null,
                     device_id: getDeviceId(),
                 });
+                // Ghi nhận đơn kể cả khi khách đã rời màn QR: đơn có thật trên cloud, theo dõi cho chắc và
+                // dùng lại được nếu khách chọn lại chuyển khoản cùng số tiền.
+                if (res.data?.code) {
+                    donQrRef.current.push({
+                        code: res.data.code,
+                        amount: Number(res.data.amount) || soTien,
+                        paid: false,
+                        order: res.data,
+                    });
+                }
                 if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);
             } catch (error) {
                 if (!cancelled && qrRequestRef.current === requestId) {
@@ -403,49 +507,51 @@ const Payment = () => {
             if (qrRequestRef.current === requestId) setLoading(false);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [method, qrOrder, qrError, remainingAmount]);
+    }, [method, qrOrder, qrError, conLai]);
 
     useEffect(() => {
-        if (method !== 'qr' || !qrOrder?.code) return undefined;
-
-        // Hỏi trạng thái đơn QR qua API cloud mỗi 2.5 s. Trước 0.0.22 kiosk đọc THẲNG bảng payments bằng
-        // khoá anon (realtime + poll) -> bảng phải cho đọc công khai, ai có khoá anon trong mã trang web là
-        // đọc hết đơn. Realtime vốn hay không subscribe được trên mạng booth (chặn WebSocket) nên poll
-        // 2.5 s mới là đường chính từ trước; socket 'sepay_payment_success' bên trên vẫn giữ.
+        // Hỏi trạng thái MỌI đơn QR chưa trả của bước này qua API cloud mỗi 2.5 s — ở mọi màn, không chỉ
+        // màn QR (khách đã chuyển rồi bấm Quay lại vẫn được tính). Trước 0.0.22 kiosk đọc THẲNG bảng
+        // payments bằng khoá anon -> bảng phải cho đọc công khai. Realtime vốn hay không subscribe được
+        // trên mạng booth (chặn WebSocket) nên poll mới là đường chính; socket 'sepay_payment_success'
+        // bên trên vẫn giữ.
         let stopped = false;
         let dangHoi = false;
-        const checkStatus = async () => {
-            if (dangHoi) return;
+        const hoiTrangThai = async () => {
+            if (dangHoi || dangXuLyRef.current) return;
+            const choTra = donQrRef.current.filter((d) => !d.paid);
+            if (!choTra.length) return;
             dangHoi = true;
             try {
-                const { data } = await axios.get(`${CLOUD_API_URL}/api/sepay-orders`, {
-                    params: { code: qrOrder.code },
-                    timeout: 8000,
-                });
-                if (!stopped && data?.status === 'paid') {
-                    handlePaymentSuccess('qr', { orderCode: qrOrder.code });
-                }
-            } catch (error) {
-                console.warn('QR payment status check failed:', error.message);
+                await Promise.all(choTra.map(async (don) => {
+                    try {
+                        const { data } = await axios.get(`${CLOUD_API_URL}/api/sepay-orders`, {
+                            params: { code: don.code },
+                            timeout: 8000,
+                        });
+                        if (!stopped && data?.status === 'paid') danhDauDaTra(don.code);
+                    } catch (error) {
+                        console.warn('QR payment status check failed:', error.message);
+                    }
+                }));
             } finally {
                 dangHoi = false;
             }
         };
 
-        checkStatus();
         const interval = setInterval(() => {
             if (document.visibilityState !== 'visible') return;
-            checkStatus();
+            hoiTrangThai();
         }, 2500);
         return () => {
             stopped = true;
             clearInterval(interval);
         };
-    }, [handlePaymentSuccess, method, qrOrder?.code]);
+    }, [danhDauDaTra]);
 
     const methods = useMemo(() => [
         { id: 'cash', icon: Banknote, label: 'Tiền mặt' },
-        { id: 'qr', icon: QrCode, label: 'Chuyển khoản' },  // tắt khi đã nhét tiền mặt (xem selectMethod)
+        { id: 'qr', icon: QrCode, label: 'Chuyển khoản' },
         { id: 'code', icon: Hash, label: voucher ? 'Mã đã áp dụng' : 'Nhập mã' }
     ], [voucher]);
 
@@ -455,9 +561,8 @@ const Payment = () => {
 
     const selectMethod = (selectedMethod) => {
         if (selectedMethod === 'code' && voucher) return;
-        // Đã nhét tiền mặt -> không cho chuyển khoản (đơn QR tạo theo cả phần còn lại, không trừ tiền mặt):
-        // trả nốt bằng tiền mặt hoặc mã.
-        if (selectedMethod === 'qr' && cashInserted > 0) return;
+        // Đã nhét tiền mặt vẫn chuyển khoản được (0.0.23): đơn QR tạo theo PHẦN CÒN LẠI sau tiền mặt — máy
+        // đọc tiền hỏng giữa chừng thì khách trả nốt bằng chuyển khoản, không chỉ bằng mã.
         setMethod(selectedMethod);
         if (selectedMethod !== 'qr') {
             setQrOrder(null);
@@ -475,9 +580,11 @@ const Payment = () => {
             setLoading(false);
             setMethod(null);
             // GIỮ tiền mặt + vết byte: khách quay lại để nhập mã thì số tiền đã nhét vẫn được tính.
+            // Đơn QR thôi HIỆN nhưng vẫn được theo dõi (donQrRef), chọn lại chuyển khoản thì hiện lại.
             setQrOrder(null);
             setQrError('');
-        } else if (cashInserted > 0) {
+        } else if (cashInserted > 0 || donQrRef.current.some((d) => !d.paid)) {
+            // Rời bước Thanh toán là mất tiền mặt đã nhét và thôi theo dõi đơn chuyển khoản -> hỏi lại.
             setXacNhanRoi(true);
         } else {
             prevStep();
@@ -489,7 +596,7 @@ const Payment = () => {
             <h2 className="mb-2 text-5xl font-bold tracking-tight" style={{ color: secondaryTextColor }}>{formatVnd(price)}</h2>
             <div className="my-4 h-px w-full" style={{ backgroundColor: `${primaryTextColor}26` }} />
             <p className="text-xl font-bold" style={{ color: primaryTextColor }}>Số lượng: {printQuantity}</p>
-            {(voucher || cashInserted > 0) && (
+            {(voucher || cashInserted > 0 || qrDaTra > 0) && (
                 <div className="mt-5 space-y-2 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
                     {voucher && (
                         <div className="flex justify-between">
@@ -501,6 +608,12 @@ const Payment = () => {
                         <div className="flex justify-between">
                             <span>Tiền mặt đã nhận</span>
                             <strong>-{formatVnd(cashInserted)}</strong>
+                        </div>
+                    )}
+                    {qrDaTra > 0 && (
+                        <div className="flex justify-between">
+                            <span>Chuyển khoản đã nhận</span>
+                            <strong>-{formatVnd(qrDaTra)}</strong>
                         </div>
                     )}
                     <div className="flex justify-between text-lg">
@@ -523,7 +636,7 @@ const Payment = () => {
             <div className="mb-10 flex w-full max-w-lg items-center gap-4 opacity-80">
                 <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
                 <span className="whitespace-nowrap text-lg font-semibold italic" style={{ color: primaryTextColor }}>
-                    {remainingAmount <= 0 ? 'Mã đã thanh toán đủ' : cashInserted > 0 ? 'Trả nốt bằng tiền mặt hoặc mã' : 'Chọn phương thức'}
+                    {remainingAmount <= 0 ? 'Mã đã thanh toán đủ' : (cashInserted > 0 || qrDaTra > 0) ? 'Trả nốt phần còn lại' : 'Chọn phương thức'}
                 </span>
                 <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
             </div>
@@ -531,7 +644,7 @@ const Payment = () => {
             <div className="grid w-full max-w-3xl grid-cols-3 gap-6">
                 {methods.map((item) => {
                     const Icon = item.icon;
-                    const disabled = (item.id === 'code' && Boolean(voucher)) || (item.id === 'qr' && cashInserted > 0);
+                    const disabled = item.id === 'code' && Boolean(voucher);
                     return (
                         <button
                             type="button"
@@ -556,6 +669,7 @@ const Payment = () => {
             <Banknote size={80} style={{ color: primaryTextColor }} />
             <h3 className="text-3xl font-bold" style={{ color: primaryTextColor }}>Đưa tiền vào khe bên dưới</h3>
             {voucher && <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Mã đã trừ {formatVnd(voucherValue)}</p>}
+            {qrDaTra > 0 && <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Đã chuyển khoản {formatVnd(qrDaTra)}</p>}
             <div className="h-6 w-full overflow-hidden rounded-full bg-[#F6E6C9]">
                 <div
                     className="h-full bg-[#C8A47A]"
@@ -563,7 +677,7 @@ const Payment = () => {
                 />
             </div>
             <p className="text-2xl font-bold" style={{ color: primaryTextColor }}>
-                {formatVnd(cashInserted)} / {formatVnd(remainingAmount)}
+                {formatVnd(cashInserted)} / {formatVnd(mucTienMat)}
             </p>
             {billPending?.status === 'dang_nhan' ? (
                 <p className="flex items-center gap-2 text-lg font-semibold" style={{ color: primaryTextColor }}>
@@ -595,7 +709,9 @@ const Payment = () => {
         <div className="flex flex-col items-center gap-5">
             <QrCode size={72} style={{ color: primaryTextColor }} />
             <h3 className="text-3xl font-bold" style={{ color: primaryTextColor }}>Quét mã QR</h3>
-            {voucher && <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Cần thanh toán thêm {formatVnd(remainingAmount)}</p>}
+            {(voucher || cashInserted > 0 || qrDaTra > 0) && (
+                <p className="text-lg font-bold" style={{ color: primaryTextColor }}>Cần chuyển thêm {formatVnd(conLai)}</p>
+            )}
 
             {qrError ? (
                 <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-red-700">
@@ -763,9 +879,13 @@ const Payment = () => {
             {xacNhanRoi && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
                     <div className="mx-4 w-full max-w-md rounded-3xl bg-white/95 p-8 text-center shadow-2xl">
-                        <h3 className="mb-4 text-2xl font-bold" style={{ color: secondaryTextColor }}>Bạn đã nhét {formatVnd(cashInserted)}</h3>
+                        <h3 className="mb-4 text-2xl font-bold" style={{ color: secondaryTextColor }}>
+                            {cashInserted > 0 ? `Bạn đã nhét ${formatVnd(cashInserted)}` : 'Bạn đã mở mã chuyển khoản'}
+                        </h3>
                         <p className="mb-8 text-lg" style={{ color: primaryTextColor }}>
-                            Quay lại bây giờ sẽ huỷ số tiền này. Bạn có thể nhét tiếp hoặc nhập mã để trả phần còn lại.
+                            {cashInserted > 0
+                                ? 'Quay lại bây giờ sẽ huỷ số tiền này. Bạn có thể nhét tiếp, chuyển khoản hoặc nhập mã để trả phần còn lại.'
+                                : 'Nếu bạn đã chuyển khoản, hãy ở lại chờ xác nhận. Quay lại bây giờ thì khoản chuyển sẽ không được tính cho lượt chụp này.'}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -804,11 +924,10 @@ const Payment = () => {
                                         processingRef.current = false;
                                         setErrorModal({ show: false, message: '' });
                                         setCode('');
-                                        // Mã (+ tiền mặt) đủ giá mà lần dùng mã lỗi -> "Thử lại" dùng mã lại ngay
-                                        // (trước 0.0.22 mã đủ giá + Đóng thì không gì chạy lại, khách đứng mãi).
-                                        // Mã + QR thì vòng hỏi trạng thái đơn tự gọi lại.
-                                        if (errorModal.boMa && voucher && method !== 'qr'
-                                            && voucher.value + cashInserted >= price) {
+                                        // Mã (+ tiền mặt / chuyển khoản) đủ giá mà lần dùng mã lỗi -> "Thử lại" dùng
+                                        // mã lại ngay (trước 0.0.22 mã đủ giá + Đóng thì không gì chạy lại).
+                                        if (errorModal.boMa && voucher
+                                            && voucher.value + cashInserted + qrDaTra >= price) {
                                             handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code');
                                         }
                                     }}
@@ -816,12 +935,13 @@ const Payment = () => {
                                 >
                                     {errorModal.boMa && voucher ? 'Thử lại' : 'Đóng'}
                                 </button>
-                                {errorModal.boMa && voucher && method !== 'qr' && (
+                                {errorModal.boMa && voucher && (
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            // Bỏ mã không dùng được: tiền mặt đã nhét vẫn giữ, khách trả phần còn
-                                            // lại bằng tiền mặt / chuyển khoản / mã khác.
+                                            // Bỏ mã không dùng được: tiền mặt / chuyển khoản đã nhận vẫn giữ, khách
+                                            // trả phần còn lại bằng tiền mặt / chuyển khoản / mã khác. (Trước 0.0.23
+                                            // ở màn QR không có nút này: mã + QR mà mã hỏng thì kẹt ở lỗi.)
                                             processingRef.current = false;
                                             setVoucher(null);
                                             setMethod(null);
