@@ -82,12 +82,17 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return methodNotAllowed(res);
 
     try {
+        // Chưa đặt khoá thì TỪ CHỐI hết: trước đây thiếu SEPAY_API_KEY là bỏ qua kiểm tra -> ai cũng
+        // gửi được webhook giả để đánh dấu đơn QR đã trả. Từ chối (503) thì SePay còn gửi lại sau khi
+        // đặt khoá, không mất giao dịch.
         const expectedKey = process.env.SEPAY_API_KEY;
-        if (expectedKey) {
-            const provided = getAuthToken(req) || req.query?.key || req.body?.api_key;
-            if (!sameKey(provided, expectedKey)) {
-                return json(res, 401, { success: false, message: 'Unauthorized' });
-            }
+        if (!expectedKey) {
+            console.error('Sepay webhook: chua dat SEPAY_API_KEY -> tu choi');
+            return json(res, 503, { success: false, message: 'Webhook not configured' });
+        }
+        const provided = getAuthToken(req) || req.query?.key || req.body?.api_key;
+        if (!sameKey(provided, expectedKey)) {
+            return json(res, 401, { success: false, message: 'Unauthorized' });
         }
 
         const payload = req.body || {};
