@@ -53,6 +53,9 @@ function normalizeSession(row) {
     };
 }
 
+// Giá một lượt chụp hợp lệ: 0 (sự kiện) .. 10 triệu. Số âm từng lọt vào doanh thu (trừ bớt tiền thật).
+const MAX_SESSION_AMOUNT = 10000000;
+
 function buildSession(body) {
     const uuid = String(body.session_id || body.uuid || '').trim();
     return {
@@ -68,6 +71,52 @@ function buildSession(body) {
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + SESSION_MAX_AGE_MS).toISOString(),
     };
+}
+
+// Lưu lượt chụp từ kiosk (không đăng nhập — booth không có token). Kiosk gửi HAI lần cùng uuid
+// (Edit.jsx): lần 1 có ảnh ghép để QR mở được ngay, lần 2 khi ảnh gốc tải xong ở nền.
+// Lượt ĐÃ CÓ chỉ được điền phần còn trống (ảnh gốc, ảnh ghép) — KHÔNG đổi số tiền, phương thức, meta,
+// ngày tạo/hết hạn. Trước 2026-10-06 mỗi POST ghi đè cả dòng: ai biết uuid (in trên QR của khách) là
+// sửa được doanh thu + thay ảnh trong album; lần gửi thứ 2 của kiosk còn đặt lại created_at.
+// Trả { row, created } hoặc { missingTable: true }.
+async function saveSession(supabase, session, retry = true) {
+    const { data: existing, error: findError } = await supabase
+        .from('photo_sessions')
+        .select('*')
+        .eq('uuid', session.uuid)
+        .maybeSingle();
+    if (findError && isMissingTable(findError)) return { missingTable: true };
+    if (findError) throw findError;
+
+    if (existing) {
+        const patch = {};
+        const oldPhotos = Array.isArray(existing.photos) ? existing.photos : [];
+        if (!oldPhotos.length && session.photos.length) patch.photos = session.photos;
+        if (!existing.composite_url && session.composite_url) {
+            patch.composite_url = session.composite_url;
+            patch.composite_public_id = session.composite_public_id;
+        }
+        if (!Object.keys(patch).length) return { row: existing, created: false };
+        const { data, error } = await supabase
+            .from('photo_sessions')
+            .update(patch)
+            .eq('id', existing.id)
+            .select()
+            .single();
+        if (error) throw error;
+        return { row: data, created: false };
+    }
+
+    const { data, error } = await supabase
+        .from('photo_sessions')
+        .insert(session)
+        .select()
+        .single();
+    // Hai POST cùng uuid tới cùng lúc: dòng vừa được tạo bởi POST kia -> đi nhánh "đã có".
+    if (error && error.code === '23505' && retry) return saveSession(supabase, session, false);
+    if (error && isMissingTable(error)) return { missingTable: true };
+    if (error) throw error;
+    return { row: data, created: true };
 }
 
 function parseStoragePublicId(publicId) {
@@ -375,22 +424,16 @@ export default async function handler(req, res) {
             const body = req.body || {};
             const session = buildSession(body);
             if (!session.uuid) return json(res, 400, { error: 'Missing session_id' });
+            if (!Number.isFinite(session.amount) || session.amount < 0 || session.amount > MAX_SESSION_AMOUNT) {
+                return json(res, 400, { error: 'Invalid amount' });
+            }
 
-            const { data, error } = await supabase
-                .from('photo_sessions')
-                .upsert(session, {
-                    onConflict: 'uuid',
-                })
-                .select()
-                .single();
-
-            if (error && isMissingTable(error)) {
+            const saved = await saveSession(supabase, session);
+            if (saved.missingTable) {
                 const storageSession = await saveSessionToStorage(supabase, session);
                 return json(res, 201, normalizeSession(storageSession));
             }
-
-            if (error) throw error;
-            return json(res, 201, normalizeSession(data));
+            return json(res, saved.created ? 201 : 200, normalizeSession(saved.row));
         }
 
         return methodNotAllowed(res);
