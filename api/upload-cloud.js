@@ -28,13 +28,18 @@ function firstValue(value) {
     return Array.isArray(value) ? value[0] : value;
 }
 
-function cleanExtension(filename, mimetype) {
-    const fromName = filename && filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
-    if (fromName) return fromName.replace(/[^a-z0-9]/g, '') || 'bin';
-    if (mimetype?.includes('webm')) return 'webm';
-    if (mimetype?.includes('png')) return 'png';
-    if (mimetype?.includes('jpeg') || mimetype?.includes('jpg')) return 'jpg';
-    return 'bin';
+// Loại file xác định bằng BYTE ĐẦU, không tin tên/kiểu do máy gửi. Trước 2026-10-08 đuôi lấy từ tên
+// file và content-type lấy từ request: ai cũng upload được .html/.svg chạy script trên domain ảnh
+// công khai (R2/Supabase) để lừa đảo. Kiosk chỉ gửi ảnh ghép/ảnh gốc (PNG/JPEG) và motion (WebM/MP4).
+function sniffMedia(buffer) {
+    const b = buffer || Buffer.alloc(0);
+    const at = (offset, bytes) => bytes.every((v, i) => b[offset + i] === v);
+    if (at(0, [0xff, 0xd8, 0xff])) return { ext: 'jpg', type: 'image/jpeg' };
+    if (at(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return { ext: 'png', type: 'image/png' };
+    if (at(0, [0x52, 0x49, 0x46, 0x46]) && at(8, [0x57, 0x45, 0x42, 0x50])) return { ext: 'webp', type: 'image/webp' };
+    if (at(0, [0x1a, 0x45, 0xdf, 0xa3])) return { ext: 'webm', type: 'video/webm' };
+    if (at(4, [0x66, 0x74, 0x79, 0x70])) return { ext: 'mp4', type: 'video/mp4' }; // 'ftyp'
+    return null;
 }
 
 async function resolveBucket(supabase) {
@@ -81,11 +86,13 @@ export default async function handler(req, res) {
             const file = firstValue(files.file);
             if (!file) return json(res, 400, { error: 'Missing file' });
 
-            const extension = cleanExtension(file.originalFilename, file.mimetype);
+            const buffer = await fs.readFile(file.filepath);
+            const media = sniffMedia(buffer);
+            if (!media) return json(res, 415, { error: 'Chỉ nhận ảnh JPEG/PNG/WebP hoặc video WebM/MP4' });
+            const extension = media.ext;
             // Đường dẫn có random -> khó đoán (public bucket + xoá sau 48h theo hạn album).
             const objectPath = `booth/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
-            const buffer = await fs.readFile(file.filepath);
-            const contentType = file.mimetype || 'application/octet-stream';
+            const contentType = media.type;
 
             // Ưu tiên R2 (egress miễn phí) khi PHOTO_STORAGE=r2 + cấu hình đủ. Lỗi -> fallback Supabase
             // để KHÁCH luôn có ảnh. public_id 'r2:...' để cron cleanup xoá đúng nguồn.

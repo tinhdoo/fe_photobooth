@@ -53,6 +53,39 @@ function normalizeSession(row) {
     };
 }
 
+// Album công khai (?id= trong QR) và phản hồi POST của kiosk: chỉ những gì trang album (ViewPage) cần.
+// Trước 2026-10-08 trả nguyên dòng: ai có mã album là đọc được số tiền, phương thức trả, mã giảm giá,
+// mã đơn QR, vết máy đọc tiền, mã máy... trong meta_data. Danh sách đầy đủ chỉ còn ở nhánh admin.
+function albumPhoto(photo) {
+    if (!photo || typeof photo !== 'object') return photo;
+    return { url: photo.url || null, video_url: photo.video_url || null, type: photo.type || null };
+}
+
+function albumSession(row) {
+    const full = normalizeSession(row);
+    if (!full) return null;
+    const meta = full.meta_data || {};
+    return {
+        uuid: full.uuid,
+        layout_id: full.layout_id,
+        composite_url: full.composite_url,
+        photos: full.photos.map(albumPhoto),
+        meta_data: {
+            layout_id: meta.layout_id,
+            frame_url: meta.frame_url,
+            frame_config: meta.frame_config,
+            photo_positions: meta.photo_positions,
+        },
+        status: full.status,
+        created_at: full.created_at,
+        expires_at: full.expires_at,
+    };
+}
+
+// Mã lượt do kiosk sinh (crypto.randomUUID). Mã còn được ghép vào đường dẫn storage
+// ('sessions/<uuid>.json') -> chặn '/', '..' để không trỏ ra file khác (config/app.json...).
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+
 // Giá một lượt chụp hợp lệ: 0 (sự kiện) .. 10 triệu. Số âm từng lọt vào doanh thu (trừ bớt tiền thật).
 const MAX_SESSION_AMOUNT = 10000000;
 
@@ -119,22 +152,39 @@ async function saveSession(supabase, session, retry = true) {
     return { row: data, created: true };
 }
 
+// public_id do kiosk gửi lên (POST không đăng nhập) -> trước 2026-10-08 ai cũng ghi được
+// 'tomato/config/app.json' hay 'r2:releases/...' vào một lượt rồi chờ lượt hết hạn để cron XOÁ HỘ.
+// Chỉ xoá file nằm trong thư mục ảnh khách. 'photobooth/' = backend booth cũ upload thẳng Supabase.
+const SUPABASE_SESSION_PREFIXES = ['booth/', 'cloud/', 'mobile/', 'sessions/', 'photobooth/'];
+const R2_SESSION_PREFIXES = ['booth/'];
+
+function isSessionStoragePath(path, prefixes) {
+    const value = String(path || '');
+    if (!value || value.startsWith('/') || value.includes('..') || value.includes('\\')) return false;
+    return prefixes.some((prefix) => value.startsWith(prefix));
+}
+
 function parseStoragePublicId(publicId) {
     const value = String(publicId || '').trim();
     // Ảnh mới trên R2 có public_id dạng 'r2:booth/...' -> xử lý riêng, KHÔNG gộp vào path Supabase.
     if (value.startsWith('r2:')) return null;
     const slashIndex = value.indexOf('/');
     if (slashIndex <= 0) return null;
+    const path = value.slice(slashIndex + 1);
+    if (!isSessionStoragePath(path, SUPABASE_SESSION_PREFIXES)) return null;
     return {
         bucket: value.slice(0, slashIndex),
-        path: value.slice(slashIndex + 1),
+        path,
     };
 }
 
 // Thu các KEY R2 từ public_id 'r2:booth/...' (ảnh mới). Ảnh cũ (Supabase) không có prefix -> bỏ qua.
 function collectSessionR2Keys(session) {
     const keys = new Set();
-    const add = (pid) => { const v = String(pid || ''); if (v.startsWith('r2:')) keys.add(v.slice(3)); };
+    const add = (pid) => {
+        const v = String(pid || '');
+        if (v.startsWith('r2:') && isSessionStoragePath(v.slice(3), R2_SESSION_PREFIXES)) keys.add(v.slice(3));
+    };
     add(session.composite_public_id);
     add(session.gif_public_id);
     (Array.isArray(session.photos) ? session.photos : []).forEach((p) => { add(p?.public_id); add(p?.video_public_id); });
@@ -211,7 +261,7 @@ async function purgeExpiredSession(supabase, row) {
     try {
         const bucket = await resolveBucket(supabase);
         const paths = collectSessionStoragePaths(row);
-        if (row.uuid) paths.push(`sessions/${row.uuid}.json`);
+        if (SESSION_ID_RE.test(String(row.uuid || ''))) paths.push(`sessions/${row.uuid}.json`);
         if (paths.length) await removeStoragePaths(supabase, bucket, paths);
     } catch { /* bỏ qua lỗi xoá storage */ }
     try {
@@ -268,7 +318,7 @@ async function cleanupExpiredCloud(req, res, supabase) {
         const sessionPaths = new Set();
         for (const session of sessions) {
             collectSessionStoragePaths(session).forEach((path) => sessionPaths.add(path));
-            if (session.uuid) sessionPaths.add(`sessions/${session.uuid}.json`);
+            if (SESSION_ID_RE.test(String(session.uuid || ''))) sessionPaths.add(`sessions/${session.uuid}.json`);
         }
 
         // 2) Đánh dấu expired — GIỮ row để báo cáo doanh thu không mất lịch sử.
@@ -380,6 +430,7 @@ export default async function handler(req, res) {
             const sessionId = String(req.query.id || req.query.uuid || '').trim();
 
             if (sessionId) {
+                if (!SESSION_ID_RE.test(sessionId)) return json(res, 404, { error: 'Session not found' });
                 const { data, error } = await supabase
                     .from('photo_sessions')
                     .select('*')
@@ -392,7 +443,7 @@ export default async function handler(req, res) {
                     if (storageSession.status !== 'expired' && isSessionExpired(storageSession)) {
                         await purgeExpiredSession(supabase, storageSession);
                     }
-                    return json(res, 200, normalizeSession(storageSession));
+                    return json(res, 200, albumSession(storageSession));
                 }
 
                 if (error) throw error;
@@ -402,7 +453,7 @@ export default async function handler(req, res) {
                 if (data.status !== 'expired' && isSessionExpired(data)) {
                     await purgeExpiredSession(supabase, data);
                 }
-                return json(res, 200, normalizeSession(data));
+                return json(res, 200, albumSession(data));
             }
 
             // DANH SÁCH lượt chụp (kèm mã album của khách) chỉ cho admin. Album từng khách (?id=) vẫn
@@ -424,6 +475,7 @@ export default async function handler(req, res) {
             const body = req.body || {};
             const session = buildSession(body);
             if (!session.uuid) return json(res, 400, { error: 'Missing session_id' });
+            if (!SESSION_ID_RE.test(session.uuid)) return json(res, 400, { error: 'Invalid session_id' });
             if (!Number.isFinite(session.amount) || session.amount < 0 || session.amount > MAX_SESSION_AMOUNT) {
                 return json(res, 400, { error: 'Invalid amount' });
             }
@@ -431,9 +483,9 @@ export default async function handler(req, res) {
             const saved = await saveSession(supabase, session);
             if (saved.missingTable) {
                 const storageSession = await saveSessionToStorage(supabase, session);
-                return json(res, 201, normalizeSession(storageSession));
+                return json(res, 201, albumSession(storageSession));
             }
-            return json(res, saved.created ? 201 : 200, normalizeSession(saved.row));
+            return json(res, saved.created ? 201 : 200, albumSession(saved.row));
         }
 
         return methodNotAllowed(res);
