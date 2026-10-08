@@ -56,7 +56,6 @@ const preloadStepChunks = () => {
 };
 
 const ViewPage = lazy(() => import('./pages/ViewPage'));
-const MobileUploadClient = lazy(() => import('./pages/MobileUploadClient'));
 const FaceFilterDemo = lazy(() => import('./pages/FaceFilterDemo'));
 const AIFilterDemo = lazy(() => import('./pages/AIFilterDemo'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
@@ -219,7 +218,6 @@ const App = () => {
                         <Route path="/face-filter" element={<FaceFilterDemo />} />
                         <Route path="/ai-filter" element={<AIFilterDemo />} />
                         <Route path="/album/:id" element={<ViewPage />} />
-                        <Route path="/m/upload/:sessionId" element={<MobileUploadClient />} />
                         <Route path="/admin/login" element={<AdminLogin />} />
                         <Route
                             path="/admin"
