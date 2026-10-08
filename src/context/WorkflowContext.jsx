@@ -38,6 +38,9 @@ const CLOUD_SYNC_KEYS = [
     'bg_welcome', 'bg_source-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
     'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_print-photo', 'bg_wait-print-photo', 'bg_qr-photo',
     'brand_text_primary', 'brand_text_secondary',
+    // Logo đổi ở trang Thương hiệu trên cloud. Trước 0.0.24 tới booth nhờ realtime áp nguyên khối cấu hình;
+    // realtime giờ chỉ nhận các khoá trong danh sách này nên phải có tên ở đây.
+    'logo_main',
     // Mốc admin đổi giá gốc (0.0.24): mốc lịch giá chạy trước đó nhường cho giá gốc (utils/pricing.js).
     'price_updated_at',
 ];
@@ -270,10 +273,12 @@ export const WorkflowProvider = ({ children }) => {
     }, []);
 
     // Initialize mode from localStorage (fallback)
-    // Khởi đầu = chế độ cloud xác nhận lần gần nhất (BOOTH_MODE), không mặc định 'payment' rồi chờ mạng.
+    // Khởi đầu = chế độ xác nhận lần gần nhất, không chờ mạng. Có cloud: đọc BOOTH_MODE_CLOUD, khoá CHỈ ghi từ
+    // giá trị cloud trả về. Không dùng BOOTH_MODE: bản trước 0.0.24 ghi khoá đó cả khi gạt tay, có thể còn
+    // 'event' -> mở máy lúc chưa tới được cloud là chụp miễn phí. Chưa từng có xác nhận -> Trả phí.
     const [isEventMode, setIsEventMode] = useState(() => {
         try {
-            return localStorage.getItem('BOOTH_MODE') === 'event';
+            return localStorage.getItem(CLOUD_API_URL ? 'BOOTH_MODE_CLOUD' : 'BOOTH_MODE') === 'event';
         } catch {
             return false;
         }
@@ -290,17 +295,19 @@ export const WorkflowProvider = ({ children }) => {
         }
 
         const deviceId = getDeviceId();
+        // Mã máy đang chạy thật: syncDevice đổi sang mã backend cấp nếu khác localStorage (xem kênh realtime).
+        let currentDeviceId = deviceId;
 
         // Chế độ Trả phí/Sự kiện: có cloud thì CHỈ cloud quyết định (đổi ở trang Cài đặt, PUT chỉ admin).
         // Trước 0.0.24 nhịp tim áp chế độ của backend local rồi mới tới chế độ cloud -> mỗi 60 s lật qua
         // lại giữa hai giá trị, mất mạng thì đứng luôn ở giá trị local (có thể là 'event' = chụp miễn phí).
-        // Giờ: cloud trả về -> áp + lưu BOOTH_MODE làm dự phòng; cloud lỗi -> giữ chế độ cloud xác nhận
-        // lần gần nhất. Không cấu hình cloud (máy chạy độc lập) -> theo backend local như cũ.
+        // Giờ: cloud trả về -> áp + lưu BOOTH_MODE_CLOUD làm dự phòng; cloud lỗi -> giữ chế độ cloud xác nhận
+        // lần gần nhất. Không cấu hình cloud (máy chạy độc lập) -> theo backend local như cũ (BOOTH_MODE).
         const applyDeviceMode = (mode, xacNhan = false) => {
             if (mode !== 'event' && mode !== 'payment') return;
             if (xacNhan) {
                 try {
-                    localStorage.setItem('BOOTH_MODE', mode);
+                    localStorage.setItem(CLOUD_API_URL ? 'BOOTH_MODE_CLOUD' : 'BOOTH_MODE', mode);
                 } catch {
                     // bỏ qua (private mode / đầy bộ nhớ)
                 }
@@ -331,6 +338,7 @@ export const WorkflowProvider = ({ children }) => {
                     const sysData = await sysRes.json();
                     if (sysData.device_id) {
                         activeDeviceId = sysData.device_id;
+                        currentDeviceId = activeDeviceId;
                         localStorage.setItem("device_id", activeDeviceId);
                         localStorage.setItem("DEVICE_ID", activeDeviceId);
                     }
@@ -394,7 +402,11 @@ export const WorkflowProvider = ({ children }) => {
                     },
                     (payload) => {
                         const row = payload.new || payload.old;
-                        if (row?.mode) applyDeviceMode(row.mode, true);
+                        // Kênh đăng ký theo mã máy lúc mở trang; backend có thể cấp mã khác (máy chép
+                        // localStorage từ máy khác, sự cố 2026-09-15). Chỉ nhận bản ghi của mã đang chạy, kẻo áp
+                        // chế độ Trả phí/Sự kiện của máy khác. Trang tải lại sau mỗi lượt -> lần sau đăng ký đúng mã.
+                        if (!row?.mode || row.device_id !== currentDeviceId) return;
+                        applyDeviceMode(row.mode, true);
                     }
                 )
                 .subscribe();

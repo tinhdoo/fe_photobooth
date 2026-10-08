@@ -83,6 +83,23 @@ const FILTERS = [
     // và chèn vào SAU danh sách này lúc chạy (xem state beautyFilters). Bộ hiển thị vẫn đúng 7 ô (grid-cols-7).
 ];
 
+// Chờ tối đa `ms`; quá giờ -> reject với lỗi có quaGio = true. Bước gốc vẫn chạy nốt ở nền, kết quả bị bỏ.
+// Trước 0.0.24b một ảnh treo khi áp hiệu ứng (MediaPipe kẹt GPU, /api/enhance không trả lời, ảnh không tải
+// xong) giữ isFiltering = true mãi -> nút In khoá cứng, hết giờ cũng không tự in được.
+const withTimeout = (promise, ms, label = 'Tác vụ') => new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+        const err = new Error(`${label} quá ${Math.round(ms / 1000)} giây`);
+        err.quaGio = true;
+        reject(err);
+    }, ms);
+    Promise.resolve(promise).then(
+        (v) => { clearTimeout(t); resolve(v); },
+        (e) => { clearTimeout(t); reject(e); },
+    );
+});
+// Hạn cho MỘT ảnh khi áp hiệu ứng. Ảnh đầu còn gồm lúc nạp mô hình nhận diện mặt nên để rộng tay.
+const FILTER_PHOTO_TIMEOUT_MS = 30000;
+
 const mapWithConcurrency = async (items, limit, worker) => {
     const results = new Array(items.length);
     let cursor = 0;
@@ -368,7 +385,8 @@ const Edit = () => {
         const fetchFrames = async () => {
             try {
                 const layoutId = layout.id || 'strip_4';
-                const res = await axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: layoutId } });
+                // Có hạn: không trả lời thì framesLoaded không bao giờ bật -> nút In khoá mãi (0.0.24b).
+                const res = await axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: layoutId }, timeout: 15000 });
                 const allFrames = res.data || [];
                 setFrames(allFrames);
 
@@ -376,7 +394,7 @@ const Edit = () => {
                 allFrames.forEach((f) => {
                     if (f.url) { const im = new Image(); im.src = f.url; } // warm cache ảnh frame
                     if (f.url && f.layout && f.name && !frameConfigCacheRef.current.has(f.id)) {
-                        axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: f.layout, name: f.name, resource: 'config' } })
+                        axios.get(`${FRAME_API_URL}/api/frames`, { params: { layout: f.layout, name: f.name, resource: 'config' }, timeout: 8000 })
                             .then((cfgRes) => { if (cfgRes.data) frameConfigCacheRef.current.set(f.id, cfgRes.data); })
                             .catch(() => {});
                     }
@@ -439,33 +457,46 @@ const Edit = () => {
 
             // Client-side Filters
             if (selectedFilter.filter) {
+                // Một ảnh đổi màu quá giờ (GPU kẹt) -> các ảnh sau giữ ảnh gốc, không chờ thêm từng ảnh.
+                let treoMau = false;
                 const filtered = await mapWithConcurrency(photos, 2, async (photoSrc) => {
                     if (!photoSrc) return null;
                     const cacheKey = `${selectedFilter.id}:${photoSrc}`;
                     if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+                    if (treoMau) return photoSrc;
 
-                    return new Promise((resolve) => {
+                    return withTimeout(new Promise((resolve) => {
                         const img = new Image();
                         img.crossOrigin = 'anonymous'; // Important for CORS
                         img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.width;
-                            canvas.height = img.height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
-                            selectedFilter.filter(ctx, canvas.width, canvas.height);
-                            canvas.toBlob((blob) => {
-                                if (!blob) {
-                                    resolve(photoSrc);
-                                    return;
-                                }
-                                const url = URL.createObjectURL(blob);
-                                filterCacheRef.current.set(cacheKey, url);
-                                resolve(url);
-                            }, 'image/jpeg', 0.9);
+                            // Lỗi khi vẽ (ảnh quá lớn -> getContext trả null...) trước đây làm Promise treo mãi.
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0);
+                                selectedFilter.filter(ctx, canvas.width, canvas.height);
+                                canvas.toBlob((blob) => {
+                                    if (!blob) {
+                                        resolve(photoSrc);
+                                        return;
+                                    }
+                                    const url = URL.createObjectURL(blob);
+                                    filterCacheRef.current.set(cacheKey, url);
+                                    resolve(url);
+                                }, 'image/jpeg', 0.9);
+                            } catch (e) {
+                                console.error('Doi mau that bai:', e);
+                                resolve(photoSrc);
+                            }
                         };
                         img.onerror = () => resolve(photoSrc);
                         img.src = photoSrc;
+                    }), FILTER_PHOTO_TIMEOUT_MS, 'Đổi màu').catch((e) => {
+                        if (e?.quaGio) treoMau = true;
+                        console.error(e);
+                        return photoSrc;
                     });
                 });
                 if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
@@ -476,21 +507,30 @@ const Edit = () => {
             if (selectedFilter.type === 'beauty') {
                 setIsFiltering(true);
                 try {
-                    const { applyBeautyToImage } = await import('../../faceFilter/ai/applyBeauty.js');
+                    const { applyBeautyToImage } = await withTimeout(import('../../faceFilter/ai/applyBeauty.js'), FILTER_PHOTO_TIMEOUT_MS, 'Nạp bộ làm đẹp');
+                    // Một ảnh quá giờ = bộ làm đẹp đang kẹt -> các ảnh sau giữ ảnh gốc luôn, không chờ thêm
+                    // 30 giây cho từng ảnh.
+                    let treo = false;
                     const filtered = await mapWithConcurrency(photos, 1, async (photoSrc) => {
                         if (!photoSrc) return null;
                         const cacheKey = `${selectedFilter.id}:${photoSrc}`;
                         if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+                        if (treo) return photoSrc;
                         try {
-                            const url = await applyBeautyToImage(photoSrc, selectedFilter.def);
+                            const url = await withTimeout(applyBeautyToImage(photoSrc, selectedFilter.def), FILTER_PHOTO_TIMEOUT_MS, 'Làm đẹp');
                             filterCacheRef.current.set(cacheKey, url);
                             return url;
                         } catch (e) {
+                            if (e?.quaGio) treo = true;
                             console.error('Beauty filter error', e);
                             return photoSrc;
                         }
                     });
                     if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
+                } catch (err) {
+                    // Không nạp được bộ làm đẹp -> hiện ảnh gốc, không giữ ảnh của filter chọn trước đó.
+                    console.error('Beauty filter failed', err);
+                    if (isMounted && filterRunRef.current === runId) setFilteredPhotos(photos);
                 } finally {
                     if (isMounted && filterRunRef.current === runId) setIsFiltering(false);
                 }
@@ -501,25 +541,29 @@ const Edit = () => {
             if (selectedFilter.type === 'backend') {
                 setIsFiltering(true);
                 try {
+                    let treo = false; // một ảnh quá giờ -> các ảnh sau giữ ảnh gốc luôn
                     const filtered = await mapWithConcurrency(photos, 2, async (photoSrc, index) => {
                         if (!photoSrc) return null;
                         const cacheKey = `${selectedFilter.id}:${photoSrc}`;
                         if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
+                        if (treo) return photoSrc;
 
                         try {
-                            const response = await fetch(photoSrc);
+                            const response = await withTimeout(fetch(photoSrc), FILTER_PHOTO_TIMEOUT_MS, 'Đọc ảnh');
                             const blob = await response.blob();
                             const formData = new FormData();
                             formData.append('photo', blob, `photo_${index}.jpg`);
                             formData.append('filter_type', selectedFilter.id);
 
                             const res = await axios.post(`${API_URL}/api/enhance`, formData, {
-                                headers: { 'Content-Type': 'multipart/form-data' }
+                                headers: { 'Content-Type': 'multipart/form-data' },
+                                timeout: FILTER_PHOTO_TIMEOUT_MS,
                             });
                             const filteredUrl = `${res.data.url}?t=${Date.now()}`;
                             filterCacheRef.current.set(cacheKey, filteredUrl);
                             return filteredUrl;
                         } catch (e) {
+                            if (e?.quaGio || ['ECONNABORTED', 'ETIMEDOUT'].includes(e?.code)) treo = true;
                             console.error("Backend filter error", e);
                             return photoSrc;
                         }
@@ -539,9 +583,6 @@ const Edit = () => {
 
     // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
     const isPrintingRef = useRef(false);
-    // Mã lượt của LẦN THỬ IN đầu tiên trong màn này: bấm In lại sau lỗi/timeout dùng lại đúng mã đó
-    // (xem handlePrint).
-    const maLanInRef = useRef(null);
     useEffect(() => {
         // CHỜ khung load + áp XONG (framesLoaded chỉ = true SAU khi mount đã await chọn frame[0] +
         // áp config ô). In trước lúc này -> khung/ô chưa áp -> layout HỎNG/LỆCH Ô (đã gặp ở mini-special
@@ -604,7 +645,9 @@ const Edit = () => {
         setDangTaiKhung(true);
         try {
             const res = await axios.get(`${FRAME_API_URL}/api/frames`, {
-                params: { layout: frame.layout, name: frame.name, resource: 'config' }
+                params: { layout: frame.layout, name: frame.name, resource: 'config' },
+                // Không trả lời -> "Đang tải khung..." khoá nút In mãi (0.0.24b). Lỗi/quá giờ xử lý như lỗi mạng.
+                timeout: 8000,
             });
             if (res.data) cache.set(frame.id, res.data);
 
@@ -668,13 +711,16 @@ const Edit = () => {
         document.addEventListener('touchend', upHandler);
     };
 
+    // Có hạn: mạng treo giữa chừng thì trước đây nút In đứng "Đang xử lý..." mãi (0.0.24b). File lên cloud
+    // tối đa ~4,5 MB (giới hạn Vercel) -> 90 giây đủ cho đường lên ~0,5 Mbps.
     const uploadFile = async (blob, filename = `capture_${Date.now()}.png`) => {
         const formData = new FormData();
         formData.append('file', blob, filename);
         try {
             const uploadBaseUrl = CLOUD_API_URL || API_URL;
             const res = await axios.post(`${uploadBaseUrl}/api/upload-cloud`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 90000,
             });
             return { url: res.data.url, public_id: res.data.public_id };
         } catch (error) {
@@ -825,9 +871,15 @@ const Edit = () => {
             // QUA việc quay lại Review rồi vào lại Edit (ref của component sẽ mất khi Edit remount).
             // Chưa in được (lỗi / timeout chưa rõ) mà bấm In lại -> DÙNG LẠI mã của lần thử trước: backend thấy
             // mã này đã có job chưa lỗi thì không in tấm thứ hai (0.0.24). Trước đây mỗi lần bấm một mã mới ->
-            // request cũ còn chạy ngầm + request mới = 2 tấm.
-            if (!maLanInRef.current) maLanInRef.current = genUuid();
-            const sessionId = sessionData.printedSessionId || maLanInRef.current;
+            // request cũ còn chạy ngầm + request mới = 2 tấm. Mã giữ trong sessionData (không phải ref của màn
+            // này) để sống qua Quay lại / Chụp lại rồi vào lại; lượt khách mới (resetSession tải lại trang) mới
+            // có mã mới.
+            let maLanIn = sessionData.printAttemptId;
+            if (!maLanIn) {
+                maLanIn = genUuid();
+                updateSessionData('printAttemptId', maLanIn);
+            }
+            const sessionId = sessionData.printedSessionId || maLanIn;
             const albumBaseUrl = CLOUD_API_URL || window.location.origin;
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
@@ -1130,7 +1182,18 @@ const Edit = () => {
 
             // 8. Upload & Create Session (chạy SAU khi đã gửi lệnh in)
             compositeCanvas.toBlob(async (blob) => {
-                if (!blob || !printBlob) { setIsUploading(false); return; }
+                if (!blob || !printBlob) {
+                    // Đã in nhưng không xuất được ảnh album (thiếu bộ nhớ...): trước đây chỉ mở khoá nút, màn
+                    // đứng yên (nút Quay lại đã ẩn vì đã in). Cho lối ra giống lỗi lưu cloud.
+                    setErrorDialog({
+                        show: true,
+                        title: 'Không thể lưu ảnh',
+                        message: 'Ảnh đã in xong nhưng chưa tạo được ảnh cho album online.\nBấm Thử lại, hoặc Kết thúc để về trang chủ.',
+                        daIn: true,
+                    });
+                    setIsUploading(false);
+                    return;
+                }
                 try {
                     const compositeData = await uploadFile(blob);
                     const compositeUrl = compositeData.url;
@@ -1181,7 +1244,7 @@ const Edit = () => {
 
                     // 1) Tạo session NGAY với ảnh ghép (composite) -> album có ảnh để quét QR LIỀN,
                     //    KHÔNG phải chờ upload ảnh gốc + video motion (webm nặng) ở nền.
-                    await axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload([]));
+                    await axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload([]), { timeout: 20000 });
 
                     updateSessionData('finalImage', compositeUrl);
                     // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
@@ -1259,7 +1322,7 @@ const Edit = () => {
                             };
                         }
                     })
-                        .then((uploadedPhotos) => axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload(uploadedPhotos.filter(Boolean))))
+                        .then((uploadedPhotos) => axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload(uploadedPhotos.filter(Boolean)), { timeout: 30000 }))
                         .catch((bgErr) => console.error('Cập nhật ảnh gốc/video ở nền thất bại:', bgErr));
                     setPendingMediaUpload(bgUpload);
                 } catch (err) {

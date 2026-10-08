@@ -36,9 +36,10 @@ export const getCurrentPricing = (configs) => {
         const now = new Date();
         const DAY_MS = 24 * 60 * 60 * 1000;
         let best = null; // { firedAt: Date, item }
-        // Mốc admin đổi GIÁ GỐC (cloud tự đóng khi lưu giá). Đổi giá gốc cũng là một "mốc": mốc lịch
-        // nào đã chạy TRƯỚC đó thì nhường cho giá gốc mới. Không có mốc này, một mốc 'một lần' đã qua
-        // đè giá gốc mãi mãi (sửa giá trong Cài đặt không ăn).
+        // Mốc admin đổi GIÁ GỐC (cloud tự đóng khi lưu giá gói / giá in thêm). Mốc 'một lần' đã chạy TRƯỚC
+        // đó coi như đã dùng xong, nhường cho giá gốc mới. Không có mốc này, một mốc 'một lần' đã qua đè
+        // giá gốc mãi mãi (sửa giá trong Cài đặt không ăn). Mốc hằng ngày KHÔNG bị cắt: giá theo giờ trong
+        // ngày vẫn chạy, đổi giá gốc giữa ngày không xoá giờ vàng đang chạy.
         const giaGocLuc = configs?.price_updated_at ? new Date(configs.price_updated_at).getTime() : NaN;
 
         for (const item of schedule) {
@@ -55,14 +56,19 @@ export const getCurrentPricing = (configs) => {
             } else if (item.run_at) {
                 const d = new Date(item.run_at);
                 if (isNaN(d) || d > now) continue; // một lần: chỉ tính khi đã qua
-                firedAt = d;
+                // Thêm mốc với giờ ĐÃ QUA (= áp từ lúc thêm): mốc chạy từ lúc được thêm, không phải từ run_at.
+                // id = Date.now() lúc thêm (Cài đặt). Không tính lúc thêm thì mốc thêm SAU lần đổi giá gốc
+                // nhưng chọn giờ trước đó bị coi là cũ và bị bỏ.
+                const themLuc = Number(item.id);
+                firedAt = (themLuc > 1.5e12 && themLuc <= now.getTime() && themLuc > d.getTime()) ? new Date(themLuc) : d;
+                if (firedAt.getTime() < giaGocLuc) continue;
             }
 
             if (!firedAt) continue;
             if (!best || firedAt > best.firedAt) best = { firedAt, item };
         }
 
-        if (best && !(best.firedAt.getTime() < giaGocLuc)) {
+        if (best) {
             const it = best.item;
             return {
                 price: parseInt(it.price) || base.price,
