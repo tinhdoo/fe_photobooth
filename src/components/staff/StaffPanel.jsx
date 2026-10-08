@@ -9,6 +9,14 @@ const statusLabel = {
     not_printed: 'Chưa in',
 };
 
+// Chỉ "Đã in" mới xanh. Trước đây mọi trạng thái khác "Lỗi in" đều tô xanh -> lệnh "Đang chờ" (máy in
+// chưa nhận, có thể kẹt) trông như đã in xong, nhân viên không biết để in lại.
+const statusTone = {
+    sent: 'bg-green-50 text-green-700',
+    failed: 'bg-red-50 text-red-600',
+    pending: 'bg-amber-50 text-amber-700',
+};
+
 const paymentLabel = {
     cash: 'Tiền mặt',
     qr: 'QR',
@@ -124,7 +132,6 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                     ) : (
                         <div className="space-y-3">
                             {sessions.map((session) => {
-                                const isFailed = session.printStatus === 'failed';
                                 const isPrinting = printingId?.startsWith(session.uuid);
                                 const previewUrl = session.previewUrl || session.finalImageUrl;
                                 return (
@@ -148,7 +155,7 @@ const StaffPanel = ({ onClose, embedded = false }) => {
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <h3 className="text-xl font-black text-[#1a1a2e]">{session.sessionId}</h3>
-                                                <span className={`rounded-full px-3 py-1 text-xs font-black ${isFailed ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                                                <span className={`rounded-full px-3 py-1 text-xs font-black ${statusTone[session.printStatus] || 'bg-gray-100 text-gray-600'}`}>
                                                     {statusLabel[session.printStatus] || session.printStatus}
                                                 </span>
                                             </div>

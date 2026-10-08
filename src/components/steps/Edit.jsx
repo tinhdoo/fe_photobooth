@@ -401,9 +401,16 @@ const Edit = () => {
                 });
 
                 if (allFrames.length > 0) {
+                    // Danh sách tải LẠI giữa lượt (admin sửa khung -> frame_revision đổi): giữ khung khách đang
+                    // chọn nếu nó còn trong danh sách mới, chỉ về khung đầu khi khung đó đã bị xoá. Trước 0.0.24
+                    // luôn về khung đầu -> khách đang chỉnh bỗng mất khung đã chọn, có khi in luôn khung khác.
+                    const dangChon = selectedFrameRef.current;
+                    const conKhung = dangChon && dangChon.id !== 'none'
+                        ? allFrames.find((f) => f.id === dangChon.id)
+                        : null;
                     // CHỜ áp xong frame mặc định (gồm cả config ô) rồi mới cho phép In -> ảnh in
                     // luôn có frame dù khách bấm in ngay.
-                    await handleSelectFrame(allFrames[0]);
+                    await handleSelectFrame(conKhung || allFrames[0]);
                 }
             } catch (error) {
                 console.error("Error fetching frames:", error);

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 import { isSupabaseBrowserConfigured, supabase } from '../services/supabaseClient';
 import { API_URL, CLOUD_API_URL } from '../config/api';
@@ -30,6 +30,10 @@ const controlCanonLiveView = (action) => {
 const IDLE_SUSPEND_MS = 60 * 60 * 1000; // 1 giờ không ai chạm
 const IDLE_CHECK_MS = 30 * 1000;
 const IDLE_ACTIVITY_EVENTS = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
+// Khách bỏ ngang TRƯỚC khi vào lượt (chọn bố cục / số lượng / thanh toán): không ai chạm bấy lâu thì
+// cảnh báo đếm ngược, hết giờ tự về trang chủ (xem effect cạnh resetSession).
+const PRE_SESSION_IDLE_MS = 3 * 60 * 1000;
+const PRE_SESSION_WARN_S = 30;
 
 const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
@@ -650,6 +654,59 @@ export const WorkflowProvider = ({ children }) => {
         window.location.reload();
     };
 
+    // KHÁCH BỎ NGANG TRƯỚC KHI VÀO LƯỢT. Đồng hồ phiên chỉ chạy từ lúc trả tiền xong, nên trước 0.0.24
+    // booth đứng mãi ở màn bố cục / thanh toán: live view Canon bật suốt (nóng máy, có khi cả đêm) và
+    // khách sau phải tự bấm Quay lại. Giờ: không ai chạm PRE_SESSION_IDLE_MS -> MainLayout hiện cảnh báo
+    // đếm ngược PRE_SESSION_WARN_S giây, chạm bất kỳ đâu là ở lại, hết giờ thì về trang chủ.
+    // Màn Thanh toán GIỮ lại (setIdleHold) khi khách đang trả dở: đã nhét tiền, đơn chuyển khoản còn hạn...
+    const idleHoldRef = useRef(null);
+    const setIdleHold = useCallback((fn) => { idleHoldRef.current = fn; }, []);
+    const [idleWarning, setIdleWarning] = useState(null); // số giây còn lại trước khi tự về trang chủ
+    useEffect(() => {
+        if (!(currentStep > 1 && currentStep < 3.5) || isSessionActive || timedOut) return undefined;
+
+        let lastActivity = Date.now();
+        // Chỉ dời mốc, KHÔNG tắt cảnh báo ngay: tắt ngay thì lớp phủ biến mất giữa lúc chạm và cú chạm rơi
+        // xuống nút bên dưới. Nhịp kế tiếp (≤ 1 s) tự tắt, cú chạm đã bị lớp phủ nuốt.
+        const markActivity = () => { lastActivity = Date.now(); };
+        IDLE_ACTIVITY_EVENTS.forEach((evt) =>
+            window.addEventListener(evt, markActivity, { capture: true, passive: true })
+        );
+        let daVe = false;
+        const timer = setInterval(() => {
+            if (daVe) return;
+            let giu = false;
+            try {
+                giu = !!idleHoldRef.current?.();
+            } catch {
+                giu = true; // lỗi khi hỏi thì coi như đang giữ: về nhầm trang chủ tệ hơn đứng chờ
+            }
+            if (window.location.pathname !== '/' || giu) lastActivity = Date.now();
+            const quaHan = Date.now() - lastActivity - PRE_SESSION_IDLE_MS;
+            if (quaHan < 0) {
+                setIdleWarning(null);
+                return;
+            }
+            const conLai = PRE_SESSION_WARN_S - Math.floor(quaHan / 1000);
+            if (conLai > 0) {
+                setIdleWarning(conLai);
+                return;
+            }
+            daVe = true;
+            clearInterval(timer);
+            console.warn(`[Workflow] khach bo ngang o buoc ${currentStep} -> ve trang chu`);
+            resetSession();
+        }, 1000);
+
+        return () => {
+            clearInterval(timer);
+            IDLE_ACTIVITY_EVENTS.forEach((evt) =>
+                window.removeEventListener(evt, markActivity, { capture: true })
+            );
+            setIdleWarning(null);
+        };
+    }, [currentStep, isSessionActive, timedOut]);
+
     const updateSessionData = (key, value) => {
         setSessionData((prev) => ({ ...prev, [key]: value }));
     };
@@ -678,6 +735,8 @@ export const WorkflowProvider = ({ children }) => {
                 isSessionActive,
                 timedOut,
                 savingBeforeReset,
+                idleWarning,
+                setIdleHold,
                 isIdleSuspended,
                 wakeFromIdle,
                 SESSION_DURATION,

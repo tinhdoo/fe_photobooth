@@ -11,9 +11,12 @@ const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ
 import { API_URL, CLOUD_API_URL } from '../../config/api';
 // Máy đọc tiền là phần cứng LOCAL (serial trên booth) -> luôn gọi backend local.
 const LOCAL_API_URL = API_URL;
+// Đơn chuyển khoản hết hạn sau 15 phút trên cloud (api/sepay-orders). Còn trong hạn thì khách có thể đang
+// chuyển trên điện thoại -> booth không tự về trang chủ dù lâu không ai chạm màn hình.
+const QR_GIU_PHIEN_MS = 16 * 60 * 1000;
 
 const Payment = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, configs } = useWorkflow();
+    const { nextStep, prevStep, sessionData, updateSessionData, configs, setIdleHold } = useWorkflow();
     const [method, setMethod] = useState(null);
     const [loading, setLoading] = useState(false);
     const [cashInserted, setCashInserted] = useState(0);
@@ -187,6 +190,18 @@ const Payment = () => {
     // Cập nhật ref mỗi render để socket handler (tạo 1 lần) luôn thấy giá trị hiện tại.
     methodRef.current = method;
     cashRef.current = cashInserted;
+
+    // Khách đang trả dở thì booth KHÔNG tự về trang chủ dù lâu không ai chạm (WorkflowContext): đã nhét
+    // tiền, máy đang nhận / trả tờ, đang chốt thanh toán, đã nhận chuyển khoản, hoặc còn đơn chuyển khoản
+    // trong hạn. Gán lại mỗi render -> luôn đọc trạng thái mới nhất.
+    const giuPhienRef = useRef(() => false);
+    giuPhienRef.current = () => cashRef.current > 0 || !!billPending || dangXuLyRef.current || donDaTra.length > 0
+        || donQrRef.current.some((d) => !d.paid && Date.now() - (d.taoLuc || 0) < QR_GIU_PHIEN_MS);
+    useEffect(() => {
+        if (!setIdleHold) return undefined;
+        setIdleHold(() => giuPhienRef.current());
+        return () => setIdleHold(null);
+    }, [setIdleHold]);
 
     // Đối chiếu tiền mặt với sổ của backend theo mã lượt: money_inserted bị lỡ (socket nối lại đúng lúc
     // chốt tờ) thì tờ đó vẫn được cộng. Chỉ TĂNG, không bao giờ giảm số trên màn hình.
@@ -500,6 +515,7 @@ const Payment = () => {
                         amount: Number(res.data.amount) || soTien,
                         paid: false,
                         order: res.data,
+                        taoLuc: Date.now(),
                     });
                 }
                 if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);

@@ -8,6 +8,22 @@ const getPhotoUrl = (photo) => {
     return typeof photo === 'string' ? photo : photo.url;
 };
 
+// Mọi blob URL (ảnh + video) trong một danh sách ảnh.
+const collectUrls = (arr) => (Array.isArray(arr) ? arr : []).flatMap((p) => {
+    if (!p) return [];
+    return typeof p === 'string' ? [p] : [p.url, p.videoUrl];
+});
+
+// Giải phóng blob URL của bộ ảnh cũ, trừ những URL còn được dùng.
+const revokeUnused = (urls, keep) => {
+    const dangDung = new Set(keep);
+    new Set(urls).forEach((u) => {
+        if (typeof u === 'string' && u.startsWith('blob:') && !dangDung.has(u)) {
+            try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+        }
+    });
+};
+
 const getReviewGrid = (layout) => {
     if (layout.type === 'strip') {
         return {
@@ -98,7 +114,21 @@ const Review = () => {
             const avail = (sourcePhotos || []).filter((p) => p && !used.has(p));
             let changed = false;
             for (let i = 0; i < currentLayout.photoCount; i += 1) {
-                if (!slots[i] && avail.length) { slots[i] = avail.shift(); changed = true; }
+                if (!slots[i] && avail.length) { slots[i] = avail.shift(); changed = true; used.add(slots[i]); }
+            }
+            // Hết giờ giữa lúc "Chụp lại tất cả": ô còn trống lấy lại ẢNH CŨ (ưu tiên đúng ảnh cũ của ô đó).
+            // Trước 0.0.24 ảnh cũ bị xoá ngay khi bấm chụp lại -> bản in tự động ra với ô trống.
+            const backup = sessionData.retakeBackup;
+            if (backup) {
+                const oldSlots = backup.photos || [];
+                const oldPool = [...oldSlots, ...(backup.captured || [])];
+                for (let i = 0; i < currentLayout.photoCount; i += 1) {
+                    if (slots[i]) continue;
+                    const cungO = oldSlots[i] && !used.has(oldSlots[i]) ? oldSlots[i] : null;
+                    const pick = cungO || oldPool.find((p) => p && !used.has(p));
+                    if (pick) { slots[i] = pick; used.add(pick); changed = true; }
+                }
+                updateSessionData('retakeBackup', null);
             }
             if (changed) updateSessionData('photos', slots);
             nextStep(); // -> Edit (rồi Edit tự in)
@@ -106,22 +136,38 @@ const Review = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timedOut]);
 
+    // Chụp lại xong ĐỦ ảnh (không hết giờ) -> bỏ bộ ảnh cũ đã cất, giải phóng blob URL của nó (tránh rò rỉ
+    // bộ nhớ khi khách chụp lại nhiều lần trong một lượt).
+    const retakeBackup = sessionData.retakeBackup;
+    const duAnh = displayPhotos.every(Boolean);
+    useEffect(() => {
+        if (!retakeBackup || timedOut || !duAnh) return;
+        revokeUnused(
+            [...collectUrls(retakeBackup.photos), ...collectUrls(retakeBackup.captured)],
+            [...collectUrls(sessionData.photos), ...collectUrls(sessionData.capturedPhotos)],
+        );
+        updateSessionData('retakeBackup', null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [retakeBackup, timedOut, duAnh]);
+
     const handleRetakeAll = () => {
-        // Giải phóng blob URL (ảnh + video) của TẤT CẢ ảnh cũ trước khi chụp lại từ đầu,
-        // tránh rò rỉ bộ nhớ trong phiên (chụp lại 1 tấm đã revoke qua releaseReplacedPhoto).
-        const collectUrls = (arr) => (Array.isArray(arr) ? arr : []).flatMap((p) => {
-            if (!p) return [];
-            return typeof p === 'string' ? [p] : [p.url, p.videoUrl];
-        });
-        const urls = new Set([...collectUrls(sessionData.photos), ...collectUrls(sessionData.capturedPhotos)]);
-        urls.forEach((u) => {
-            if (typeof u === 'string' && u.startsWith('blob:')) {
-                try { URL.revokeObjectURL(u); } catch { /* ignore */ }
-            }
+        // CẤT bộ ảnh cũ thay vì xoá ngay: hết giờ giữa lúc chụp lại thì ô còn trống lấy lại ảnh cũ (effect
+        // timedOut ở trên). Chụp lại xong đủ ảnh thì effect bên trên mới giải phóng. Bộ cất từ lần chụp lại
+        // trước (hiếm: chụp lại tất cả hai lần) thì giải phóng luôn, trừ ảnh còn trong bộ hiện tại.
+        const cu = sessionData.retakeBackup;
+        if (cu) {
+            revokeUnused(
+                [...collectUrls(cu.photos), ...collectUrls(cu.captured)],
+                [...collectUrls(sessionData.photos), ...collectUrls(sessionData.capturedPhotos)],
+            );
+        }
+        updateSessionData('retakeBackup', {
+            photos: [...(sessionData.photos || [])],
+            captured: [...(sessionData.capturedPhotos || [])],
         });
 
         updateSessionData('photos', []);
-        updateSessionData('capturedPhotos', []); // dọn nguồn để không giữ tham chiếu ảnh đã revoke
+        updateSessionData('capturedPhotos', []); // ảnh cũ nằm trong retakeBackup, nguồn chụp mới bắt đầu rỗng
         // Xoá retakeIndex còn sót (vd lượt "chụp lại 1 tấm" trước bị lỗi/thoát dở): nếu để sót,
         // Capture sẽ vào nhánh retake với nguồn RỖNG -> mảng thưa, ô trống, count sai.
         updateSessionData('retakeIndex', null);
