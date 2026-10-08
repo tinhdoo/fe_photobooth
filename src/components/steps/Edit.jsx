@@ -157,7 +157,7 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 });
 
 const Edit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
+    const { nextStep, prevStep, resetSession, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const captureRef = useRef(null);
     // --- STATE ---
@@ -297,6 +297,8 @@ const Edit = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isFiltering, setIsFiltering] = useState(false);
     const [errorDialog, setErrorDialog] = useState({ show: false, title: '', message: '' });
+    // Đang tải cấu hình ô của khung vừa chọn -> khoá In (in lúc này là vẽ theo lưới mặc định, lệch ô).
+    const [dangTaiKhung, setDangTaiKhung] = useState(false);
 
     // Preview QR Code State
     const [previewQrUrl, setPreviewQrUrl] = useState(null);
@@ -537,13 +539,16 @@ const Edit = () => {
 
     // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
     const isPrintingRef = useRef(false);
+    // Mã lượt của LẦN THỬ IN đầu tiên trong màn này: bấm In lại sau lỗi/timeout dùng lại đúng mã đó
+    // (xem handlePrint).
+    const maLanInRef = useRef(null);
     useEffect(() => {
         // CHỜ khung load + áp XONG (framesLoaded chỉ = true SAU khi mount đã await chọn frame[0] +
         // áp config ô). In trước lúc này -> khung/ô chưa áp -> layout HỎNG/LỆCH Ô (đã gặp ở mini-special
         // khi hết giờ). Khi framesLoaded=true thì frameConfig đã được commit -> handlePrint (closure của
         // render này) đọc đúng khung. Gọi THẲNG handlePrint (KHÔNG dùng setTimeout(handlePrint) vì bản
         // đó đóng băng frameConfig CŨ -> vẽ sai ô).
-        if (!timedOut || isPrintingRef.current || !framesLoaded) return;
+        if (!timedOut || isPrintingRef.current || !framesLoaded || isFiltering || dangTaiKhung) return;
         console.log("Timeout: Auto-printing...");
         isPrintingRef.current = true;
         (async () => {
@@ -559,8 +564,18 @@ const Edit = () => {
             handlePrint();
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timedOut, framesLoaded]);
+    }, [timedOut, framesLoaded, isFiltering, dangTaiKhung]);
 
+
+    // Lỗi lưu ảnh SAU khi đã in mà không ai bấm gì (khách đã cầm ảnh đi) -> 2 phút sau tự về trang chủ,
+    // không để booth đứng ở hộp thoại lỗi. Deps chỉ cờ hộp thoại: resetSession đổi tham chiếu mỗi giây
+    // (đồng hồ phiên) sẽ làm hẹn giờ đặt lại mãi (xem Result.jsx).
+    useEffect(() => {
+        if (!errorDialog.show || !errorDialog.daIn) return undefined;
+        const t = setTimeout(() => { resetSession(); }, 2 * 60 * 1000);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [errorDialog.show, errorDialog.daIn]);
 
     // --- HANDLERS ---
 
@@ -568,6 +583,7 @@ const Edit = () => {
     const handleSelectFrame = async (frame) => {
         setSelectedFrame(frame);
         selectedFrameRef.current = frame;
+        setDangTaiKhung(false);
 
         // Frame màu trơn / none -> không có config layout
         if (!(frame.url && frame.layout && frame.name)) {
@@ -585,6 +601,7 @@ const Edit = () => {
 
         // Lần đầu của frame này: clear tạm rồi fetch + cache lại
         setFrameConfig({ boxes: [] });
+        setDangTaiKhung(true);
         try {
             const res = await axios.get(`${FRAME_API_URL}/api/frames`, {
                 params: { layout: frame.layout, name: frame.name, resource: 'config' }
@@ -597,6 +614,9 @@ const Edit = () => {
             }
         } catch (error) {
             console.error("Error fetching config:", error);
+        } finally {
+            // Khách đã chọn khung khác trong lúc tải -> lần chọn đó tự lo cờ của nó.
+            if (selectedFrameRef.current?.id === frame.id) setDangTaiKhung(false);
         }
     };
 
@@ -679,6 +699,21 @@ const Edit = () => {
         });
 
         return res.data;
+    };
+
+    // Timeout/mất kết nối KHÔNG có nghĩa là in hỏng: backend tạo PrintJob rồi mới lưu file và xếp
+    // hàng, nên khi axios huỷ ở 30s thì lệnh in THƯỜNG VẪN ĐANG CHẠY và sẽ ra giấy. Nếu coi là
+    // thất bại, khách/nhân viên bấm In lại -> gửi lệnh thứ hai -> RA 2 TẤM, tốn giấy.
+    // Hỏi lại backend xem đã có job mang session này chưa rồi mới kết luận.
+    const wasPrintQueued = async (sessionId) => {
+        if (!sessionId) return false;
+        try {
+            const res = await axios.get(`${API_URL}/api/print/jobs`, { params: { limit: 30 }, timeout: 8000 });
+            // Job 'failed' (không thấy máy in...) = CHƯA in -> để khách in lại (backend cho phép).
+            return (Array.isArray(res.data) ? res.data : []).some((j) => j && j.session_uuid === sessionId && j.status !== 'failed');
+        } catch {
+            return false; // không hỏi được -> coi như chưa in, để khách còn cơ hội in lại
+        }
     };
 
     const canvasToBlob = (canvas, type = 'image/png', quality) => new Promise((resolve) => {
@@ -766,7 +801,8 @@ const Edit = () => {
     // in lại cũng theo slider hiện tại. Frontend không còn nung màu vào file in nữa.
 
     const handlePrint = async () => {
-        if (isUploading) return;
+        // Đang áp filter / tải cấu hình khung -> ảnh in thiếu hiệu ứng hoặc lệch ô (0.0.24).
+        if (isUploading || isFiltering || dangTaiKhung) return;
         setIsUploading(true);
 
         try {
@@ -787,7 +823,11 @@ const Edit = () => {
             // Dùng lại sessionId đã in ra QR (nếu đây là lần vào lại/retry sau khi in xong) -> QR trên
             // tấm ảnh đã in vẫn trỏ đúng album; lần in đầu sinh UUID mới. Lưu ở sessionData để SỐNG
             // QUA việc quay lại Review rồi vào lại Edit (ref của component sẽ mất khi Edit remount).
-            const sessionId = sessionData.printedSessionId || genUuid();
+            // Chưa in được (lỗi / timeout chưa rõ) mà bấm In lại -> DÙNG LẠI mã của lần thử trước: backend thấy
+            // mã này đã có job chưa lỗi thì không in tấm thứ hai (0.0.24). Trước đây mỗi lần bấm một mã mới ->
+            // request cũ còn chạy ngầm + request mới = 2 tấm.
+            if (!maLanInRef.current) maLanInRef.current = genUuid();
+            const sessionId = sessionData.printedSessionId || maLanInRef.current;
             const albumBaseUrl = CLOUD_API_URL || window.location.origin;
             const downloadUrl = `${albumBaseUrl}/album/${sessionId}`;
 
@@ -1063,13 +1103,21 @@ const Edit = () => {
                     // lần In sau KHÔNG ra tấm thứ 2; giữ luôn sessionId để QR đã in khớp album tạo sau.
                     updateSessionData('printedSessionId', sessionId);
                 } catch (printError) {
-                    printOk = false;
-                    const data = printError.response?.data;
-                    const available = data?.available_printers?.length
-                        ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
-                        : '';
-                    const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
-                    setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+                    // Không có response (timeout / rớt kết nối) -> lệnh in có thể ĐÃ được nhận và
+                    // đang chạy. Xác minh trước khi báo lỗi, tránh in ra tấm thứ hai khi bấm In lại.
+                    const noResponse = !printError.response;
+                    if (noResponse && await wasPrintQueued(sessionId)) {
+                        console.warn('Print request timed out but job IS queued -> coi nhu da in:', sessionId);
+                        updateSessionData('printedSessionId', sessionId);
+                    } else {
+                        printOk = false;
+                        const data = printError.response?.data;
+                        const available = data?.available_printers?.length
+                            ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
+                            : '';
+                        const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
+                        setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
+                    }
                 }
             }
             // IN LỖI -> DỪNG: KHÔNG tạo session / KHÔNG sang Result. Trước đây catch không return nên
@@ -1216,10 +1264,14 @@ const Edit = () => {
                     setPendingMediaUpload(bgUpload);
                 } catch (err) {
                     console.error("Upload process failed:", err);
+                    // Ảnh ĐÃ in (lệnh in đi trước phần cloud). Cho hai lối ra: lưu lại (không in thêm) hoặc kết
+                    // thúc lượt. Trước 0.0.24 chỉ có "Đã hiểu" -> booth đứng mãi ở màn này, còn Quay lại ->
+                    // Chụp lại thì được in thêm một tấm miễn phí.
                     setErrorDialog({
                         show: true,
                         title: 'Không thể lưu ảnh',
-                        message: 'Có lỗi khi lưu ảnh, vui lòng thử lại.',
+                        message: 'Ảnh đã in xong nhưng chưa lưu được lên album online.\nBấm Thử lại, hoặc Kết thúc để về trang chủ.',
+                        daIn: true,
                     });
                 } finally {
                     setIsUploading(false);
@@ -1275,15 +1327,17 @@ const Edit = () => {
             className="flex flex-col h-full w-full p-6 bg-[#FFF8E7] relative bg-cover bg-center"
             style={{ backgroundImage: configs?.['bg_filter-adjustment'] ? `url('${configs['bg_filter-adjustment']}')` : 'none' }}
         >
-            {/* Back Button */}
-            <button
-                onClick={prevStep}
-                className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white rounded-full transition-none font-serif font-bold shadow-sm border border-[#D5B895]/20 z-20 active:scale-95"
-                style={{ color: primaryTextColor }}
-            >
-                <ArrowLeft size={24} />
-                <span>Quay Lại</span>
-            </button>
+            {/* Back Button — ẩn khi lượt đã in: Quay lại -> Chụp lại xoá dấu đã in -> in thêm tấm miễn phí. */}
+            {!sessionData.printedSessionId && (
+                <button
+                    onClick={prevStep}
+                    className="absolute top-6 left-6 flex items-center gap-2 px-6 py-3 bg-white rounded-full transition-none font-serif font-bold shadow-sm border border-[#D5B895]/20 z-20 active:scale-95"
+                    style={{ color: primaryTextColor }}
+                >
+                    <ArrowLeft size={24} />
+                    <span>Quay Lại</span>
+                </button>
+            )}
 
             <motion.h2
                 initial={{ opacity: 0, y: -20 }}
@@ -1605,10 +1659,10 @@ const Edit = () => {
 
                     <motion.button
                         onClick={handlePrint}
-                        disabled={isUploading || !framesLoaded}
-                        className={`bg-[#D5B895] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest transition-opacity duration-300 ${isUploading ? 'opacity-70 cursor-not-allowed' : (!framesLoaded ? 'opacity-40 cursor-not-allowed' : 'active:scale-95')}`}
+                        disabled={isUploading || !framesLoaded || isFiltering || dangTaiKhung}
+                        className={`bg-[#D5B895] text-white text-xl px-20 py-4 rounded-[2rem] shadow-xl font-bold font-serif uppercase tracking-widest transition-opacity duration-300 ${isUploading ? 'opacity-70 cursor-not-allowed' : ((!framesLoaded || isFiltering || dangTaiKhung) ? 'opacity-40 cursor-not-allowed' : 'active:scale-95')}`}
                     >
-                        {isUploading ? "Đang xử lý..." : "In Ảnh"}
+                        {isUploading ? "Đang xử lý..." : isFiltering ? "Đang áp hiệu ứng..." : dangTaiKhung ? "Đang tải khung..." : "In Ảnh"}
                     </motion.button>
                 </div>
             </div>
@@ -1644,13 +1698,32 @@ const Edit = () => {
                         <p className="mx-auto mb-6 max-w-sm whitespace-pre-line text-base font-semibold leading-relaxed text-[#7B5E43]">
                             {errorDialog.message}
                         </p>
-                        <button
-                            type="button"
-                            onClick={() => setErrorDialog({ show: false, title: '', message: '' })}
-                            className="min-h-12 rounded-2xl bg-[#D5B895] px-10 text-base font-extrabold text-white shadow-md active:scale-95"
-                        >
-                            Đã hiểu
-                        </button>
+                        {errorDialog.daIn ? (
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setErrorDialog({ show: false, title: '', message: '' }); handlePrint(); }}
+                                    className="min-h-12 rounded-2xl bg-[#D5B895] px-8 text-base font-extrabold text-white shadow-md active:scale-95"
+                                >
+                                    Thử lại
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => resetSession()}
+                                    className="min-h-12 rounded-2xl border-2 border-[#D5B895] bg-white px-8 text-base font-extrabold text-[#7B5E43] shadow-md active:scale-95"
+                                >
+                                    Kết thúc
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setErrorDialog({ show: false, title: '', message: '' })}
+                                className="min-h-12 rounded-2xl bg-[#D5B895] px-10 text-base font-extrabold text-white shadow-md active:scale-95"
+                            >
+                                Đã hiểu
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

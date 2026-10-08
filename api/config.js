@@ -16,6 +16,8 @@ const DEFAULT_CONFIG = {
     brand_text_secondary: '#5E6B78',
 };
 
+const PRICE_KEYS = ['price', 'print_price', 'mobile_price', 'mobile_print_price'];
+
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
     const { data, error } = await supabase.storage.listBuckets();
@@ -99,11 +101,20 @@ export default async function handler(req, res) {
             // booth. GET vẫn mở (booth đọc không có token).
             if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
             const current = await readConfig(supabase, bucket);
+            const body = req.body || {};
+            const now = new Date().toISOString();
             const next = {
                 ...current,
-                ...(req.body || {}),
-                updated_at: new Date().toISOString(),
+                ...body,
+                updated_at: now,
             };
+            // Mốc đổi GIÁ GỐC (server tự đóng, không nhận từ client). Booth bỏ qua mốc lịch giá đã chạy
+            // TRƯỚC mốc này (getCurrentPricing, _apply_due_price_schedule). Trước 2026-10-08 một mốc
+            // 'một lần' đã qua đè giá gốc mãi mãi: sửa giá trong Cài đặt không có tác dụng gì.
+            const doiGia = PRICE_KEYS.some((key) => body[key] !== undefined && String(body[key]) !== String(current[key] ?? ''));
+            if (doiGia) next.price_updated_at = now;
+            else if (current.price_updated_at) next.price_updated_at = current.price_updated_at;
+            else delete next.price_updated_at;
             await writeConfig(supabase, bucket, next);
             return json(res, 200, next);
         }

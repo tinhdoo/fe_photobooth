@@ -36,6 +36,10 @@ export const getCurrentPricing = (configs) => {
         const now = new Date();
         const DAY_MS = 24 * 60 * 60 * 1000;
         let best = null; // { firedAt: Date, item }
+        // Mốc admin đổi GIÁ GỐC (cloud tự đóng khi lưu giá). Đổi giá gốc cũng là một "mốc": mốc lịch
+        // nào đã chạy TRƯỚC đó thì nhường cho giá gốc mới. Không có mốc này, một mốc 'một lần' đã qua
+        // đè giá gốc mãi mãi (sửa giá trong Cài đặt không ăn).
+        const giaGocLuc = configs?.price_updated_at ? new Date(configs.price_updated_at).getTime() : NaN;
 
         for (const item of schedule) {
             if (!item || item.enabled === false) continue;
@@ -58,7 +62,7 @@ export const getCurrentPricing = (configs) => {
             if (!best || firedAt > best.firedAt) best = { firedAt, item };
         }
 
-        if (best) {
+        if (best && !(best.firedAt.getTime() < giaGocLuc)) {
             const it = best.item;
             return {
                 price: parseInt(it.price) || base.price,

@@ -37,7 +37,9 @@ const CLOUD_SYNC_KEYS = [
     'session_timeout', 'mobile_session_timeout', 'countdown', 'hotfolder_capture_timeout', 'canon_capture_timeout',
     'bg_welcome', 'bg_source-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
     'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_print-photo', 'bg_wait-print-photo', 'bg_qr-photo',
-    'brand_text_primary', 'brand_text_secondary'
+    'brand_text_primary', 'brand_text_secondary',
+    // Mốc admin đổi giá gốc (0.0.24): mốc lịch giá chạy trước đó nhường cho giá gốc (utils/pricing.js).
+    'price_updated_at',
 ];
 
 const DEFAULT_CONFIGS = {
@@ -201,8 +203,24 @@ export const WorkflowProvider = ({ children }) => {
     };
 
     const applyRemoteConfigs = (nextConfigs = {}) => {
+        // Booth chỉ nhận các khoá đồng bộ (CLOUD_SYNC_KEYS) như fetchConfigs. Cấu hình trên cloud còn có
+        // camera_mode (mặc định 'webcam'), staff_pin, print_*... — trước 0.0.24 sự kiện realtime áp NGUYÊN
+        // khối: admin lưu giá một cái là booth chuyển sang webcam, đổi PIN nhân viên, đổi màu in.
+        let incoming = nextConfigs;
+        if (isLocalApp()) {
+            incoming = {};
+            CLOUD_SYNC_KEYS.forEach((key) => {
+                if (nextConfigs[key] !== undefined) incoming[key] = nextConfigs[key];
+            });
+            if (!Object.keys(incoming).length) return;
+            fetch(apiPath('/api/config'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(incoming),
+            }).catch((error) => console.error('Failed to sync realtime cloud config:', error));
+        }
         setConfigs(prev => {
-            const normalized = normalizeConfigs(nextConfigs, prev);
+            const normalized = normalizeConfigs(incoming, prev);
             if (sameConfig(prev, normalized)) return prev;
             cacheConfigs(normalized);
             return normalized;
@@ -252,7 +270,14 @@ export const WorkflowProvider = ({ children }) => {
     }, []);
 
     // Initialize mode from localStorage (fallback)
-    const [isEventMode, setIsEventMode] = useState(false);
+    // Khởi đầu = chế độ cloud xác nhận lần gần nhất (BOOTH_MODE), không mặc định 'payment' rồi chờ mạng.
+    const [isEventMode, setIsEventMode] = useState(() => {
+        try {
+            return localStorage.getItem('BOOTH_MODE') === 'event';
+        } catch {
+            return false;
+        }
+    });
     // Lưu id (numeric) bản ghi thiết bị trên CLOUD -> để nút gạt Event/Payment ghi bền lên cloud.
     const cloudDeviceIdRef = useRef(null);
 
@@ -266,7 +291,20 @@ export const WorkflowProvider = ({ children }) => {
 
         const deviceId = getDeviceId();
 
-        const applyDeviceMode = (mode) => {
+        // Chế độ Trả phí/Sự kiện: có cloud thì CHỈ cloud quyết định (đổi ở trang Cài đặt, PUT chỉ admin).
+        // Trước 0.0.24 nhịp tim áp chế độ của backend local rồi mới tới chế độ cloud -> mỗi 60 s lật qua
+        // lại giữa hai giá trị, mất mạng thì đứng luôn ở giá trị local (có thể là 'event' = chụp miễn phí).
+        // Giờ: cloud trả về -> áp + lưu BOOTH_MODE làm dự phòng; cloud lỗi -> giữ chế độ cloud xác nhận
+        // lần gần nhất. Không cấu hình cloud (máy chạy độc lập) -> theo backend local như cũ.
+        const applyDeviceMode = (mode, xacNhan = false) => {
+            if (mode !== 'event' && mode !== 'payment') return;
+            if (xacNhan) {
+                try {
+                    localStorage.setItem('BOOTH_MODE', mode);
+                } catch {
+                    // bỏ qua (private mode / đầy bộ nhớ)
+                }
+            }
             setIsEventMode(prev => {
                 const next = mode === 'event';
                 return prev === next ? prev : next;
@@ -312,12 +350,10 @@ export const WorkflowProvider = ({ children }) => {
 
                 if (res.ok) {
                     const data = await res.json();
-                    applyDeviceMode(data.mode);
+                    if (!CLOUD_API_URL) applyDeviceMode(data.mode, true);
                 }
             } catch (error) {
                 console.error("Device sync failed:", error);
-                // Fallback to local setting if offline
-                setIsEventMode(localStorage.getItem('BOOTH_MODE') === 'event');
             }
 
             if (CLOUD_API_URL) {
@@ -330,7 +366,7 @@ export const WorkflowProvider = ({ children }) => {
                     if (cloudRes.ok) {
                         const data = await cloudRes.json();
                         if (data.id) cloudDeviceIdRef.current = data.id;
-                        applyDeviceMode(data.mode);
+                        applyDeviceMode(data.mode, true);
                     }
                 } catch (error) {
                     console.warn("Cloud device sync failed:", error);
@@ -358,7 +394,7 @@ export const WorkflowProvider = ({ children }) => {
                     },
                     (payload) => {
                         const row = payload.new || payload.old;
-                        if (row?.mode) applyDeviceMode(row.mode);
+                        if (row?.mode) applyDeviceMode(row.mode, true);
                     }
                 )
                 .subscribe();
@@ -374,7 +410,9 @@ export const WorkflowProvider = ({ children }) => {
         const newMode = !isEventMode;
         const modeStr = newMode ? 'event' : 'payment';
         setIsEventMode(newMode);
-        localStorage.setItem('BOOTH_MODE', modeStr);
+        // Có cloud: cloud quyết định, nút gạt chỉ có tác dụng tới nhịp tim kế -> KHÔNG ghi BOOTH_MODE,
+        // kẻo mất mạng thì chế độ gạt tay thành vĩnh viễn.
+        if (!CLOUD_API_URL) localStorage.setItem('BOOTH_MODE', modeStr);
 
         // GHI BỀN vào DB (local + cloud). Trước đây chỉ set localStorage -> mỗi 60s heartbeat đọc
         // mode cũ trong DB rồi applyDeviceMode() ghi đè ngược -> nút gạt "không ăn", máy tưởng
@@ -482,6 +520,16 @@ export const WorkflowProvider = ({ children }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ idle: false }),
         }).catch(() => { });
+        // Trang kiosk vừa (tải lại) mở = không ai đang ở màn tiền mặt. Tải lại ĐÚNG LÚC khách ở màn tiền
+        // mặt thì không ai gửi accepting:false -> máy đọc tiền vẫn mở, đèn sáng, nuốt tiền mà không lượt nào
+        // nhận (0.0.24). Chỉ trang kiosk '/': mở /admin ở tab khác không được tắt hộ khách đang trả tiền.
+        if (window.location.pathname === '/') {
+            fetch(apiPath('/api/bill/accept'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accepting: false }),
+            }).catch(() => { });
+        }
     }, []);
 
     // Phát hiện booth rảnh -> tạm ngưng để Windows được ngủ.

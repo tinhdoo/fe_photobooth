@@ -197,13 +197,16 @@ const Payment = () => {
                 timeout: 3000,
             });
             const tong = Number(data?.tong_luot);
-            if (!Number.isFinite(tong) || tong <= cashRef.current) return;
-            console.warn(`[Payment] doi chieu tien mat: man hinh ${cashRef.current}, backend ${tong} -> lay ${tong}`);
-            cashRef.current = tong;
-            setCashInserted((prev) => Math.max(prev, tong));
-            setBillPending(null);
+            if (Number.isFinite(tong) && tong > cashRef.current) {
+                console.warn(`[Payment] doi chieu tien mat: man hinh ${cashRef.current}, backend ${tong} -> lay ${tong}`);
+                cashRef.current = tong;
+                setCashInserted((prev) => Math.max(prev, tong));
+                setBillPending(null);
+            }
+            return data;
         } catch (e) {
             // backend chưa trả lời -> lần sau
+            return null;
         }
     }, []);
 
@@ -354,14 +357,6 @@ const Payment = () => {
         return () => clearTimeout(t);
     }, [billPending, doiChieuTienMat]);
 
-    // Ở màn tiền mặt: đối chiếu định kỳ với sổ backend (rẻ: không đụng cổng COM) — lưới an toàn cho mọi
-    // money_inserted bị lỡ mà socket không hề báo mất kết nối.
-    useEffect(() => {
-        if (method !== 'cash') return undefined;
-        const t = setInterval(doiChieuTienMat, 5000);
-        return () => clearInterval(t);
-    }, [method, doiChieuTienMat]);
-
     // Gửi trạng thái nhận tiền TUẦN TỰ: một request đang bay tại một thời điểm, xong thì gửi trạng
     // thái MỚI NHẤT nếu đã đổi. Vì sao: React chạy cleanup (false) rồi effect (true) trong cùng một
     // nhịp -> hai POST bay song song trên hai kết nối; backend eventlet xử lý theo thứ tự socket sẵn
@@ -403,6 +398,22 @@ const Payment = () => {
             sendBillAccept(false);
         };
     }, [method, conPhaiTra, loading, dangXuLy, sendBillAccept]);
+
+    // Ở màn tiền mặt: đối chiếu định kỳ với sổ backend (rẻ: không đụng cổng COM) — lưới an toàn cho mọi
+    // money_inserted bị lỡ mà socket không hề báo mất kết nối. Lần hỏi này (kèm mã lượt) cũng là nhịp
+    // "kiosk còn sống": im quá 60 s backend tự tắt nhận tiền (0.0.24). Bị tắt nhầm (mạng nội bộ nghẽn)
+    // mà vẫn đang muốn nhận -> bật lại.
+    useEffect(() => {
+        if (method !== 'cash') return undefined;
+        const t = setInterval(async () => {
+            const data = await doiChieuTienMat();
+            if (data?.accepting === false && billWantRef.current && !billInFlightRef.current) {
+                console.warn('[Payment] backend da tat nhan tien trong khi van o man tien mat -> bat lai');
+                sendBillAccept(true);
+            }
+        }, 5000);
+        return () => clearInterval(t);
+    }, [method, doiChieuTienMat, sendBillAccept]);
 
     // Rời màn tiền mặt -> xoá trạng thái máy đọc tiền, lần vào sau lại bắt đầu từ "Đang kết nối…"
     // (backend đã đóng cổng, vào lại sẽ mở lại và emit bill_status mới).
