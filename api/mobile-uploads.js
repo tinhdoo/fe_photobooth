@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
+import { SESSION_ID_RE } from '../lib/uploads.js';
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
@@ -57,6 +58,8 @@ export default async function handler(req, res) {
         if (!sessionId) {
             return json(res, 400, { error: 'Missing session_id' });
         }
+        // Ghép vào đường dẫn storage ở nhánh dự phòng -> chặn '../' (liệt kê + ký URL file ngoài mobile/).
+        if (!SESSION_ID_RE.test(sessionId)) return json(res, 400, { error: 'Invalid session_id' });
 
         const supabase = getSupabaseAdmin();
         const { data, error } = await supabase

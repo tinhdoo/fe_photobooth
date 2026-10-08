@@ -16,7 +16,9 @@ const DEFAULT_CONFIG = {
     brand_text_secondary: '#5E6B78',
 };
 
-const PRICE_KEYS = ['price', 'print_price', 'mobile_price', 'mobile_print_price'];
+// Chỉ giá gói và giá in thêm của booth. Giá điện thoại là sản phẩm riêng: nếu đổi nó cũng đóng dấu thì mốc
+// lịch 'một lần' đang chạy cho giá booth bị huỷ theo -> giá khách trả ở booth đổi bất ngờ.
+const PRICE_KEYS = ['price', 'print_price'];
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';

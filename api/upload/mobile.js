@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../../lib/supabase.js';
+import { SESSION_ID_RE, sniffMedia } from '../../lib/uploads.js';
 
 export const config = {
     api: {
@@ -74,17 +75,21 @@ export default async function handler(req, res) {
         const slotIndex = Number.isFinite(Number(rawSlotIndex)) ? Number(rawSlotIndex) : null;
 
         if (!sessionId) return json(res, 400, { error: 'Missing session_id' });
+        // session_id ghép vào đường dẫn storage: trước 2026-10-08 '../../...' đi được ra ngoài thư mục mobile/
+        // (thư viện storage không mã hoá đường dẫn) bằng quyền service-role.
+        if (!SESSION_ID_RE.test(sessionId)) return json(res, 400, { error: 'Invalid session_id' });
         if (!file) return json(res, 400, { error: 'Missing file' });
 
         const supabase = getSupabaseAdmin();
         const bucket = await resolveBucket(supabase);
-        const originalName = file.originalFilename || 'photo.jpg';
-        const extension = originalName.includes('.') ? originalName.split('.').pop().toLowerCase() : 'jpg';
-        const objectPath = `mobile/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
         const buffer = await fs.readFile(file.filepath);
+        // Ảnh từ điện thoại: chỉ JPEG/PNG/WebP, đuôi + content-type theo byte đầu (không theo tên file).
+        const media = sniffMedia(buffer);
+        if (!media || !media.type.startsWith('image/')) return json(res, 415, { error: 'Chỉ nhận ảnh JPEG/PNG/WebP' });
+        const objectPath = `mobile/${sessionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${media.ext}`;
 
         await uploadToBucket(supabase, bucket, objectPath, buffer, {
-                contentType: file.mimetype || 'image/jpeg',
+                contentType: media.type,
                 upsert: false,
         });
 

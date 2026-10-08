@@ -1,6 +1,7 @@
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 import { deleteR2Object } from '../lib/r2.js';
 import { requireActiveAdmin } from '../lib/auth.js';
+import { SESSION_ID_RE } from '../lib/uploads.js';
 
 async function resolveBucket(supabase) {
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
@@ -64,6 +65,10 @@ function albumPhoto(photo) {
 function albumSession(row) {
     const full = normalizeSession(row);
     if (!full) return null;
+    // Hết hạn: ảnh đã/đang bị dọn -> chỉ báo trạng thái (ViewPage hiện "Liên kết đã hết hạn").
+    if (full.status === 'expired') {
+        return { uuid: full.uuid, status: 'expired', created_at: full.created_at, expires_at: full.expires_at };
+    }
     const meta = full.meta_data || {};
     return {
         uuid: full.uuid,
@@ -82,12 +87,14 @@ function albumSession(row) {
     };
 }
 
-// Mã lượt do kiosk sinh (crypto.randomUUID). Mã còn được ghép vào đường dẫn storage
-// ('sessions/<uuid>.json') -> chặn '/', '..' để không trỏ ra file khác (config/app.json...).
-const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
-
 // Giá một lượt chụp hợp lệ: 0 (sự kiện) .. 10 triệu. Số âm từng lọt vào doanh thu (trừ bớt tiền thật).
 const MAX_SESSION_AMOUNT = 10000000;
+
+// Khung nhiều nhất 9 ô; 24 là dư. Không giới hạn thì một POST ghi mảng tuỳ ý vào DB và vào danh sách cron xoá.
+const MAX_SESSION_PHOTOS = 24;
+
+// Kiosk gửi lần 2 (ảnh gốc + video) vài phút sau lần 1. Quá cửa sổ này không còn lần gửi hợp lệ nào.
+const SESSION_FILL_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 function buildSession(body) {
     const uuid = String(body.session_id || body.uuid || '').trim();
@@ -96,7 +103,7 @@ function buildSession(body) {
         layout_id: body.layout_id || 'strip_4',
         composite_url: body.composite_url || null,
         composite_public_id: body.composite_public_id || null,
-        photos: Array.isArray(body.photos) ? body.photos : [],
+        photos: Array.isArray(body.photos) ? body.photos.slice(0, MAX_SESSION_PHOTOS) : [],
         payment_method: body.payment_method || 'cash',
         amount: Number(body.amount || 0),
         meta_data: body.meta_data || {},
@@ -122,6 +129,12 @@ async function saveSession(supabase, session, retry = true) {
     if (findError) throw findError;
 
     if (existing) {
+        // Lượt hết hạn: ảnh đã bị dọn, điền lại là tạo file không ai dọn nữa (cron bỏ qua dòng 'expired').
+        // Lượt quá cửa sổ gửi: chỉ có thể là người cầm mã QR cũ thay ảnh vào album -> giữ nguyên.
+        const createdMs = new Date(existing.created_at || 0).getTime();
+        if (isSessionExpired(existing) || !(Date.now() - createdMs < SESSION_FILL_WINDOW_MS)) {
+            return { row: existing, created: false };
+        }
         const patch = {};
         const oldPhotos = Array.isArray(existing.photos) ? existing.photos : [];
         if (!oldPhotos.length && session.photos.length) patch.photos = session.photos;
@@ -155,7 +168,9 @@ async function saveSession(supabase, session, retry = true) {
 // public_id do kiosk gửi lên (POST không đăng nhập) -> trước 2026-10-08 ai cũng ghi được
 // 'tomato/config/app.json' hay 'r2:releases/...' vào một lượt rồi chờ lượt hết hạn để cron XOÁ HỘ.
 // Chỉ xoá file nằm trong thư mục ảnh khách. 'photobooth/' = backend booth cũ upload thẳng Supabase.
-const SUPABASE_SESSION_PREFIXES = ['booth/', 'cloud/', 'mobile/', 'sessions/', 'photobooth/'];
+// Không có 'sessions/' (JSON lượt của người khác) và 'cloud/' (không còn code nào ghi; file cũ ở đó cron
+// vẫn dọn theo tuổi ở bước quét mồ côi).
+const SUPABASE_SESSION_PREFIXES = ['booth/', 'mobile/', 'photobooth/'];
 const R2_SESSION_PREFIXES = ['booth/'];
 
 function isSessionStoragePath(path, prefixes) {
@@ -194,11 +209,19 @@ function collectSessionR2Keys(session) {
     return Array.from(keys);
 }
 
-async function removeR2Keys(keys) {
+// Song song có giới hạn: cron xử lý tới 200 lượt x ~10 file; xoá tuần tự (~0,1-0,2 s/file) vượt giới hạn
+// thời gian của function -> lần chạy bị cắt giữa chừng.
+async function removeR2Keys(keys, concurrency = 16) {
     let deleted = 0;
-    for (const key of keys) {
-        try { await deleteR2Object(key); deleted += 1; } catch { /* best-effort */ }
-    }
+    let next = 0;
+    const worker = async () => {
+        while (next < keys.length) {
+            const key = keys[next];
+            next += 1;
+            try { await deleteR2Object(key); deleted += 1; } catch { /* best-effort */ }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, keys.length) }, worker));
     return deleted;
 }
 

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
 import { getSupabaseAdmin, handleOptions, json, methodNotAllowed } from '../lib/supabase.js';
 import { photosUseR2, putR2Object, r2PublicUrl } from '../lib/r2.js';
+import { sniffMedia } from '../lib/uploads.js';
 
 export const config = {
     api: {
@@ -26,20 +27,6 @@ function parseForm(req) {
 
 function firstValue(value) {
     return Array.isArray(value) ? value[0] : value;
-}
-
-// Loại file xác định bằng BYTE ĐẦU, không tin tên/kiểu do máy gửi. Trước 2026-10-08 đuôi lấy từ tên
-// file và content-type lấy từ request: ai cũng upload được .html/.svg chạy script trên domain ảnh
-// công khai (R2/Supabase) để lừa đảo. Kiosk chỉ gửi ảnh ghép/ảnh gốc (PNG/JPEG) và motion (WebM/MP4).
-function sniffMedia(buffer) {
-    const b = buffer || Buffer.alloc(0);
-    const at = (offset, bytes) => bytes.every((v, i) => b[offset + i] === v);
-    if (at(0, [0xff, 0xd8, 0xff])) return { ext: 'jpg', type: 'image/jpeg' };
-    if (at(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return { ext: 'png', type: 'image/png' };
-    if (at(0, [0x52, 0x49, 0x46, 0x46]) && at(8, [0x57, 0x45, 0x42, 0x50])) return { ext: 'webp', type: 'image/webp' };
-    if (at(0, [0x1a, 0x45, 0xdf, 0xa3])) return { ext: 'webm', type: 'video/webm' };
-    if (at(4, [0x66, 0x74, 0x79, 0x70])) return { ext: 'mp4', type: 'video/mp4' }; // 'ftyp'
-    return null;
 }
 
 async function resolveBucket(supabase) {
@@ -87,6 +74,8 @@ export default async function handler(req, res) {
             if (!file) return json(res, 400, { error: 'Missing file' });
 
             const buffer = await fs.readFile(file.filepath);
+            // Loại file theo BYTE ĐẦU (lib/uploads.js). Trước 2026-10-08 đuôi lấy từ tên file, content-type
+            // từ request -> host được .html/.svg trên domain ảnh công khai. Kiosk chỉ gửi JPEG/PNG + WebM/MP4.
             const media = sniffMedia(buffer);
             if (!media) return json(res, 415, { error: 'Chỉ nhận ảnh JPEG/PNG/WebP hoặc video WebM/MP4' });
             const extension = media.ext;
