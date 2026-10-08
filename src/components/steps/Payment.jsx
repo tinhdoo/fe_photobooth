@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useRef } from 'react';
-import { ArrowLeft, Banknote, Hash, Loader2, QrCode } from 'lucide-react';
+import { ArrowLeft, Banknote, Hash, Loader2, Printer, QrCode } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
@@ -202,6 +202,57 @@ const Payment = () => {
         setIdleHold(() => giuPhienRef.current());
         return () => setIdleHold(null);
     }, [setIdleHold]);
+
+    // MÁY IN PHẢI IN ĐƯỢC TRƯỚC KHI THU TIỀN (backend /api/printer/ready: có trong Windows, không ngoại tuyến /
+    // lỗi / hết giấy, đủ giấy cho lượt này). Trước 0.0.25 máy in chỉ được kiểm lúc khởi động: máy in tắt hoặc hết
+    // giấy giữa ngày thì khách vẫn trả tiền rồi mới kẹt ở bước in. Chỉ chặn khi khách CHƯA trả gì (đã trả một
+    // phần thì phải cho trả nốt). Không hỏi được (mạng / quá giờ) thì cho trả tiền, không chặn oan.
+    // null = đang kiểm lần đầu.
+    const [mayIn, setMayIn] = useState(null);
+    const soToCan = useMemo(() => {
+        const mode = sessionData.layout?.printMode || (sessionData.layout?.type === 'strip' ? 'double_strip' : 'grid_4x6');
+        // Giống Edit: dải đôi in hai dải trên một tờ.
+        return (mode === 'double_strip' || mode === 'double_strip_horizontal')
+            ? Math.max(1, Math.ceil(printQuantity / 2))
+            : Math.max(1, printQuantity);
+    }, [sessionData.layout, printQuantity]);
+    // Đơn chuyển khoản đã mở (kể cả khi khách bấm Quay lại, đơn vẫn được theo dõi) = có thể đang trả.
+    const chuaTraGi = cashInserted === 0 && qrDaTra === 0 && !voucher && !qrOrder && donQrRef.current.length === 0;
+    useEffect(() => {
+        if (!chuaTraGi || method) return undefined;
+        let huy = false;
+        let dangKiem = false;
+        const kiem = async () => {
+            if (dangKiem) return;
+            dangKiem = true;
+            try {
+                const { data } = await axios.get(`${LOCAL_API_URL}/api/printer/ready`, {
+                    params: { can: soToCan },
+                    timeout: 10000,
+                });
+                if (huy) return;
+                if (data?.ready === false) {
+                    console.warn('[Payment] may in chua san sang:', data.ly_do);
+                    setMayIn({ ready: false, lyDo: data.ly_do || 'Máy in chưa sẵn sàng' });
+                } else {
+                    setMayIn({ ready: true });
+                }
+            } catch {
+                if (!huy) setMayIn({ ready: true });
+            } finally {
+                dangKiem = false;
+            }
+        };
+        kiem();
+        // Kiểm lại định kỳ: máy in vừa được sửa thì mở lại, vừa hỏng trong lúc khách đứng chọn thì chặn kịp.
+        const timer = setInterval(kiem, 15000);
+        return () => {
+            huy = true;
+            clearInterval(timer);
+        };
+    }, [chuaTraGi, method, soToCan]);
+    const chanMayIn = chuaTraGi && mayIn?.ready === false;
+    const dangKiemMayIn = chuaTraGi && mayIn === null;
 
     // Đối chiếu tiền mặt với sổ của backend theo mã lượt: money_inserted bị lỡ (socket nối lại đúng lúc
     // chốt tờ) thì tờ đó vẫn được cộng. Chỉ TĂNG, không bao giờ giảm số trên màn hình.
@@ -668,10 +719,27 @@ const Payment = () => {
                 <div className="h-px flex-1 rounded-full" style={{ backgroundColor: `${primaryTextColor}40` }} />
             </div>
 
+            {chanMayIn ? (
+                <div className="w-full max-w-2xl rounded-3xl border border-red-200 bg-white/95 p-10 text-center shadow-md">
+                    <Printer size={56} className="mx-auto mb-4 text-red-500" />
+                    <p className="text-3xl font-bold" style={{ color: secondaryTextColor }}>Máy in chưa sẵn sàng</p>
+                    <p className="mt-3 text-xl" style={{ color: primaryTextColor }}>{mayIn.lyDo}</p>
+                    <p className="mt-6 text-lg font-bold" style={{ color: primaryTextColor }}>
+                        Vui lòng gọi nhân viên. Bạn chưa phải trả tiền.
+                    </p>
+                    <p className="mt-2 text-sm opacity-70" style={{ color: primaryTextColor }}>Máy sẽ tự kiểm tra lại sau ít giây.</p>
+                </div>
+            ) : (
+            <>
+            {dangKiemMayIn && (
+                <p className="mb-4 flex items-center gap-2 text-base font-semibold" style={{ color: primaryTextColor }}>
+                    <Loader2 size={18} className="animate-spin" /> Đang kiểm tra máy in...
+                </p>
+            )}
             <div className="grid w-full max-w-3xl grid-cols-3 gap-6">
                 {methods.map((item) => {
                     const Icon = item.icon;
-                    const disabled = item.id === 'code' && Boolean(voucher);
+                    const disabled = (item.id === 'code' && Boolean(voucher)) || dangKiemMayIn;
                     return (
                         <button
                             type="button"
@@ -688,6 +756,8 @@ const Payment = () => {
                     );
                 })}
             </div>
+            </>
+            )}
         </div>
     );
 

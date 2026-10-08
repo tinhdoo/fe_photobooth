@@ -28,6 +28,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
         canon_capture_timeout: '30',
         printer_name: 'RX1HS',
         printer_copies: '1',
+        printer_check_before_pay: 'true',
         print_brightness: '0',
         print_contrast: '0',
         print_saturation: '0',
@@ -625,6 +626,25 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                     />
                                 </label>
                             </div>
+
+                            {/* Chỉ có tác dụng trên booth (backend local đọc); cấu hình cloud không đồng bộ khoá này. */}
+                            {isLocalAdmin && (
+                                <label className="flex cursor-pointer select-none items-start gap-3 rounded-xl bg-gray-50 px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={String(configs.printer_check_before_pay ?? 'true') !== 'false'}
+                                        onChange={(e) => setConfigs((prev) => ({ ...prev, printer_check_before_pay: e.target.checked ? 'true' : 'false' }))}
+                                        className="mt-0.5 h-4 w-4 accent-[#e63946]"
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-bold text-gray-700">Kiểm tra máy in &amp; giấy trước khi khách trả tiền</span>
+                                        <span className="mt-1 block text-xs text-gray-500">
+                                            Máy in tắt, báo lỗi hoặc không đủ giấy thì màn Thanh toán báo gọi nhân viên thay vì thu tiền.
+                                            Chỉ tắt khi máy in báo sai trạng thái làm khách không trả tiền được.
+                                        </span>
+                                    </span>
+                                </label>
+                            )}
 
                             {/* Cân chỉnh ảnh in */}
                             <div className="border-t border-gray-100 pt-4 mt-4 space-y-4">
