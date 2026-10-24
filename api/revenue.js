@@ -101,6 +101,8 @@ function normalizeSessionTransaction(session, source = 'session') {
         detail_label: detailLabel(paymentMethod, paymentCode, sepayCode),
         source,
         device_id: meta.device_id || null,
+        // Khách IN THÊM ở màn Kết quả (booth 0.0.29): giao dịch riêng, gắn với lượt gốc (in_them_cho).
+        in_them: meta.loai === 'in_them',
     };
 }
 

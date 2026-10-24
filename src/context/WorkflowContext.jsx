@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useState, useEffect, useRef } f
 import { getDeviceId, getDeviceName, setDeviceName } from '../utils/deviceId';
 import { isSupabaseBrowserConfigured, supabase } from '../services/supabaseClient';
 import { API_URL, CLOUD_API_URL } from '../config/api';
+import { guiLaiInThemConKet } from '../utils/inThem';
 const WorkflowContext = createContext();
 const isLocalApp = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const apiPath = (path) => `${API_URL}${path}`;
@@ -12,6 +13,10 @@ const cloudApiPath = (path) => `${CLOUD_API_URL}${path}`;
 // trang chủ" hoặc hết giờ trước khi upload nền hoàn tất.
 let pendingMediaUpload = null;
 export const setPendingMediaUpload = (promise) => { pendingMediaUpload = promise; };
+// Thêm một việc nền nữa (vd ghi doanh thu IN THÊM ở màn Kết quả) mà KHÔNG bỏ việc đang chờ của Edit.
+export const themViecNen = (promise) => {
+    pendingMediaUpload = pendingMediaUpload ? Promise.allSettled([pendingMediaUpload, promise]) : promise;
+};
 
 // Canon middleware chạy ngay trên máy booth (cùng máy với trình duyệt kiosk).
 const CANON_MIDDLEWARE_URL = 'http://localhost:5001';
@@ -248,6 +253,12 @@ export const WorkflowProvider = ({ children }) => {
             return normalized;
         });
     };
+
+    // Doanh thu in thêm chưa lên cloud ở lần chạy trước (trang tải lại / mất mạng) -> gửi bù sau khi app ổn định.
+    useEffect(() => {
+        const t = setTimeout(() => { guiLaiInThemConKet().catch(() => {}); }, 20000);
+        return () => clearTimeout(t);
+    }, []);
 
     useEffect(() => {
         fetchConfigs();
@@ -749,6 +760,14 @@ export const WorkflowProvider = ({ children }) => {
     // Màn Thanh toán GIỮ lại (setIdleHold) khi khách đang trả dở: đã nhét tiền, đơn chuyển khoản còn hạn...
     const idleHoldRef = useRef(null);
     const setIdleHold = useCallback((fn) => { idleHoldRef.current = fn; }, []);
+    // Màn Kết quả hỏi khi khách đang trả tiền IN THÊM (Payment ở đó cũng gọi setIdleHold). Lỗi khi hỏi = đang giữ.
+    const isIdleHeld = useCallback(() => {
+        try {
+            return !!idleHoldRef.current?.();
+        } catch {
+            return true;
+        }
+    }, []);
     const [idleWarning, setIdleWarning] = useState(null); // số giây còn lại trước khi tự về trang chủ
     useEffect(() => {
         if (!(currentStep > 1 && currentStep < 3.5) || isSessionActive || timedOut) return undefined;
@@ -827,6 +846,7 @@ export const WorkflowProvider = ({ children }) => {
                 savingBeforeReset,
                 idleWarning,
                 setIdleHold,
+                isIdleHeld,
                 isIdleSuspended,
                 wakeFromIdle,
                 SESSION_DURATION,

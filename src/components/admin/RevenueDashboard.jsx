@@ -186,7 +186,7 @@ const RevenueDashboard = () => {
         const map = new Map();
         (stats.transactions || []).forEach((tx) => {
             const id = tx.device_id || 'unknown';
-            if (!map.has(id)) map.set(id, { device_id: id, total: 0, count: 0, cash: 0, qr: 0, code: 0 });
+            if (!map.has(id)) map.set(id, { device_id: id, total: 0, count: 0, luot: 0, cash: 0, qr: 0, code: 0 });
             const b = map.get(id);
             const m = String(tx.payment_method || '').toLowerCase();
             const applied = voucherApplied(tx);
@@ -202,6 +202,7 @@ const RevenueDashboard = () => {
             else if (!m.includes('code') || m.includes('cash')) b.cash += real; // pure 'code' -> real=0
             b.total += real;                                     // doanh thu thật = cash + qr
             b.count += 1;
+            if (!tx.in_them) b.luot += 1; // in thêm ở màn Kết quả: giao dịch riêng, không phải lượt chụp mới
         });
         return Array.from(map.values()).sort((a, b) => b.total - a.total);
     }, [stats.transactions]);
@@ -348,6 +349,10 @@ const RevenueDashboard = () => {
     };
 
     const getMethodDetail = (tx) => {
+        const chiTiet = getMethodDetailGoc(tx);
+        return tx.in_them ? ['In thêm', chiTiet].filter(Boolean).join(' • ') : chiTiet;
+    };
+    const getMethodDetailGoc = (tx) => {
         if (tx.detail_label) return tx.detail_label;
         const details = [];
         if (tx.payment_code) details.push(`Mã: ${tx.payment_code}`);
@@ -667,14 +672,14 @@ const RevenueDashboard = () => {
 
                         {/* So sánh lượt chụp giữa các booth (biểu đồ tròn) — chuyển lên đây thay biểu đồ đường */}
                         {(() => {
-                            const items = revenueByBooth.filter((b) => b.count > 0);
+                            const items = revenueByBooth.filter((b) => b.luot > 0);
                             if (items.length === 0) return null;
-                            const totalCount = items.reduce((s, b) => s + b.count, 0);
+                            const totalCount = items.reduce((s, b) => s + b.luot, 0);
                             const COLORS = ['#e63946', '#f4a261', '#2a9d8f', '#457b9d', '#8338ec', '#ffb703', '#84a98c', '#c1121f', '#606c38', '#bc6c25'];
                             const cx = 100, cy = 100, R = 82, r = 50;
                             let a0 = -Math.PI / 2;
                             const slices = items.map((b, i) => {
-                                const frac = b.count / totalCount;
+                                const frac = b.luot / totalCount;
                                 const a1 = a0 + frac * Math.PI * 2;
                                 const large = (a1 - a0) > Math.PI ? 1 : 0;
                                 const p = (ang, rad) => `${(cx + rad * Math.cos(ang)).toFixed(2)} ${(cy + rad * Math.sin(ang)).toFixed(2)}`;
@@ -696,7 +701,7 @@ const RevenueDashboard = () => {
                                             ) : (
                                                 slices.map((s) => (
                                                     <path key={s.b.device_id} d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
-                                                        <title>{`${boothName(s.b.device_id)}: ${s.b.count} lượt (${Math.round(s.frac * 100)}%)`}</title>
+                                                        <title>{`${boothName(s.b.device_id)}: ${s.b.luot} lượt (${Math.round(s.frac * 100)}%)`}</title>
                                                     </path>
                                                 ))
                                             )}
@@ -708,7 +713,7 @@ const RevenueDashboard = () => {
                                                 <div key={s.b.device_id} className="flex items-center gap-2 text-sm">
                                                     <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: s.color }} />
                                                     <span className="truncate font-semibold text-[#1a1a2e]">{boothName(s.b.device_id)}</span>
-                                                    <span className="ml-auto whitespace-nowrap font-bold text-gray-500">{s.b.count} · {Math.round(s.frac * 100)}%</span>
+                                                    <span className="ml-auto whitespace-nowrap font-bold text-gray-500">{s.b.luot} · {Math.round(s.frac * 100)}%</span>
                                                 </div>
                                             ))}
                                         </div>

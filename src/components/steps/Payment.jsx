@@ -15,8 +15,16 @@ const LOCAL_API_URL = API_URL;
 // chuyển trên điện thoại -> booth không tự về trang chủ dù lâu không ai chạm màn hình.
 const QR_GIU_PHIEN_MS = 16 * 60 * 1000;
 
-const Payment = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, configs, setIdleHold } = useWorkflow();
+// `inThem` = { soTien, soLuong, maLan, onXong(thanhToan), onQuayLai }: màn Kết quả (Result.jsx) dùng lại màn này cho IN THÊM.
+// Khi đó giá / số lượng lấy từ props, trả xong thì đưa kết quả cho Result thay vì ghi vào phiên rồi sang bước chụp —
+// thông tin thanh toán của LƯỢT GỐC giữ nguyên cho Doanh thu, lần in thêm được ghi thành giao dịch riêng.
+const Payment = ({ inThem = null } = {}) => {
+    const { nextStep, prevStep: prevStepGoc, sessionData, updateSessionData, configs, setIdleHold } = useWorkflow();
+    // Result dựng lại object `inThem` mỗi lần render: callback / effect chỉ phụ thuộc cờ `laInThem`, gọi qua ref.
+    const inThemRef = useRef(inThem);
+    inThemRef.current = inThem;
+    const laInThem = !!inThem;
+    const prevStep = laInThem ? () => inThemRef.current?.onQuayLai() : prevStepGoc;
     const [method, setMethod] = useState(null);
     const [loading, setLoading] = useState(false);
     const [cashInserted, setCashInserted] = useState(0);
@@ -89,8 +97,8 @@ const Payment = () => {
     // tới trần ~6/host + cạn thread middleware -> ĐƠ (và giữ EVF nóng). Phải gán blank-GIF để đóng.
     const liveImgRef = useRef(null);
 
-    const price = sessionData.printPrice || 60000;
-    const printQuantity = sessionData.printQuantity || 1;
+    const price = inThem ? inThem.soTien : (sessionData.printPrice || 60000);
+    const printQuantity = inThem ? inThem.soLuong : (sessionData.printQuantity || 1);
     const voucherValue = Math.min(voucher?.value || 0, price);
     const remainingAmount = Math.max(price - voucherValue, 0);
     // Tiền chuyển khoản đã nhận (các đơn QR đã trả).
@@ -153,6 +161,23 @@ const Payment = () => {
             }
 
             setLoading(false);
+            if (laInThem) {
+                // Giữ khoá processingRef: Result chuyển sang in ngay, màn này sắp unmount.
+                inThemRef.current?.onXong({
+                    payment_method: phuongThuc,
+                    amount: price,
+                    payment_code: activeVoucher?.code || null,
+                    payment_code_value: activeVoucher?.value || null,
+                    payment_code_applied: activeVoucher ? activeVoucherValue : null,
+                    payment_code_id: activeVoucher?.id || null,
+                    cash_inserted: cashInserted,
+                    cash_trace: cashInserted > 0 ? (cashTraceRef.current || undefined) : undefined,
+                    sepay_order_code: donDaTra[0]?.code || null,
+                    sepay_order_codes: donDaTra.length > 1 ? donDaTra.map((d) => d.code) : undefined,
+                    qr_paid: donDaTra.length ? qrDaTra : undefined,
+                });
+                return;
+            }
             updateSessionData('paymentMethod', phuongThuc);
             updateSessionData('paymentStatus', 'completed');
             updateSessionData('paymentTotal', price);
@@ -185,7 +210,7 @@ const Payment = () => {
             }
             nextStep();
         }, 500);
-    }, [cashInserted, datXuLy, donDaTra, method, nextStep, price, qrDaTra, updateSessionData, voucher]);
+    }, [cashInserted, datXuLy, donDaTra, laInThem, method, nextStep, price, qrDaTra, updateSessionData, voucher]);
 
     // Cập nhật ref mỗi render để socket handler (tạo 1 lần) luôn thấy giá trị hiện tại.
     methodRef.current = method;
@@ -227,7 +252,8 @@ const Payment = () => {
             dangKiem = true;
             try {
                 const { data } = await axios.get(`${LOCAL_API_URL}/api/printer/ready`, {
-                    params: { can: soToCan },
+                    // In thêm: lệnh in lượt gốc thường vẫn đang chạy -> backend cộng cả số tờ còn trong hàng đợi.
+                    params: laInThem ? { can: soToCan, cho_hang_doi: 1 } : { can: soToCan },
                     timeout: 10000,
                 });
                 if (huy) return;
@@ -250,7 +276,7 @@ const Payment = () => {
             huy = true;
             clearInterval(timer);
         };
-    }, [chuaTraGi, method, soToCan]);
+    }, [chuaTraGi, laInThem, method, soToCan]);
     const chanMayIn = chuaTraGi && mayIn?.ready === false;
     const dangKiemMayIn = chuaTraGi && mayIn === null;
 
@@ -555,7 +581,9 @@ const Payment = () => {
             try {
                 const res = await axios.post(`${CLOUD_API_URL}/api/sepay-orders`, {
                     amount: soTien,
-                    session_id: sessionData?.sessionId || sessionData?.uuid || null,
+                    // In thêm: mã LẦN IN THÊM, không phải mã album gốc — Doanh thu ghép đơn theo session_id trước,
+                    // mang mã gốc là tiền in thêm bị gộp vào lượt gốc (mất hẳn nếu bản ghi in thêm chưa lên).
+                    session_id: inThem ? (inThem.maLan || null) : (sessionData?.sessionId || sessionData?.uuid || null),
                     device_id: getDeviceId(),
                 });
                 // Ghi nhận đơn kể cả khi khách đã rời màn QR: đơn có thật trên cloud, theo dõi cho chắc và
@@ -706,7 +734,7 @@ const Payment = () => {
     const renderMethodSelection = () => (
         <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center">
             <h2 className="mb-10 text-center text-5xl font-bold uppercase tracking-wide" style={{ color: primaryTextColor }}>
-                Thanh toán
+                {inThem ? 'Thanh toán in thêm' : 'Thanh toán'}
             </h2>
 
             {renderSummary()}
@@ -942,7 +970,7 @@ const Payment = () => {
             {/* Pre-warm live view Canon (EVF) ngay từ bước thanh toán: mở sẵn luồng MJPEG để khi
                 vào bước chụp live view đã ra hình -> video motion ảnh ĐẦU không bị trống. Ẩn nhưng
                 vẫn stream. Chỉ áp dụng canon mode. */}
-            {configs?.camera_mode === 'canon' && (
+            {configs?.camera_mode === 'canon' && !inThem && (
                 <img
                     ref={liveImgRef}
                     src="http://localhost:5001/liveview"
