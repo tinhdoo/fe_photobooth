@@ -19,6 +19,7 @@ import { cropToIdPhoto } from '../../idPhoto/idCrop';
 import { tachNenAnhThe } from '../../idPhoto/tachNenBackend';
 import { replaceBackgroundAt, BACKGROUNDS } from '../../idPhoto/replaceBackground';
 import { KIEU_TO_ANH_THE, dungToAnhThe } from '../../idPhoto/toAnhThe';
+import { luuLuotAnhThe } from '../../idPhoto/luuLuotCloud';
 import {
     SLIDER_TABS, EMPTY_EDIT, editFromPreset, sliderValue, setEditValue, isNeutral, editKey,
     addSpot, popSpot, clearSpots, MAX_SPOTS,
@@ -413,40 +414,20 @@ const IdPhotoStudio = () => {
             const k = latestRef.current.khung;
             const kAnh = k?.url ? await coHan(anhKhung(k), HAN_TAI_KHUNG_MS, 'Tải khung').catch(() => null) : null;
             const to = dungToAnhThe(cell, oCua(k), kAnh);
-            // Đã in ở lần trước (ví dụ request quá giờ nhưng máy vẫn in) -> không gửi lệnh nữa, chỉ đi tiếp.
-            if (sessionData.printedSessionId) {
-                updateSessionData('finalImage', to.toDataURL('image/jpeg', 0.92));
-                nextStep();
-                return;
-            }
             // Mã lần in giữ trong sessionData: bấm In lại sau lỗi / quá giờ vẫn dùng mã cũ -> backend thấy mã đã có
-            // lệnh chưa lỗi thì trả lại lệnh đó, không in tấm thứ hai (0.0.24).
-            let maLanIn = sessionData.printAttemptId;
+            // lệnh chưa lỗi thì trả lại lệnh đó, không in tấm thứ hai (0.0.24). Cũng là mã album trong QR.
+            let maLanIn = sessionData.printedSessionId || sessionData.printAttemptId;
             if (!maLanIn) {
                 maLanIn = taoMa();
                 updateSessionData('printAttemptId', maLanIn);
             }
-            const blob = await new Promise((ok) => to.toBlob(ok, 'image/png'));
-            const fd = new FormData();
-            fd.append('file', blob, 'TomatoPhotobooth_anhthe.png');
-            fd.append('copies', String(Math.max(1, parseInt(sessionData.printQuantity, 10) || 1)));
-            fd.append('print_mode', layoutCua(k).printMode || sessionData.layout?.printMode || 'id_photo_4x6');
-            fd.append('cut_mode', 'none');
-            fd.append('session_id', maLanIn);
-
-            let daGui = false;
-            try {
-                await axios.post(`${API_URL}/api/print`, fd, { timeout: 60000 });
-                daGui = true;
-            } catch (e) {
-                if (!e.response && await daXepHangIn(maLanIn)) daGui = true;
-                else throw e;
-            }
-            if (daGui) {
+            // Đã in ở lần trước (request quá giờ nhưng máy vẫn in, hoặc in xong mà lưu cloud lỗi) -> không gửi
+            // lệnh in nữa, chỉ lưu lại.
+            if (!sessionData.printedSessionId) {
+                await guiLenhIn(to, k, maLanIn);
                 updateSessionData('printedSessionId', maLanIn);
-                updateSessionData('finalImage', to.toDataURL('image/jpeg', 0.92));
-                nextStep(); // -> Kết quả (7)
             }
+            await luuVaSangKetQua(to, cell, maLanIn);
         } catch (e) {
             console.error('[IdPhotoStudio] in lỗi', e);
             const msg = e.response?.data?.error || e.message || 'không rõ';
@@ -455,6 +436,46 @@ const IdPhotoStudio = () => {
             dangInRef.current = false;
             setDangIn(false);
         }
+    };
+
+    const guiLenhIn = async (to, k, maLanIn) => {
+        const blob = await new Promise((ok) => to.toBlob(ok, 'image/png'));
+        const fd = new FormData();
+        fd.append('file', blob, 'TomatoPhotobooth_anhthe.png');
+        fd.append('copies', String(Math.max(1, parseInt(sessionData.printQuantity, 10) || 1)));
+        fd.append('print_mode', layoutCua(k).printMode || sessionData.layout?.printMode || 'id_photo_4x6');
+        fd.append('cut_mode', 'none');
+        fd.append('session_id', maLanIn);
+
+        try {
+            await axios.post(`${API_URL}/api/print`, fd, { timeout: 60000 });
+        } catch (e) {
+            if (!e.response && await daXepHangIn(maLanIn)) return;
+            throw e;
+        }
+    };
+
+    // Sau khi in: lưu tờ in + bản ghi lượt lên cloud (QR album + Doanh thu), rồi sang Kết quả (7). Lỗi mạng thì ở lại
+    // màn này: nút đổi thành "Lưu lại" (không in thêm), kèm "Kết thúc" như Edit.jsx.
+    const luuVaSangKetQua = async (to, cell, maLanIn) => {
+        let url;
+        try {
+            url = await luuLuotAnhThe({
+                to,
+                anh: cell,
+                maLuot: maLanIn,
+                sessionData,
+                soTo: Math.max(1, parseInt(sessionData.printQuantity, 10) || 1),
+            });
+        } catch (e) {
+            console.error('[IdPhotoStudio] lưu cloud lỗi', e);
+            setCanhBao('Ảnh đã in xong nhưng chưa lưu được lên mạng nên chưa có mã QR (' + (e.message || 'lỗi mạng')
+                + '). Bấm "Lưu lại" để thử lại — không in thêm tấm nào — hoặc "Kết thúc" để về trang chủ.');
+            return;
+        }
+        updateSessionData('sessionId', maLanIn);
+        updateSessionData('finalImage', url);
+        nextStep(); // -> Kết quả (7)
     };
 
     // HẾT GIỜ PHIÊN: tự in tấm đang chọn với nền / khung / chỉnh mặt đang chọn ngay khi ảnh xử lý xong.
@@ -756,8 +777,16 @@ const IdPhotoStudio = () => {
                                 className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#e63946] py-4 text-xl font-black text-white shadow-lg shadow-[#e63946]/20 active:scale-95 disabled:opacity-60"
                             >
                                 {dangIn ? <Loader2 className="animate-spin" size={24} /> : <Printer size={24} />}
-                                {dangIn ? 'Đang gửi lệnh in…' : 'In ảnh thẻ'}
+                                {dangIn ? (daIn ? 'Đang lưu ảnh…' : 'Đang gửi lệnh in…') : (daIn ? 'Lưu lại' : 'In ảnh thẻ')}
                             </button>
+                            {daIn && !dangIn && (
+                                <button
+                                    onClick={resetSession}
+                                    className="flex items-center gap-2 rounded-2xl border-2 border-[#D5B895] bg-white px-5 text-base font-extrabold active:scale-95"
+                                >
+                                    Kết thúc
+                                </button>
+                            )}
                         </div>
                     )}
                 </section>
