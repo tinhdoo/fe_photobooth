@@ -4,8 +4,14 @@ import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTria
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 import { authHeader } from '../../utils/auth';
 
+// Máy im lặng quá lâu (máy cũ đã cài lại, mã ngẫu nhiên lúc thử) gom vào nút "Hiện N máy cũ" thay vì xoá: trang
+// Doanh thu lấy tên phòng từ danh sách này, xoá đi thì doanh thu cũ của máy đó chỉ còn hiện mã.
+const NGAY_MAY_CU = 14;
+
 const DeviceManager = () => {
     const [devices, setDevices] = useState([]);
+    const [hienMayCu, setHienMayCu] = useState(false);
+    const [mocMayCu, setMocMayCu] = useState(() => Date.now() - NGAY_MAY_CU * 86400000);
     const [loading, setLoading] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
@@ -16,6 +22,7 @@ const DeviceManager = () => {
         try {
             const res = await axios.get('/api/devices', { headers: authHeader() });
             setDevices(Array.isArray(res.data) ? res.data : []);
+            setMocMayCu(Date.now() - NGAY_MAY_CU * 86400000);
         } catch (error) {
             console.error("Failed to fetch devices:", error);
         } finally {
@@ -120,6 +127,10 @@ const DeviceManager = () => {
         }
     };
 
+    const laMayCu = (d) => !(new Date(d.last_active).getTime() >= mocMayCu);
+    const soMayCu = devices.filter(laMayCu).length;
+    const dsHien = hienMayCu ? devices : devices.filter((d) => !laMayCu(d));
+
     return (
         <div className="space-y-8 animate-fadeIn">
             {/* Delete Confirmation Modal */}
@@ -164,7 +175,7 @@ const DeviceManager = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {devices.map((device) => (
+                {dsHien.map((device) => (
                     <div key={device.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
                         <div className="flex justify-between items-start">
                             <div className="p-3 bg-gray-100 rounded-xl text-gray-600">
@@ -246,6 +257,19 @@ const DeviceManager = () => {
                     </div>
                 )}
             </div>
+
+            {soMayCu > 0 && (
+                <div className="flex justify-center">
+                    <button
+                        onClick={() => setHienMayCu((v) => !v)}
+                        className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-500 hover:text-[#e63946] hover:border-red-100 transition-colors"
+                    >
+                        {hienMayCu
+                            ? `Ẩn ${soMayCu} máy cũ`
+                            : `Hiện ${soMayCu} máy cũ (không hoạt động hơn ${NGAY_MAY_CU} ngày)`}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

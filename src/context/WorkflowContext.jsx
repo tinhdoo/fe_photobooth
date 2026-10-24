@@ -326,6 +326,10 @@ export const WorkflowProvider = ({ children }) => {
         const deviceId = getDeviceId();
         // Mã máy đang chạy thật: syncDevice đổi sang mã backend cấp nếu khác localStorage (xem kênh realtime).
         let currentDeviceId = deviceId;
+        // Kiosk trên máy booth đã lấy được mã máy từ backend cục bộ chưa. Chưa thì KHÔNG báo lên cloud: mã trong
+        // localStorage có thể là mã ngẫu nhiên 'sf-device-…' (backend chưa lên lúc bật máy, trình duyệt bị xoá dữ
+        // liệu, máy dev) -> mỗi lần như vậy cloud thêm một "máy ma" (trang Thiết bị có hơn 70 máy, 24/10/2026).
+        let maMayDaXacNhan = false;
 
         // Chế độ Trả phí/Sự kiện: có cloud thì CHỈ cloud quyết định (đổi ở trang Cài đặt, PUT chỉ admin).
         // Trước 0.0.24 nhịp tim áp chế độ của backend local rồi mới tới chế độ cloud -> mỗi 60 s lật qua
@@ -376,6 +380,7 @@ export const WorkflowProvider = ({ children }) => {
                 if (sysRes.ok) {
                     const sysData = await sysRes.json();
                     if (sysData.device_id) {
+                        maMayDaXacNhan = true;
                         activeDeviceId = sysData.device_id;
                         currentDeviceId = activeDeviceId;
                         localStorage.setItem("device_id", activeDeviceId);
@@ -403,7 +408,8 @@ export const WorkflowProvider = ({ children }) => {
                 console.error("Device sync failed:", error);
             }
 
-            if (CLOUD_API_URL) {
+            // Chưa có mã máy từ backend -> nhịp tim kế (60 s) thử lại; chế độ / ảnh thẻ giữ giá trị cloud lần trước.
+            if (CLOUD_API_URL && (maMayDaXacNhan || !isLocalApp())) {
                 try {
                     const cloudRes = await fetch(`${CLOUD_API_URL}/api/devices`, {
                         method: 'POST',
