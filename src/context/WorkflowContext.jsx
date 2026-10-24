@@ -40,8 +40,8 @@ const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
     'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
     'session_timeout', 'mobile_session_timeout', 'countdown', 'hotfolder_capture_timeout', 'canon_capture_timeout',
-    'bg_welcome', 'bg_source-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
-    'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_print-photo', 'bg_wait-print-photo', 'bg_qr-photo',
+    'bg_welcome', 'bg_mode-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
+    'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_qr-photo', 'bg_id-photo',
     'brand_text_primary', 'brand_text_secondary',
     // Logo đổi ở trang Thương hiệu trên cloud. Trước 0.0.24 tới booth nhờ realtime áp nguyên khối cấu hình;
     // realtime giờ chỉ nhận các khoá trong danh sách này nên phải có tên ở đây.

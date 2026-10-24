@@ -13,7 +13,7 @@ import { napTruocTachNen } from '../../idPhoto/tachNenBackend';
 const ID_LAYOUT = LAYOUTS.find((l) => l.idPhoto);
 
 const ModeSelection = () => {
-    const { nextStep, prevStep, goToStep, updateSessionData, isEventMode } = useWorkflow();
+    const { nextStep, prevStep, goToStep, updateSessionData, isEventMode, configs } = useWorkflow();
 
     const chonAnhChoi = () => {
         updateSessionData('captureMode', 'normal');
@@ -33,7 +33,10 @@ const ModeSelection = () => {
     };
 
     return (
-        <div className="flex h-full w-full flex-col bg-[#FFF8E7] px-6 py-8 md:px-12">
+        <div
+            className="flex h-full w-full flex-col bg-[#FFF8E7] bg-cover bg-center px-6 py-8 md:px-12"
+            style={{ backgroundImage: configs?.['bg_mode-selection'] ? `url('${configs['bg_mode-selection']}')` : 'none' }}
+        >
             <button
                 onClick={prevStep}
                 className="mb-2 flex w-fit items-center gap-2 rounded-2xl border border-[#E7D3B7] bg-white px-4 py-2 text-sm font-bold text-[#7B5E43] active:scale-95"

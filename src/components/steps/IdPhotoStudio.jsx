@@ -111,7 +111,7 @@ function KhungNho({ khung }) {
 }
 
 const IdPhotoStudio = () => {
-    const { sessionData, updateSessionData, nextStep, prevStep, timedOut, resetSession } = useWorkflow();
+    const { sessionData, updateSessionData, nextStep, prevStep, timedOut, resetSession, configs } = useWorkflow();
 
     const anhDaChup = useMemo(() => {
         const ds = sessionData.capturedPhotos?.length ? sessionData.capturedPhotos : sessionData.photos;
@@ -492,7 +492,10 @@ const IdPhotoStudio = () => {
     const sangNen = (id) => id === 'white' || id === 'gray' || id === 'blue_light';
 
     return (
-        <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#FFF8E7] px-6 py-4 text-[#7A5A3B]">
+        <div
+            className="relative flex h-full w-full flex-col overflow-hidden bg-[#FFF8E7] bg-cover bg-center px-6 py-4 text-[#7A5A3B]"
+            style={{ backgroundImage: configs?.['bg_id-photo'] ? `url('${configs['bg_id-photo']}')` : 'none' }}
+        >
             <style>{RANGE_CSS}</style>
             <header className="flex shrink-0 items-center justify-between pb-3">
                 {/* Hết giờ hoặc đã in thì không cho chụp lại (hết giờ: màn Chụp đẩy thẳng về đây; đã in: tránh in lần 2). */}

@@ -12,18 +12,19 @@ const loiQuyen = (status, macDinh) => ([401, 403].includes(status)
     ? 'Không có quyền: đổi hình nền / màu chữ trên trang quản lý cloud (tomatophotobooth.vercel.app/admin) sau khi đăng nhập admin.'
     : macDinh);
 
+// Theo thứ tự màn trên booth. Đã bỏ: source-selection (màn Chọn nguồn ảnh không còn), print-photo và
+// wait-print-photo (in + QR nằm chung màn cuối, dùng qr-photo) — đặt ảnh vào đó không màn nào dùng.
 const pageBackgrounds = [
-    { id: 'source-selection', label: 'Chọn nguồn ảnh (source-selection)' },
+    { id: 'mode-selection', label: 'Chọn chế độ: Photobooth / Ảnh thẻ (mode-selection)' },
     { id: 'choose-slot', label: 'Chọn loại khung (choose-slot)' },
     { id: 'select-photo-number', label: 'Chọn số lượng ảnh (select-photo-number)' },
     { id: 'payment', label: 'Thanh toán (payment)' },
     { id: 'payment-wait', label: 'Thanh toán hoàn tất (payment-wait)' },
+    { id: 'preview-when', label: 'Chuẩn bị & chụp ảnh (preview-when)' },
     { id: 'select-photo', label: 'Chọn ảnh yêu thích (select-photo)' },
-    { id: 'filter-adjustment', label: 'Chọn màu filter (filter-adjustment)' },
-    { id: 'preview-when', label: 'Chọn kiểu khung (preview-when)' },
-    { id: 'print-photo', label: 'In ảnh (print-photo)' },
-    { id: 'wait-print-photo', label: 'Chờ in ảnh (wait-print-photo)' },
-    { id: 'qr-photo', label: 'QR code ảnh (qr-photo)' },
+    { id: 'filter-adjustment', label: 'Chỉnh ảnh & chọn filter (filter-adjustment)' },
+    { id: 'qr-photo', label: 'In ảnh & QR code (qr-photo)' },
+    { id: 'id-photo', label: 'Ảnh thẻ của bạn (id-photo)' },
 ];
 
 const colorControls = [
