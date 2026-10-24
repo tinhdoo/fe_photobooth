@@ -24,9 +24,10 @@ const controlCanonLiveView = (action) => {
     }
 };
 // TẠM NGƯNG KHI RẢNH: booth đứng ở Welcome quá lâu -> pause video nền, ngưng poll, đóng cổng
-// máy đọc tiền. Mục đích là NHẢ hết thứ đang giữ máy thức để Windows tự ngủ theo power plan
-// (video nền chạy = Chrome giữ power request 'Display Required' -> máy KHÔNG BAO GIỜ ngủ).
-// Không tự ép sleep: thời gian ngủ vẫn do power plan Windows quyết định.
+// máy đọc tiền. Video nền chạy = Chrome giữ power request 'Display Required' -> màn hình không bao giờ tắt.
+// Từ 2026-10-24 máy tính KHÔNG còn sleep (Canon middleware xin giữ máy thức: sleep rồi thức là Windows dò
+// lại USB, rớt máy ảnh, kiosk kẹt ở bước Chụp) -> tạm ngưng giờ chỉ để MÀN HÌNH tắt theo power plan và
+// máy nghỉ tải (Chrome, mạng, cổng serial).
 const IDLE_SUSPEND_MS = 60 * 60 * 1000; // 1 giờ không ai chạm
 const IDLE_CHECK_MS = 30 * 1000;
 const IDLE_ACTIVITY_EVENTS = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
@@ -47,6 +48,8 @@ const CLOUD_SYNC_KEYS = [
     'logo_main',
     // Mốc admin đổi giá gốc (0.0.24): mốc lịch giá chạy trước đó nhường cho giá gốc (utils/pricing.js).
     'price_updated_at',
+    // Bước 5.5 "Chỉnh ảnh": bật/tắt + thời gian từ trang Cài đặt trên cloud, không phải thao tác trên máy booth.
+    'photo_edit_enabled', 'photo_edit_timeout',
 ];
 
 const DEFAULT_CONFIGS = {
@@ -71,7 +74,12 @@ const DEFAULT_CONFIGS = {
     print_green: 0,
     print_blue: 0,
     price_schedule: '[]',
+    photo_edit_enabled: 'false',
+    photo_edit_timeout: 200,
 };
+
+// Bước 5.5 "Chỉnh ảnh" (giữa Chọn ảnh 5 và Chỉnh sửa 6). Mặc định tắt: booth chạy y như cũ tới khi admin bật.
+export const isPhotoEditEnabled = (configs) => String(configs?.photo_edit_enabled ?? 'false') === 'true';
 
 const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     ...fallback,
@@ -97,6 +105,8 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     print_green: parseInt(nextConfigs.print_green ?? fallback.print_green) || 0,
     print_blue: parseInt(nextConfigs.print_blue ?? fallback.print_blue) || 0,
     price_schedule: nextConfigs.price_schedule ?? fallback.price_schedule ?? DEFAULT_CONFIGS.price_schedule,
+    photo_edit_enabled: String(nextConfigs.photo_edit_enabled ?? fallback.photo_edit_enabled ?? DEFAULT_CONFIGS.photo_edit_enabled),
+    photo_edit_timeout: parseInt(nextConfigs.photo_edit_timeout ?? fallback.photo_edit_timeout) || DEFAULT_CONFIGS.photo_edit_timeout,
 });
 
 const readCachedConfigs = () => {
@@ -133,6 +143,9 @@ export const WorkflowProvider = ({ children }) => {
         capturedPhotos: [], // Stable inventory of all taken photos
         activeSlot: null, // Track which slot is being edited
         source: 'camera', // Luôn chụp tại quầy (đã bỏ tuỳ chọn tải ảnh từ điện thoại)
+        // Chế độ chụp do KHÁCH chọn ở màn Welcome: 'normal' (ảnh chơi) | 'id' (ảnh thẻ).
+        // Khác với isEventMode — cái đó là cài đặt TOÀN MÁY do nhân viên bật.
+        captureMode: 'normal',
     });
 
 
@@ -287,6 +300,16 @@ export const WorkflowProvider = ({ children }) => {
             return false;
         }
     });
+    // Ảnh thẻ bật RIÊNG từng máy (admin bật ở trang Thiết bị trên cloud; api/devices device_features). Máy tắt thì
+    // bỏ luôn màn Chọn chế độ (1.5): Welcome đi thẳng sang Bố cục. Giữ giá trị cloud xác nhận lần gần nhất để mất mạng
+    // vẫn đúng; chưa từng xác nhận -> tắt.
+    const [idPhotoOn, setIdPhotoOn] = useState(() => {
+        try {
+            return localStorage.getItem('ID_PHOTO_CLOUD') === 'true';
+        } catch {
+            return false;
+        }
+    });
     // Lưu id (numeric) bản ghi thiết bị trên CLOUD -> để nút gạt Event/Payment ghi bền lên cloud.
     const cloudDeviceIdRef = useRef(null);
 
@@ -320,6 +343,16 @@ export const WorkflowProvider = ({ children }) => {
                 const next = mode === 'event';
                 return prev === next ? prev : next;
             });
+        };
+
+        const applyIdPhoto = (on) => {
+            if (typeof on !== 'boolean') return;
+            try {
+                localStorage.setItem('ID_PHOTO_CLOUD', on ? 'true' : 'false');
+            } catch {
+                // bỏ qua (private mode / đầy bộ nhớ)
+            }
+            setIdPhotoOn((prev) => (prev === on ? prev : on));
         };
 
         const syncDevice = async () => {
@@ -379,6 +412,7 @@ export const WorkflowProvider = ({ children }) => {
                         const data = await cloudRes.json();
                         if (data.id) cloudDeviceIdRef.current = data.id;
                         applyDeviceMode(data.mode, true);
+                        applyIdPhoto(data.id_photo);
                     }
                 } catch (error) {
                     console.warn("Cloud device sync failed:", error);
@@ -411,6 +445,16 @@ export const WorkflowProvider = ({ children }) => {
                         // chế độ Trả phí/Sự kiện của máy khác. Trang tải lại sau mỗi lượt -> lần sau đăng ký đúng mã.
                         if (!row?.mode || row.device_id !== currentDeviceId) return;
                         applyDeviceMode(row.mode, true);
+                    }
+                )
+                // Admin bật/tắt Ảnh thẻ -> áp ngay (không có realtime thì nhịp tim 60 s cũng tới).
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'app_configs', filter: 'key=eq.device_features' },
+                    (payload) => {
+                        const all = payload.new?.config;
+                        if (!all || typeof all !== 'object') return;
+                        applyIdPhoto(all[currentDeviceId]?.id_photo === true);
                     }
                 )
                 .subscribe();
@@ -451,10 +495,27 @@ export const WorkflowProvider = ({ children }) => {
         }
     };
 
+    const photoEditOn = isPhotoEditEnabled(configs) && sessionData.captureMode !== 'id';
+    // Thời gian bước 5.5 tính cho CẢ lượt (PhotoEdit lưu phần còn lại vào photoEditTimeLeft): dùng hết rồi thì không
+    // vào lại nữa. Không có giới hạn này, khách đi qua lại 5.5 <-> 6 được thêm nguyên thời gian mỗi lần trong khi
+    // đồng hồ phiên đứng yên ở 5.5 -> giữ máy vô hạn.
+    const photoEditLeft = sessionData.photoEditTimeLeft;
+    const canPhotoEdit = photoEditOn && !(typeof photoEditLeft === 'number' && photoEditLeft <= 0);
+
     const nextStep = () => {
+        const isIdPhoto = sessionData.captureMode === 'id';
         setCurrentStep((prev) => {
-            // Từ Welcome (1) -> Layout Selection (2). (Đã bỏ bước chọn nguồn 1.5 - chỉ chụp tại quầy.)
-            if (prev === 1) return 2;
+            // LUỒNG ẢNH THẺ: sau khi Chụp (4) thì rẽ sang Studio ảnh thẻ (8), rồi tới Kết quả (7).
+            // Không đi qua Chọn ảnh (5) và Chỉnh sửa (6) — hai màn đó dành cho ảnh chơi.
+            if (isIdPhoto && prev === 4) return 8;
+            if (isIdPhoto && prev === 8) return 7;
+
+            // Welcome (1) -> trang CHỌN CHẾ ĐỘ (1.5) -> ảnh chơi thì sang chọn bố cục (2),
+            // ảnh thẻ thì trang đó tự goToStep(2.5). Bước 1.5 trước đây dùng cho "chọn nguồn"
+            // (đã bỏ), nay tái sử dụng số đó.
+            // Máy không bật Ảnh thẻ: chỉ có ảnh chơi -> bỏ màn chọn chế độ.
+            if (prev === 1) return idPhotoOn ? 1.5 : 2;
+            if (prev === 1.5) return 2;
 
             // Payment Mode: Insert Quantity step between Layout (2) and Payment (3)
             if (!isEventMode && prev === 2) return 2.5; // Go to Quantity
@@ -467,12 +528,24 @@ export const WorkflowProvider = ({ children }) => {
             // Event Mode: Skip Quantity + Payment. Layout -> qua màn Chuẩn bị (3.5).
             if (isEventMode && prev === 2) return 3.5;
 
+            // Chọn ảnh (5) -> Chỉnh ảnh (5.5) -> Chỉnh sửa (6). Hết giờ phiên thì bỏ qua 5.5 để chuỗi tự in
+            // không phải chờ thêm một màn.
+            if (prev === 5) return canPhotoEdit && !timedOut ? 5.5 : 6;
+            if (prev === 5.5) return 6;
+
             return Math.min(prev + 1, 7);
         });
     };
 
     const prevStep = () => {
+        const isIdPhoto = sessionData.captureMode === 'id';
         setCurrentStep((prev) => {
+            // Ảnh thẻ: Studio (8) lùi về Chụp (4); Số lượng (2.5) lùi thẳng về Welcome (1)
+            // vì luồng này không có bước chọn bố cục.
+            if (isIdPhoto && prev === 8) return 4;
+            if (isIdPhoto && prev === 2.5) return 1.5;
+            // Ảnh thẻ ở chế độ sự kiện không qua Bố cục (2) -> lùi từ Chụp về màn Chọn chế độ.
+            if (isIdPhoto && isEventMode && prev === 4) return 1.5;
             // Payment Mode: Handle Quantity step
             if (!isEventMode && prev === 3) return 2.5; // From Payment back to Quantity
             if (!isEventMode && prev === 2.5) return 2; // From Quantity back to Layout
@@ -480,8 +553,12 @@ export const WorkflowProvider = ({ children }) => {
             // Event Mode: Skip back over quantity and payment
             if (isEventMode && prev === 4) return 2; // From Capture back to Layout
 
-            // Từ Layout (2) quay lại Welcome (1). (Đã bỏ bước chọn nguồn 1.5.)
-            if (prev === 2) return 1;
+            // Lùi: Bố cục (2) -> Chọn chế độ (1.5) -> Welcome (1).
+            if (prev === 2) return idPhotoOn ? 1.5 : 1;
+            if (prev === 1.5) return 1;
+
+            if (prev === 6) return canPhotoEdit ? 5.5 : 5;
+            if (prev === 5.5) return 5;
 
             return Math.max(prev - 1, 1);
         });
@@ -548,7 +625,7 @@ export const WorkflowProvider = ({ children }) => {
         }
     }, []);
 
-    // Phát hiện booth rảnh -> tạm ngưng để Windows được ngủ.
+    // Phát hiện booth rảnh -> tạm ngưng để màn hình được tắt (máy tính không sleep, xem IDLE_SUSPEND_MS).
     // Chỉ ngưng khi đang đứng ở Welcome (step 1) và KHÔNG có phiên nào chạy dở, nên không bao
     // giờ cắt ngang khách đang chụp/thanh toán. Effect chạy lại mỗi khi đổi bước -> đồng hồ rảnh
     // được đặt lại, đúng ý "vừa có người thao tác".
@@ -588,15 +665,18 @@ export const WorkflowProvider = ({ children }) => {
     }, [currentStep, isSessionActive]);
 
     // Timer Countdown
+    // Bước Chỉnh ảnh (5.5) có đồng hồ riêng (photo_edit_timeout) nên đồng hồ phiên đứng yên trong lúc đó:
+    // khách chỉnh ảnh không bị ăn vào thời gian chọn khung/in.
+    const sessionTimerPaused = currentStep === 5.5;
     useEffect(() => {
-        if (!isSessionActive) return undefined;
+        if (!isSessionActive || sessionTimerPaused) return undefined;
 
         const interval = setInterval(() => {
             setTimeLeft((prev) => Math.max(0, prev - 1));
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isSessionActive]);
+    }, [isSessionActive, sessionTimerPaused]);
 
     useEffect(() => {
         if (timeLeft === 0 && isSessionActive) {
@@ -733,6 +813,8 @@ export const WorkflowProvider = ({ children }) => {
                 toggleEventMode,
                 timeLeft, // Expose timer
                 isSessionActive,
+                photoEditOn,
+                idPhotoOn,
                 timedOut,
                 savingBeforeReset,
                 idleWarning,

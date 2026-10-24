@@ -69,12 +69,9 @@ const Capture = () => {
     const [latestPhoto, setLatestPhoto] = useState(null);
     const isRetakeMode = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
 
-    // Chụp lại NGAY trong lúc đang chụp chuỗi: khách chạm 1 ô ảnh nhỏ ĐÃ chụp -> huỷ đếm ngược/timer
-    // chuyển ô đang chờ rồi chụp lại đúng ô đó, xong tự chạy tiếp chuỗi. retakeSlot: ô đang chụp lại
-    // (để highlight UI). retakeSlotRef: nguồn sự thật cho logic trong takePhoto async (tránh closure
-    // cũ). Khác hẳn sessionData.retakeIndex (luồng chụp lại từ bước Review, ẩn dải ảnh nhỏ).
-    const [retakeSlot, setRetakeSlot] = useState(null);
-    const retakeSlotRef = useRef(null);
+    // Chụp lại chỉ làm từ bước Review (sessionData.retakeIndex). Bản cũ có sẵn xử lý "chạm ô ảnh nhỏ để chụp lại
+    // giữa chuỗi" nhưng chưa từng có chỗ chạm nào kích hoạt -> đã gỡ (23/10): chạm nhầm lúc đang tạo dáng sẽ đè
+    // một tấm cũ, còn Review có đủ thời gian xem rồi mới chọn.
 
     // Webcam refs and state
     const videoRef = useRef(null);
@@ -147,6 +144,13 @@ const Capture = () => {
     // MJPEG live view (set src=''). <img> MJPEG là kết nối sống dai; không ngắt -> tích tụ tới
     // giới hạn ~6 kết nối/host của trình duyệt -> đơ/màn trắng sau nhiều lần retake.
     useEffect(() => {
+        // BẬT LẠI cờ ở SETUP, không chỉ tắt ở cleanup. React StrictMode (chỉ có ở dev) chạy
+        // setup -> cleanup -> setup trên CÙNG một component, mà useRef giữ nguyên giá trị qua
+        // vòng giả lập đó. Thiếu dòng này thì cleanup đặt false rồi không ai bật lại -> cờ kẹt
+        // false suốt phiên -> timer trong scheduleAdvance() luôn thoát sớm -> chụp xong tấm đầu
+        // là đứng im, không đếm ngược tấm kế. Build production không double-invoke nên máy ngoài
+        // quầy không dính, chỉ dính khi chạy npm run dev.
+        mountedRef.current = true;
         return () => {
             mountedRef.current = false; // chặn các advance/countdown hẹn giờ chạy sau khi rời bước
             // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
@@ -222,6 +226,10 @@ const Capture = () => {
     };
 
     const startRecording = () => {
+        // Ảnh thẻ KHÔNG quay motion: ảnh hồ sơ chỉ cần tấm tĩnh, quay thêm chỉ tốn CPU và bộ nhớ
+        // giữa 4 lần bấm máy. stopRecording() tự trả null khi không có recorder nên không cần
+        // chặn thêm ở chỗ dừng.
+        if (layout?.idPhoto) return;
         if (cameraMode === 'canon') { startCanonRecording(); return; }
         if (cameraMode !== 'webcam' || !stream) return;
         try {
@@ -297,7 +305,10 @@ const Capture = () => {
 
     // Dynamic Photo Count based on Layout
     const layout = sessionData.layout;
-    const TOTAL_PHOTOS = layout ? layout.photoCount : 4; // Default to 4
+    // captureCount TÁCH RIÊNG số LẦN BẤM MÁY khỏi số Ô ẢNH trên tờ in. Ảnh chơi thì hai con số
+    // này bằng nhau nên photoCount là đủ. Ảnh thẻ thì khác hẳn: chụp 4 tấm cho khách chọn,
+    // nhưng chỉ MỘT tấm được chọn rồi nhân ra 9 ô trên tờ (photoCount: 1).
+    const TOTAL_PHOTOS = layout ? (layout.captureCount || layout.photoCount) : 4; // Default to 4
 
     // Initialize webcam
 
@@ -556,23 +567,6 @@ const Capture = () => {
     // Ghi ảnh sau khi chụp xong: phân biệt rõ NGUỒN (capturedPhotos, lưới phải) và Ô (photos, lưới trái).
     // Khi chụp lại, thay đúng ảnh trong nguồn, KHÔNG để ô trống (null) bên trái lọt sang nguồn.
     const applyCapture = (newItem) => {
-        // Chụp lại NGAY trong lúc chụp chuỗi (khách chạm ô ảnh nhỏ): thay đúng ô được chạm, giữ mảng
-        // liền mạch -> chuỗi tự tiếp tục ở ô trống kế. Lúc này photos===capturedPhotos===photosTaken
-        // (đồng bộ ở nhánh chụp lần đầu) nên cập nhật đồng loạt là nhất quán. Đọc từ ref để không dính
-        // closure cũ khi takePhoto await (Canon /capture) lâu.
-        const inlineIdx = retakeSlotRef.current;
-        if (inlineIdx !== null && inlineIdx !== undefined) {
-            const oldItem = photosTaken[inlineIdx];
-            const updated = [...photosTaken];
-            updated[inlineIdx] = newItem;
-            releaseReplacedPhoto(oldItem, updated);
-            retakeSlotRef.current = null;
-            setRetakeSlot(null);
-            setPhotosTaken(updated);
-            updateSessionData('photos', updated);
-            updateSessionData('capturedPhotos', updated);
-            return updated.length;
-        }
         const ri = sessionData.retakeIndex;
         if (ri !== undefined && ri !== null) {
             const prevSources = (sessionData.capturedPhotos && sessionData.capturedPhotos.length)
@@ -685,11 +679,10 @@ const Capture = () => {
                     ? "Máy ảnh không phản hồi, đang thử lại..."
                     : ("Lỗi chụp ảnh Canon: " + error.message));
                 setTimeout(() => setCameraError(null), 3000);
-                // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh, đang chụp lại
-                // từ Review, HOẶC đang chụp lại inline khách chạm ô ảnh nhỏ - retakeSlotRef còn set kể cả
-                // khi đã đủ ảnh). Lỗi hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý. Đẩy timer
-                // vào advanceTimersRef để khách chạm ô khác giữa lúc chờ vẫn huỷ được.
-                if (isRetakeMode || retakeSlotRef.current !== null || photosTaken.length < TOTAL_PHOTOS) {
+                // TỰ PHỤC HỒI: thay vì đơ, đếm ngược lại để thử chụp tiếp (còn thiếu ảnh hoặc đang chụp lại
+                // từ Review). Lỗi hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý. Đẩy timer vào
+                // advanceTimersRef để rời bước giữa lúc chờ vẫn huỷ được.
+                if (isRetakeMode || photosTaken.length < TOTAL_PHOTOS) {
                     const rt = setTimeout(() => { if (mountedRef.current) startCountdown(); }, 3500);
                     advanceTimersRef.current.push(rt);
                 }
@@ -946,9 +939,7 @@ const Capture = () => {
                     <div className={`absolute bottom-6 left-0 right-0 flex justify-center z-30 px-8 ${TOTAL_PHOTOS > 8 ? 'gap-2' : 'gap-4'}`}>
                         {Array.from({ length: TOTAL_PHOTOS }).map((_, i) => {
                             const photoUrl = photosTaken[i];
-                            // Ô đang được chụp: khi đang chụp lại 1 tấm thì sáng ô đó, ngược lại là ô kế tiếp.
-                            const activeIdx = (retakeSlot !== null && retakeSlot !== undefined) ? retakeSlot : photosTaken.length;
-                            const isCurrent = i === activeIdx;
+                            const isCurrent = i === photosTaken.length; // ô sắp chụp
                             return (
                                 <motion.div
                                     key={i}

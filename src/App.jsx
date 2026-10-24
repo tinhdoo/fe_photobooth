@@ -10,6 +10,7 @@ import LayoutSelection from './components/steps/LayoutSelection';
 import PrintQuantity from './components/steps/PrintQuantity';
 import Payment from './components/steps/Payment';
 import GetReady from './components/steps/GetReady';
+import ModeSelection from './components/steps/ModeSelection';
 
 // Lazy-import CÓ TỰ PHỤC HỒI: khi chunk lỗi (thường do đã build/deploy bản mới nhưng tab cũ
 // còn trỏ tên chunk hash cũ -> 404), tải lại trang 1 LẦN để lấy index.html + chunk mới, thay
@@ -40,17 +41,21 @@ const importCapture = () => import('./components/steps/Capture');
 const importEdit = () => import('./components/steps/Edit');
 const importReview = () => import('./components/steps/Review');
 const importResult = () => import('./components/steps/Result');
+const importIdPhotoStudio = () => import('./components/steps/IdPhotoStudio');
+const importPhotoEdit = () => import('./components/steps/PhotoEdit');
 const Capture = lazyWithReload(importCapture);
 const Edit = lazyWithReload(importEdit);
 const Review = lazyWithReload(importReview);
 const Result = lazyWithReload(importResult);
+const IdPhotoStudio = lazyWithReload(importIdPhotoStudio);
+const PhotoEdit = lazyWithReload(importPhotoEdit);
 
 // Nạp sẵn (preload) chunk các bước Chụp/Edit/Review/Result NGAY lúc app rảnh sau khi mở. Chunk
 // nằm sẵn trong bộ nhớ module của tab -> tới bước Chụp là dùng LIỀN, không phải fetch từ server
 // (nguồn gây treo "3 chấm" khi khách thanh toán sau lúc máy để idle rất lâu). Idle KHÔNG xoá module
 // đã nạp nên chỉ cần nạp 1 lần. Best-effort: lỗi thì bỏ qua (lúc vào bước lazyWithReload sẽ thử lại).
 const preloadStepChunks = () => {
-    [importCapture, importEdit, importReview, importResult].forEach((imp) => {
+    [importCapture, importEdit, importReview, importResult, importPhotoEdit].forEach((imp) => {
         try { imp().catch(() => { }); } catch { /* ignore */ }
     });
 };
@@ -126,6 +131,8 @@ const StepContent = () => {
     switch (currentStep) {
         case 1:
             return <Welcome />;
+        case 1.5:
+            return <ModeSelection />;
         case 2:
             return <LayoutSelection />;
         case 2.5:
@@ -146,6 +153,12 @@ const StepContent = () => {
                     <Review />
                 </StepSuspense>
             );
+        case 5.5:
+            return (
+                <StepSuspense>
+                    <PhotoEdit />
+                </StepSuspense>
+            );
         case 6:
             return (
                 <StepSuspense>
@@ -156,6 +169,14 @@ const StepContent = () => {
             return (
                 <StepSuspense>
                     <Result />
+                </StepSuspense>
+            );
+        // Bước 8 chỉ có trong LUỒNG ẢNH THẺ (Welcome -> chọn "Ảnh thẻ").
+        // Luồng ảnh chơi không bao giờ tới đây; luồng ảnh thẻ không đi qua 5 và 6.
+        case 8:
+            return (
+                <StepSuspense>
+                    <IdPhotoStudio />
                 </StepSuspense>
             );
         default:

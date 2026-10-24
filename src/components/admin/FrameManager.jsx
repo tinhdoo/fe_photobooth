@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images } from 'lucide-react';
+import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images, Download } from 'lucide-react';
 import { LAYOUTS } from '../../data/layouts';
 import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
@@ -9,6 +9,7 @@ import ConfirmDialog from './ConfirmDialog';
 import IconManager from './IconManager';
 
 import { FRAME_API_URL } from '../../config/api';
+import { veToMau } from '../../idPhoto/toAnhThe';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
 
 // API MỚI luôn trả về trường 'thumb_url' (kể cả null). API CŨ (chưa deploy) KHÔNG có trường này.
@@ -59,13 +60,25 @@ const FrameManager = () => {
         const timer = setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), timeout);
         return () => clearTimeout(timer);
     }, [notification.show, notification.message, notification.type]);
-    const [activeTab, setActiveTab] = useState('photobooth'); // 'photobooth' | 'icons' ('upload' đã ẩn nút)
+    const [activeTab, setActiveTab] = useState('photobooth'); // 'photobooth' | 'idphoto' | 'icons' ('upload' đã ẩn nút)
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const [topFrames, setTopFrames] = useState([]);
     const [topFramesLoading, setTopFramesLoading] = useState(true);
     const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0 });
 
-    const filteredLayouts = LAYOUTS.filter(l => activeTab === 'upload' ? l.isMobileOnly : !l.isMobileOnly);
+    // Tab Ảnh thẻ: mỗi "layout" là một KIỂU TỜ (layouts.js, idPhoto). Ô ảnh cố định theo mm nên khung ảnh thẻ chỉ là
+    // PNG phủ — không có Cấu hình lưới / Tự động dò ô như khung photobooth.
+    const filteredLayouts = LAYOUTS.filter(l => (activeTab === 'upload' ? l.isMobileOnly
+        : activeTab === 'idphoto' ? l.idPhoto
+            : !l.isMobileOnly && !l.idPhoto));
+    const isIdTab = activeTab === 'idphoto';
+    const selectedLayoutDef = LAYOUTS.find(l => l.id === selectedLayout);
+    const taiToMau = () => {
+        const a = document.createElement('a');
+        a.href = veToMau(selectedLayoutDef).toDataURL('image/png');
+        a.download = `mau_khung_${selectedLayout}.png`;
+        a.click();
+    };
 
     // Confirmation Modal State
     const [confirmModal, setConfirmModal] = useState({
@@ -435,7 +448,7 @@ const FrameManager = () => {
                     {/* Tab Switcher */}
                     <div className="inline-flex bg-gray-100/80 rounded-full p-0.5 border border-gray-200/50">
                         <button
-                            onClick={() => { setActiveTab('photobooth'); setSelectedLayout(LAYOUTS.find(l => !l.isMobileOnly)?.id || LAYOUTS[0].id); }}
+                            onClick={() => { setActiveTab('photobooth'); setSelectedLayout(LAYOUTS.find(l => !l.isMobileOnly && !l.idPhoto)?.id || LAYOUTS[0].id); }}
                             className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
                                 ${activeTab === 'photobooth'
                                     ? 'bg-white shadow text-[#e63946]'
@@ -443,6 +456,16 @@ const FrameManager = () => {
                                 }`}
                         >
                             📷 Photobooth
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('idphoto'); setSelectedLayout(LAYOUTS.find(l => l.idPhoto)?.id || LAYOUTS[0].id); }}
+                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
+                                ${activeTab === 'idphoto'
+                                    ? 'bg-white shadow text-[#e63946]'
+                                    : 'text-gray-500 hover:text-[#e63946]'
+                                }`}
+                        >
+                            🪪 Ảnh thẻ
                         </button>
                         {/* Tab "📱 Upload" (khung cho luồng tải ảnh từ điện thoại) đã ẩn: tính năng
                             tải trực tuyến không còn dùng, xem phần giá đã gỡ khỏi Cài đặt. Khung
@@ -481,7 +504,7 @@ const FrameManager = () => {
                                 }
                             `}
                         >
-                            {l.name}
+                            {isIdTab ? (l.sheetLabel || l.name) : l.name}
                         </button>
                     ))}
                 </div>
@@ -490,14 +513,25 @@ const FrameManager = () => {
             {/* Sticky Toolbar / Layout Header & Upload */}
             <div className="flex items-center justify-between mb-5">
                 <h2 className="font-bold text-lg text-[#1a1a2e] flex items-center">
-                    {LAYOUTS.find(l => l.id === selectedLayout)?.name}
+                    {isIdTab ? `Ảnh thẻ · ${selectedLayoutDef?.sheetLabel || ''}` : selectedLayoutDef?.name}
                     <span className="ml-2 text-gray-400 font-semibold text-xs sm:text-sm">
                         • {framesLoading ? '…' : `${frames.length} khung`}
                     </span>
                 </h2>
 
+                {isIdTab && (
+                    <button
+                        type="button"
+                        onClick={taiToMau}
+                        className="ml-auto mr-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:border-red-200 hover:text-[#e63946] sm:px-5 sm:py-2.5"
+                        title="Ảnh 1200x1800 có sẵn các ô ảnh trong suốt để thiết kế khung"
+                    >
+                        <Download size={18} />
+                        <span>Tải ảnh mẫu</span>
+                    </button>
+                )}
                 <label className={`
-                    ml-auto
+                    ${isIdTab ? '' : 'ml-auto'}
                     bg-[#e63946] hover:bg-[#c1121f]
                     text-white
                     px-4 py-2 sm:px-5 sm:py-2.5
@@ -522,6 +556,14 @@ const FrameManager = () => {
                 </label>
             </div>
 
+            {isIdTab && (
+                <p className="-mt-2 mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 sm:text-sm">
+                    Khung ảnh thẻ: PNG <b>1200x1800 px</b> (tờ 10x15 cm dọc), để <b>trong suốt</b> đúng các ô ảnh — bấm
+                    "Tải ảnh mẫu" để lấy sẵn vị trí ô. Ô ảnh do phần mềm đặt theo kiểu tờ đang chọn, không cần cấu hình lưới.
+                    Khách luôn chọn được thêm "Không khung" (tờ trắng).
+                </p>
+            )}
+
             {/* Bulk Toolbar */}
             {selectedFrames.size > 0 && (
                 <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 bg-white shadow-2xl border border-gray-200 rounded-3xl md:rounded-full px-4 md:px-6 py-3 flex flex-col md:flex-row items-center gap-3 md:gap-4 z-40 animate-slideUp w-[95%] md:w-auto">
@@ -534,14 +576,14 @@ const FrameManager = () => {
                     </div>
 
                     <div className="flex items-center gap-2 w-full md:w-auto justify-between">
-                        <button
+                        {!isIdTab && <button
                             onClick={confirmBulkAutoDetect}
                             disabled={isProcessing}
                             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-purple-600 hover:bg-purple-50 px-3 py-2.5 md:py-1.5 rounded-xl md:rounded-lg font-bold border border-purple-100 md:border-transparent transition-colors text-xs md:text-sm"
                         >
                             {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <WandIcon size={16} />}
                             <span className="whitespace-nowrap">Tự động</span>
-                        </button>
+                        </button>}
 
                         <button
                             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-red-500 hover:bg-red-50 px-3 py-2.5 md:py-1.5 rounded-xl md:rounded-lg font-bold border border-red-100 md:border-transparent transition-colors text-xs md:text-sm"
@@ -747,23 +789,30 @@ const FrameManager = () => {
                                                 }}
                                             />
 
+                                            {LAYOUTS.find(l => l.id === frame.layout)?.idPhoto && LAYOUTS.find(l => l.id === frame.layout).boxes.map((b, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="absolute z-0 bg-sky-300/60"
+                                                    style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.width}%`, height: `${b.height}%` }}
+                                                />
+                                            ))}
                                             <img
                                                 src={frame.thumb_url || frame.url}
                                                 alt={frame.name}
                                                 loading="lazy"
                                                 decoding="async"
-                                                className="relative z-10 w-full h-full object-contain p-2"
+                                                className={`relative z-10 w-full h-full object-contain ${LAYOUTS.find(l => l.id === frame.layout)?.idPhoto ? '' : 'p-2'}`}
                                             />
 
                                             {/* Hover Actions Overlay */}
                                             <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex items-center justify-center gap-4 z-20">
-                                                <button
+                                                {!LAYOUTS.find(l => l.id === frame.layout)?.idPhoto && <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
                                                     className="bg-white text-gray-700 hover:bg-[#e63946] hover:text-white p-3 rounded-full shadow-lg transition-all transform hover:scale-110 border border-gray-100 duration-200"
                                                     title="Cấu hình lưới"
                                                 >
                                                     <Settings size={20} />
-                                                </button>
+                                                </button>}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); confirmDelete(frame); }}
                                                     className="bg-[#e63946] text-white hover:bg-[#c1121f] p-3 rounded-full shadow-lg transition-all transform hover:scale-110 duration-200"

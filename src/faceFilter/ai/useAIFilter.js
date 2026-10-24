@@ -3,9 +3,9 @@
 // render preview realtime khi đổi filter, export ảnh ở độ phân giải gốc.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getFaceLandmarker } from '../engine/faceLandmarkerClient.js';
+import { getFaceLandmarker, MAX_FACES } from '../engine/faceLandmarkerClient.js';
 import { loadAsset } from '../engine/stickerRenderer.js';
-import { buildFaceGeometry } from './geometry.js';
+import { buildFaceGeometry, selectFaces } from './geometry.js';
 import { renderAIFilter } from './aiPipeline.js';
 
 const AI_FILTERS_URL = '/face-filters/ai-filters.json';
@@ -23,7 +23,7 @@ function fitSize(w, h, max) {
     return { w: Math.round(w * scale), h: Math.round(h * scale) };
 }
 
-export function useAIFilter(imageUrl, { maxFaces = 5 } = {}) {
+export function useAIFilter(imageUrl, { maxFaces = MAX_FACES } = {}) {
     const canvasRef = useRef(null);
     const imageElRef = useRef(null);
     const facesRef = useRef([]);
@@ -79,9 +79,9 @@ export function useAIFilter(imageUrl, { maxFaces = 5 } = {}) {
                 const aspect = (img.naturalWidth || img.width) / (img.naturalHeight || img.height);
                 const result = landmarker.detect(img);
                 if (!alive) return;
-                facesRef.current = (result.faceLandmarks || [])
+                facesRef.current = selectFaces((result.faceLandmarks || [])
                     .map((lm) => buildFaceGeometry(lm, aspect))
-                    .filter(Boolean);
+                    .filter(Boolean));
                 setFaceCount(facesRef.current.length);
                 setStatus('ready');
             } catch (e) {

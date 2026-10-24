@@ -1,135 +1,75 @@
 {
-  "version": 1,
-  "_note": "Beauty schema: beauty{retouch,toneRed,toneYellow,brightness,glow} makeup{blush,lips,eye,lipstick,lipColor} color{saturation,contrast,brightness,warmth,pinkTint,highlight}. lipstick=cường độ tô son 0..1, lipColor=\"r,g,b\". warps = sculpting rất nhẹ.",
+  "version": 2,
+  "_note": "Beauty: beauty{retouch,toneRed,toneYellow,brightness,glow} makeup{blush,blushColor,lips,eye,lipstick,lipColor} color{saturation,contrast,brightness,warmth,pinkTint,highlight}. lips=TON mau moi that (tang saturation, KHONG doi mau); lipstick=to son doi mau (dang tat, =0); blushColor=\"r,g,b\". color ap TOAN ANH. warmth: AM = lanh hon (bot vang, nhan he so kenh R/B toan anh), DUONG = am hon. warps=sculpting (Beauty bo trong vi o cuong do tu nhien la khong nhin thay).",
   "filters": [
     {
       "id": "natural",
       "name": "✨ Natural",
       "category": "Beauty",
-      "warps": [
-        {
-          "anchor": "faceCenter",
-          "radius": 1.2,
-          "strength": -0.03,
-          "axis": "x"
-        },
-        {
-          "anchor": "nose",
-          "radius": 0.33,
-          "strength": -0.02,
-          "axis": "x"
-        },
-        {
-          "anchor": "chin",
-          "radius": 0.5,
-          "strength": -0.02,
-          "axis": "y"
-        }
-      ],
+      "warps": [],
       "beauty": {
-        "retouch": 0.15,
-        "toneRed": 0.3,
-        "toneYellow": 0.2,
-        "brightness": 0.3
+        "retouch": 0.35,
+        "toneRed": 0.25,
+        "toneYellow": 0.23,
+        "brightness": 0.12
       },
       "makeup": {
-        "blush": 0.12,
-        "lips": 0.4,
-        "eye": 0.4,
-        "lipstick": 0.45,
-        "lipColor": "217,139,139"
+        "blush": 0.1,
+        "lips": 0.35,
+        "eye": 0.2,
+        "lipstick": 0
       },
       "color": {
-        "saturation": 1.02,
-        "warmth": 0.05
+        "warmth": -0.12
       }
     },
     {
       "id": "soft_pink",
       "name": "🌸 Soft Pink",
       "category": "Beauty",
-      "warps": [
-        {
-          "anchor": "faceCenter",
-          "radius": 1.2,
-          "strength": -0.03,
-          "axis": "x"
-        },
-        {
-          "anchor": "nose",
-          "radius": 0.33,
-          "strength": -0.02,
-          "axis": "x"
-        },
-        {
-          "anchor": "chin",
-          "radius": 0.5,
-          "strength": -0.02,
-          "axis": "y"
-        }
-      ],
+      "warps": [],
       "beauty": {
-        "retouch": 0.18,
+        "retouch": 0.45,
         "toneRed": 0.3,
-        "toneYellow": 0.15,
-        "brightness": 0.3
+        "toneYellow": 0.28,
+        "brightness": 0.22
       },
       "makeup": {
-        "blush": 0.28,
-        "lips": 0.45,
-        "eye": 0.4,
-        "lipstick": 0.5,
-        "lipColor": "201,122,126"
+        "blush": 0.45,
+        "blushColor": "255,140,168",
+        "lips": 0.6,
+        "eye": 0.3,
+        "lipstick": 0
       },
       "color": {
-        "saturation": 1.04,
-        "warmth": 0.1,
-        "pinkTint": 0.06
+        "saturation": 1.02,
+        "warmth": -0.15,
+        "pinkTint": 0.1
       }
     },
     {
       "id": "korean_idol",
       "name": "🎀 Korean Idol",
       "category": "Beauty",
-      "warps": [
-        {
-          "anchor": "faceCenter",
-          "radius": 1.2,
-          "strength": -0.035,
-          "axis": "x"
-        },
-        {
-          "anchor": "nose",
-          "radius": 0.33,
-          "strength": -0.02,
-          "axis": "x"
-        },
-        {
-          "anchor": "chin",
-          "radius": 0.5,
-          "strength": -0.025,
-          "axis": "y"
-        }
-      ],
+      "warps": [],
       "beauty": {
-        "retouch": 0.2,
-        "toneRed": 0.3,
-        "toneYellow": 0.2,
-        "brightness": 0.3,
-        "glow": 0.4
+        "retouch": 0.55,
+        "toneRed": 0.32,
+        "toneYellow": 0.3,
+        "brightness": 0.32,
+        "glow": 0.5
       },
       "makeup": {
-        "blush": 0.2,
-        "lips": 0.5,
-        "eye": 0.7,
-        "lipstick": 0.5,
-        "lipColor": "201,122,126"
+        "blush": 0.3,
+        "blushColor": "255,160,140",
+        "lips": 0.8,
+        "eye": 0.45,
+        "lipstick": 0
       },
       "color": {
         "saturation": 1.03,
-        "contrast": 0.98,
-        "warmth": 0.06,
-        "highlight": 0.08
+        "warmth": -0.18,
+        "highlight": 0.1
       }
     },
     {

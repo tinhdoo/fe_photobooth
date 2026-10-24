@@ -44,7 +44,9 @@ const Settings = ({ forceLocalAdmin = false }) => {
         print_scale_y: '100',
         print_offset_x: '0',
         print_offset_y: '0',
-        mode_switch_password: ''
+        mode_switch_password: '',
+        photo_edit_enabled: 'false',
+        photo_edit_timeout: '200',
     });
     const [priceScheduleForm, setPriceScheduleForm] = useState({
         run_at: '',
@@ -1037,6 +1039,30 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     Chờ ảnh Canon middleware (giây)
                                                 </label>
                                                 <input type="number" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
+                                            <label className="flex cursor-pointer select-none items-start gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={String(configs.photo_edit_enabled) === 'true'}
+                                                    onChange={(e) => setConfigs((prev) => ({ ...prev, photo_edit_enabled: e.target.checked ? 'true' : 'false' }))}
+                                                    className="mt-0.5 h-4 w-4 accent-[#e63946]"
+                                                />
+                                                <span>
+                                                    <span className="block text-xs font-bold text-gray-700">Bước "Chỉnh ảnh" (thử nghiệm)</span>
+                                                    <span className="mt-1 block text-xs text-gray-500">
+                                                        Thêm một màn sau Chọn ảnh để khách chọn kiểu làm đẹp cho từng ảnh. Bật thì các kiểu
+                                                        làm đẹp chuyển hẳn sang màn này, màn chọn khung chỉ còn filter màu. Đồng hồ phiên
+                                                        tạm dừng trong lúc khách chỉnh.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                    Thời gian bước Chỉnh ảnh (giây)
+                                                </label>
+                                                <input type="number" name="photo_edit_timeout" min="30" value={configs.photo_edit_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
                                             </div>
                                         </div>
                                     </div>

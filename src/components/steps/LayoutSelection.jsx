@@ -27,7 +27,8 @@ const LayoutSelection = () => {
 
     // Cả luồng UPLOAD lẫn chụp tại quầy đều dùng CHUNG bộ layout của kiosk (không phải layout
     // mobile riêng) -> upload cũng có strip/grid + frame giống hệt quầy (Edit/frame dùng chung).
-    const availableLayouts = LAYOUTS.filter(layout => !layout.isMobileOnly);
+    // Bỏ idPhoto: ảnh thẻ là LUỒNG RIÊNG, khách vào từ màn Welcome chứ không chọn ở đây.
+    const availableLayouts = LAYOUTS.filter(layout => !layout.isMobileOnly && !layout.idPhoto);
 
     const [currentPage, setCurrentPage] = useState(0);
     const itemsPerPage = 4;

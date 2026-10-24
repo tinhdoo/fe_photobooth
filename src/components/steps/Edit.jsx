@@ -83,6 +83,22 @@ const FILTERS = [
     // và chèn vào SAU danh sách này lúc chạy (xem state beautyFilters). Bộ hiển thị vẫn đúng 7 ô (grid-cols-7).
 ];
 
+// Gom cập nhật khi KÉO về đúng 1 lần mỗi khung hình.
+// Màn cảm ứng bắn pointermove ~120 lần/giây, trong khi màn hình chỉ vẽ 60 lần/giây. Nếu mỗi sự
+// kiện đều setState thì React vẽ lại CẢ cây Edit (9 ô ảnh + khung + sticker) gấp đôi số lần cần
+// thiết -> trên máy booth yếu là thấy giật rõ. Chỉ giữ giá trị MỚI NHẤT rồi áp một lần khi trình
+// duyệt sắp vẽ: vị trí vẫn chính xác tuyệt đối (không bỏ sót điểm cuối), mà số lần vẽ giảm hẳn.
+const createFrameThrottle = () => {
+    let raf = 0;
+    let pending = null;
+    const flush = () => { raf = 0; const fn = pending; pending = null; if (fn) fn(); };
+    const schedule = (fn) => { pending = fn; if (!raf) raf = requestAnimationFrame(flush); };
+    schedule.cancel = () => { if (raf) cancelAnimationFrame(raf); raf = 0; pending = null; };
+    // Áp ngay giá trị đang chờ (gọi khi nhấc tay ra, để không mất điểm cuối cùng).
+    schedule.flushNow = () => { if (raf) { cancelAnimationFrame(raf); flush(); } };
+    return schedule;
+};
+
 // Chờ tối đa `ms`; quá giờ -> reject với lỗi có quaGio = true. Bước gốc vẫn chạy nốt ở nền, kết quả bị bỏ.
 // Trước 0.0.24b một ảnh treo khi áp hiệu ứng (MediaPipe kẹt GPU, /api/enhance không trả lời, ảnh không tải
 // xong) giữ isFiltering = true mãi -> nút In khoá cứng, hết giờ cũng không tự in được.
@@ -115,6 +131,15 @@ const mapWithConcurrency = async (items, limit, worker) => {
 };
 
 const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition, frameConfig }) => {
+    const frame = useMemo(() => createFrameThrottle(), []);
+    // Vị trí đang kéo giữ trong ref: onPan bắn nhiều lần trong CÙNG một khung hình, mà `position`
+    // từ props chỉ đổi sau khi React vẽ lại -> nếu cộng dồn delta vào props thì các delta trong
+    // cùng khung hình bị mất, ảnh kéo chậm hơn ngón tay. Cộng dồn vào ref thì không sót delta nào.
+    const posRef = useRef(position);
+
+    // Chốt vị trí hiện tại lúc BẮT ĐẦU kéo (không đụng ref trong lúc render).
+    const handlePanStart = () => { posRef.current = position; };
+
     const handlePan = (event, info) => {
         // Natural dragging
         const SENSITIVITY = 0.002;
@@ -128,10 +153,17 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
         const adjustedDx = Math.cos(rad) * deltaX + Math.sin(rad) * deltaY;
         const adjustedDy = -Math.sin(rad) * deltaX + Math.cos(rad) * deltaY;
 
-        const newX = Math.max(0, Math.min(1, position.x - (adjustedDx * SENSITIVITY)));
-        const newY = Math.max(0, Math.min(1, position.y - (adjustedDy * SENSITIVITY)));
+        const cur = posRef.current;
+        const next = {
+            x: Math.max(0, Math.min(1, cur.x - (adjustedDx * SENSITIVITY))),
+            y: Math.max(0, Math.min(1, cur.y - (adjustedDy * SENSITIVITY))),
+        };
+        posRef.current = next;
+        frame(() => onUpdatePosition(index, next));
+    };
 
-        onUpdatePosition(index, { x: newX, y: newY });
+    const handlePanEnd = () => {
+        frame.flushNow(); // ap not vi tri cuoi, khong mat doan keo cuoi cung
     };
 
     return (
@@ -164,7 +196,14 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
                     {/* Invisible Overlay for Dragging */}
                     <motion.div
                         className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing transition-none"
+                        // touchAction none: BẮT BUỘC trên màn cảm ứng. Thiếu nó, trình duyệt coi cú
+                        // chạm là cử chỉ cuộn/zoom tiềm năng -> nó "giữ" sự kiện lại vài chục ms rồi
+                        // mới nhả, hoặc cướp luôn cử chỉ giữa chừng (pointercancel) -> khách thấy
+                        // ảnh khựng rồi nhảy, hoặc kéo được nửa chừng thì tuột.
+                        style={{ touchAction: 'none' }}
+                        onPanStart={handlePanStart}
                         onPan={handlePan}
+                        onPanEnd={handlePanEnd}
                         title="Kéo để căn chỉnh ảnh"
                     />
                 </>
@@ -174,7 +213,7 @@ const DraggablePhotoSlot = memo(({ photo, box, index, position, onUpdatePosition
 });
 
 const Edit = () => {
-    const { nextStep, prevStep, resetSession, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs } = useWorkflow();
+    const { nextStep, prevStep, resetSession, sessionData, updateSessionData, isSessionActive, timeLeft, timedOut, configs, photoEditOn } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const captureRef = useRef(null);
     // --- STATE ---
@@ -184,8 +223,13 @@ const Edit = () => {
         // KHÔNG filter(Boolean): GIỮ NGUYÊN vị trí ô. Trước đây dồn null làm LỆCH CHỈ SỐ -> box.photoIndex
         // trỏ sai ô -> ô cuối RỖNG + ô giữa sai ảnh + ảnh gốc lệch theo rawSource (đúng lỗi mất ô).
         // Ô null giờ căn đúng vị trí (draw tự bỏ qua null); filteredPhotos map 1:1 giữ null nên vẫn khớp.
-        return rawPhotos.map(p => (typeof p === 'object' && p?.url) ? p.url : p);
-    }, [sessionData.photos, sessionData.selectedPhotos]);
+        // Ảnh đã làm đẹp ở bước Chỉnh ảnh (5.5) thay cho ảnh gốc ở mọi chỗ: khung, bản in, ảnh lẻ trong album.
+        const edits = sessionData.photoEdits || {};
+        return rawPhotos.map((p) => {
+            const url = (typeof p === 'object' && p?.url) ? p.url : p;
+            return (url && edits[url]?.url) || url;
+        });
+    }, [sessionData.photos, sessionData.selectedPhotos, sessionData.photoEdits]);
 
     // Positions state for panning (Array of {x, y})
     // Initialize with 0.5 (center) for all logical slots
@@ -225,7 +269,8 @@ const Edit = () => {
     }, []);
 
     // Danh sách filter hiển thị = base (Gốc, Đen Trắng) + 5 beauty.
-    const allFilters = useMemo(() => [...FILTERS, ...beautyFilters], [beautyFilters]);
+    // Bật bước Chỉnh ảnh (5.5) thì làm đẹp đã xong ở đó: Edit chỉ còn filter màu (không hiện preset làm đẹp).
+    const allFilters = useMemo(() => (photoEditOn ? FILTERS : [...FILTERS, ...beautyFilters]), [beautyFilters, photoEditOn]);
 
     // === STICKER: khách dán icon (từ cloud) lên ảnh khung, tự kéo/phóng/xoay ===
     const [stickerIcons, setStickerIcons] = useState([]);   // icon do admin quản lý
@@ -264,28 +309,36 @@ const Edit = () => {
         setSelectedSticker((cur) => (cur === id ? null : cur));
     };
 
+    const stickerFrame = useMemo(() => createFrameThrottle(), []);
+
     const onStickerMove = useCallback((e) => {
         const d = stickerDragRef.current;
         if (!d) return;
-        if (d.mode === 'move') {
-            const nx = d.x + ((e.clientX - d.sx) / d.w) * 100;
-            const ny = d.y + ((e.clientY - d.sy) / d.h) * 100;
-            setStickers((p) => p.map((s) => s.id === d.id ? { ...s, x: Math.max(0, Math.min(100, nx)), y: Math.max(0, Math.min(100, ny)) } : s));
-        } else {
-            const dx = e.clientX - d.cx, dy = e.clientY - d.cy;
-            const dist = Math.hypot(dx, dy);
-            const diag = Math.sqrt(1 + d.ratio * d.ratio);
-            const size = Math.max(4, Math.min(140, (2 * dist) / (d.w * diag) * 100));
-            const rot = Math.atan2(dy, dx) * 180 / Math.PI - 45;
-            setStickers((p) => p.map((s) => s.id === d.id ? { ...s, size, rot } : s));
-        }
-    }, []);
+        // Đọc toạ độ ngón tay NGAY (giá trị này chỉ đúng tại thời điểm sự kiện), còn việc
+        // setState thì hoãn tới nhịp vẽ kế tiếp.
+        const cx = e.clientX, cy = e.clientY;
+        stickerFrame(() => {
+            if (d.mode === 'move') {
+                const nx = d.x + ((cx - d.sx) / d.w) * 100;
+                const ny = d.y + ((cy - d.sy) / d.h) * 100;
+                setStickers((p) => p.map((s) => s.id === d.id ? { ...s, x: Math.max(0, Math.min(100, nx)), y: Math.max(0, Math.min(100, ny)) } : s));
+            } else {
+                const dx = cx - d.cx, dy = cy - d.cy;
+                const dist = Math.hypot(dx, dy);
+                const diag = Math.sqrt(1 + d.ratio * d.ratio);
+                const size = Math.max(4, Math.min(140, (2 * dist) / (d.w * diag) * 100));
+                const rot = Math.atan2(dy, dx) * 180 / Math.PI - 45;
+                setStickers((p) => p.map((s) => s.id === d.id ? { ...s, size, rot } : s));
+            }
+        });
+    }, [stickerFrame]);
 
     const onStickerUp = useCallback(() => {
+        stickerFrame.flushNow(); // áp nốt vị trí cuối cùng trước khi kết thúc
         stickerDragRef.current = null;
         window.removeEventListener('pointermove', onStickerMove);
         window.removeEventListener('pointerup', onStickerUp);
-    }, [onStickerMove]);
+    }, [onStickerMove, stickerFrame]);
 
     const startStickerDrag = (e, s, mode) => {
         e.stopPropagation();
@@ -464,49 +517,81 @@ const Edit = () => {
 
             // Client-side Filters
             if (selectedFilter.filter) {
-                // Một ảnh đổi màu quá giờ (GPU kẹt) -> các ảnh sau giữ ảnh gốc, không chờ thêm từng ảnh.
+                // Đen Trắng / Cổ Điển / Sepia trước đây CHỈ đổi màu, không dò mặt -> khách chọn
+                // đen trắng là mặt mộc hoàn toàn, mà ảnh mất màu lại càng lộ khuyết điểm da.
+                // Giờ chạy tầng làm đẹp (mức Natural) TRƯỚC rồi mới đổi màu. Thứ tự bắt buộc:
+                // làm đẹp cần màu da thật để đo và chỉnh tông.
+                // 'natural' = mức làm đẹp nhẹ nhất. Để nguyên chuỗi ở đây (không import hằng số từ
+                // applyBeauty.js) vì module đó nạp ĐỘNG — import tĩnh sẽ kéo cả MediaPipe vào
+                // bundle chính, làm màn hình đầu tiên của booth nặng thêm vô ích.
+                // Bước Chỉnh ảnh (5.5) đang bật: da đã được làm (hoặc khách cố ý để Gốc) -> chỉ đổi màu.
+                const skinDef = photoEditOn ? null : (beautyFilters.find((b) => b.id === 'natural')?.def || null);
+                // Tầng làm đẹp quá giờ ở một ảnh = đang kẹt -> các ảnh sau chỉ đổi màu, không chờ thêm. Đổi màu
+                // cũng quá giờ (GPU kẹt) -> các ảnh sau giữ ảnh gốc.
+                let treo = false;
                 let treoMau = false;
-                const filtered = await mapWithConcurrency(photos, 2, async (photoSrc) => {
-                    if (!photoSrc) return null;
-                    const cacheKey = `${selectedFilter.id}:${photoSrc}`;
-                    if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
-                    if (treoMau) return photoSrc;
+                setIsFiltering(true);
+                try {
+                    const filtered = await mapWithConcurrency(photos, skinDef ? 1 : 2, async (photoSrc) => {
+                        if (!photoSrc) return null;
+                        // Khoá cache tách bản CÓ và KHÔNG có tầng làm đẹp: preset 'natural' nạp sau lần bấm filter
+                        // đầu tiên thì bản chỉ-đổi-màu đã vào cache; lần chạy lại khi preset nạp xong phải làm
+                        // lại có làm đẹp, không trả bản cũ.
+                        const cacheKey = `${selectedFilter.id}:${skinDef ? 'da' : 'mau'}:${photoSrc}`;
+                        if (filterCacheRef.current.has(cacheKey)) return filterCacheRef.current.get(cacheKey);
 
-                    return withTimeout(new Promise((resolve) => {
-                        const img = new Image();
-                        img.crossOrigin = 'anonymous'; // Important for CORS
-                        img.onload = () => {
-                            // Lỗi khi vẽ (ảnh quá lớn -> getContext trả null...) trước đây làm Promise treo mãi.
+                        if (skinDef && !treo) {
                             try {
-                                const canvas = document.createElement('canvas');
-                                canvas.width = img.width;
-                                canvas.height = img.height;
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0);
-                                selectedFilter.filter(ctx, canvas.width, canvas.height);
-                                canvas.toBlob((blob) => {
-                                    if (!blob) {
-                                        resolve(photoSrc);
-                                        return;
-                                    }
-                                    const url = URL.createObjectURL(blob);
-                                    filterCacheRef.current.set(cacheKey, url);
-                                    resolve(url);
-                                }, 'image/jpeg', 0.9);
+                                const { applyBeautyToImage } = await withTimeout(import('../../faceFilter/ai/applyBeauty.js'), FILTER_PHOTO_TIMEOUT_MS, 'Nạp bộ làm đẹp');
+                                const url = await withTimeout(applyBeautyToImage(photoSrc, skinDef, { after: selectedFilter.filter }), FILTER_PHOTO_TIMEOUT_MS, 'Làm đẹp + đổi màu');
+                                filterCacheRef.current.set(cacheKey, url);
+                                return url;
                             } catch (e) {
-                                console.error('Doi mau that bai:', e);
-                                resolve(photoSrc);
+                                if (e?.quaGio) treo = true;
+                                console.error('Lam dep + doi mau that bai, lui ve chi doi mau:', e);
+                                // rơi xuống nhánh chỉ-đổi-màu bên dưới
                             }
-                        };
-                        img.onerror = () => resolve(photoSrc);
-                        img.src = photoSrc;
-                    }), FILTER_PHOTO_TIMEOUT_MS, 'Đổi màu').catch((e) => {
-                        if (e?.quaGio) treoMau = true;
-                        console.error(e);
-                        return photoSrc;
+                        }
+                        if (treoMau) return photoSrc;
+
+                        return withTimeout(new Promise((resolve) => {
+                            const img = new Image();
+                            img.crossOrigin = 'anonymous'; // Important for CORS
+                            img.onload = () => {
+                                // Lỗi khi vẽ (ảnh quá lớn -> getContext trả null...) trước đây làm Promise treo mãi.
+                                try {
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = img.width;
+                                    canvas.height = img.height;
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(img, 0, 0);
+                                    selectedFilter.filter(ctx, canvas.width, canvas.height);
+                                    canvas.toBlob((blob) => {
+                                        if (!blob) {
+                                            resolve(photoSrc);
+                                            return;
+                                        }
+                                        const url = URL.createObjectURL(blob);
+                                        filterCacheRef.current.set(cacheKey, url);
+                                        resolve(url);
+                                    }, 'image/jpeg', 0.9);
+                                } catch (e) {
+                                    console.error('Doi mau that bai:', e);
+                                    resolve(photoSrc);
+                                }
+                            };
+                            img.onerror = () => resolve(photoSrc);
+                            img.src = photoSrc;
+                        }), FILTER_PHOTO_TIMEOUT_MS, 'Đổi màu').catch((e) => {
+                            if (e?.quaGio) treoMau = true;
+                            console.error(e);
+                            return photoSrc;
+                        });
                     });
-                });
-                if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
+                    if (isMounted && filterRunRef.current === runId) setFilteredPhotos(filtered);
+                } finally {
+                    if (isMounted && filterRunRef.current === runId) setIsFiltering(false);
+                }
                 return;
             }
 
@@ -586,7 +671,10 @@ const Edit = () => {
 
         applyFilterToPhotos();
         return () => { isMounted = false; };
-    }, [selectedFilter, photos]);
+        // beautyFilters: các filter đổi màu (Đen Trắng/Cổ Điển/Sepia) nay cần preset 'natural' để
+        // mịn da trước. Preset nạp BẤT ĐỒNG BỘ từ ai-filters.json, nên nếu khách bấm filter ngay
+        // khi vừa vào màn hình thì lúc đó danh sách còn rỗng -> phải chạy lại khi nạp xong.
+    }, [selectedFilter, photos, beautyFilters, photoEditOn]);
 
     // 4. Auto Complete on Timeout (Modified to include offsets if we want auto-print? No, user is idle)
     const isPrintingRef = useRef(false);
@@ -689,23 +777,35 @@ const Edit = () => {
         const offX = startPos.x - (startRect.left + (cur.x / 100) * startRect.width);
         const offY = startPos.y - (startRect.top + (cur.y / 100) * startRect.height);
 
+        // Kích thước khung ĐO MỘT LẦN lúc bắt đầu kéo. Trước đây đọc getBoundingClientRect() ở
+        // MỖI lần di chuyển -> ép trình duyệt tính lại layout ~120 lần/giây trong lúc đang kéo
+        // (layout thrashing), chính là thứ gây khựng. Khung không đổi kích thước khi đang kéo;
+        // nếu có xoay màn hình/đổi cỡ thì lần kéo sau đo lại.
+        let rect = startRect;
+        const onResize = () => { rect = container.getBoundingClientRect(); };
+        window.addEventListener('resize', onResize);
+
+        const frame = createFrameThrottle();
         const moveHandler = (moveEvent) => {
             // Chặn cuộn trang/cử chỉ mặc định khi đang kéo -> hết giật, vị trí không lệch.
             if (moveEvent.cancelable) moveEvent.preventDefault();
             const pos = getClientPos(moveEvent);
-            const rect = container.getBoundingClientRect(); // đọc lại mỗi lần -> đúng kể cả khi layout đổi
-            let newX = ((pos.x - offX - rect.left) / rect.width) * 100;
-            let newY = ((pos.y - offY - rect.top) / rect.height) * 100;
+            frame(() => {
+                let newX = ((pos.x - offX - rect.left) / rect.width) * 100;
+                let newY = ((pos.y - offY - rect.top) / rect.height) * 100;
 
-            // Clamp 0-100
-            newX = Math.max(0, Math.min(100, newX));
-            newY = Math.max(0, Math.min(100, newY));
+                // Clamp 0-100
+                newX = Math.max(0, Math.min(100, newX));
+                newY = Math.max(0, Math.min(100, newY));
 
-            if (type === 'qr') setQrSettings(p => ({ ...p, x: newX, y: newY }));
-            else setDateSettings(p => ({ ...p, x: newX, y: newY }));
+                if (type === 'qr') setQrSettings(p => ({ ...p, x: newX, y: newY }));
+                else setDateSettings(p => ({ ...p, x: newX, y: newY }));
+            });
         };
 
         const upHandler = () => {
+            frame.flushNow(); // áp nốt vị trí cuối cùng
+            window.removeEventListener('resize', onResize);
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('mouseup', upHandler);
             document.removeEventListener('touchmove', moveHandler);

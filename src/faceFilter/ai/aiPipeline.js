@@ -13,9 +13,11 @@ function makeCanvas(w, h) {
     return c;
 }
 
-// Tên anchor hợp lệ trong khai báo warp -> điểm trên geometry.
+// Tên anchor hợp lệ trong khai báo warp -> điểm trên geometry. ai-filters.json viết kiểu 'left_eye' còn geometry
+// dùng 'leftEye' -> trước đây các warp ở mắt rơi hết về giữa mặt. Nhận cả hai kiểu viết.
 function anchorPoint(face, name) {
-    return face.points[name] || face.points.faceCenter;
+    const camel = String(name).replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    return face.points[name] || face.points[camel] || face.points.faceCenter;
 }
 
 /**
@@ -33,7 +35,10 @@ export function buildPrimitives(filter, faces) {
             const axis = w.axis || 'both';
             out.push({
                 cx: pt.x,
-                cy: pt.y,
+                // Texture được nạp với UNPACK_FLIP_Y nên trục y trong shader NGƯỢC với y của
+                // landmark (0 = đỉnh ảnh). Không lật ở đây thì warp rơi vào vị trí đối xứng
+                // qua giữa ảnh (đã đo: tâm mặt y=452px nhưng warp tác động ở y=543px).
+                cy: 1 - pt.y,
                 radius,
                 sx: axis === 'y' ? 0 : s,
                 sy: axis === 'x' ? 0 : s,
@@ -58,6 +63,9 @@ export function renderAIFilter({ image, faces, filter, width, height }) {
             beauty: filter.beauty,
             makeup: filter.makeup,
             color: filter.color,
+        }, {
+            // Card đồ hoạ lỗi giữa chừng: vẽ lại ảnh gốc thay vì giữ thêm một bản sao cỡ ảnh.
+            restore: (c) => c.drawImage(image, 0, 0, width, height),
         });
     }
 

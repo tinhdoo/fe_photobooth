@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle, IdCard } from 'lucide-react';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 import { authHeader } from '../../utils/auth';
 
@@ -44,8 +44,10 @@ const DeviceManager = () => {
                             if (!nextDevice?.id) return prev;
 
                             const exists = prev.some((device) => device.id === nextDevice.id);
+                            // Gộp, không thay: id_photo / report / machines không nằm trong bảng devices (API đính kèm),
+                            // thay nguyên bản ghi thì nhịp tim nào cũng xoá mất chúng khỏi màn hình.
                             const next = exists
-                                ? prev.map((device) => device.id === nextDevice.id ? nextDevice : device)
+                                ? prev.map((device) => device.id === nextDevice.id ? { ...device, ...nextDevice } : device)
                                 : [nextDevice, ...prev];
 
                             return next.sort((a, b) => new Date(b.last_active || 0) - new Date(a.last_active || 0));
@@ -75,6 +77,20 @@ const DeviceManager = () => {
             fetchDevices();
         } catch (error) {
             console.error("Failed to update mode:", error);
+        }
+    };
+
+    // Ảnh thẻ bật riêng từng máy (máy có máy không). Máy nhận trong <= 60 s, hoặc ngay nếu đang nghe realtime.
+    const [savingIdPhoto, setSavingIdPhoto] = useState(null);
+    const toggleIdPhoto = async (device) => {
+        setSavingIdPhoto(device.id);
+        try {
+            const res = await axios.put('/api/devices', { id: device.id, id_photo: !device.id_photo }, { headers: authHeader() });
+            setDevices((prev) => prev.map((d) => (d.id === device.id ? { ...d, id_photo: res.data?.id_photo === true } : d)));
+        } catch (error) {
+            console.error("Failed to update id_photo:", error);
+        } finally {
+            setSavingIdPhoto(null);
         }
     };
 
@@ -196,7 +212,17 @@ const DeviceManager = () => {
                             </p>
                         </div>
 
-                        <div className="mt-auto pt-4 border-t border-gray-50">
+                        <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
+                            <button
+                                onClick={() => toggleIdPhoto(device)}
+                                disabled={savingIdPhoto === device.id}
+                                className={`w-full py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 border disabled:opacity-50 ${device.id_photo
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                    }`}
+                            >
+                                <IdCard size={16} /> Ảnh thẻ: {device.id_photo ? 'Đang bật' : 'Đang tắt'}
+                            </button>
                             <button
                                 onClick={() => toggleMode(device)}
                                 className={`w-full py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 ${device.mode === 'event'

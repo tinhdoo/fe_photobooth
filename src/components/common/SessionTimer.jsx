@@ -6,8 +6,9 @@ const SessionTimer = () => {
     const { timeLeft, isSessionActive, currentStep } = useWorkflow();
 
     // Only show timer in active steps (Capture, Review, Edit)
-    // Step 4 = Capture, 5 = Review, 6 = Edit
-    const shouldShow = isSessionActive && currentStep >= 4 && currentStep <= 6;
+    // Step 4 = Capture, 5 = Review, 6 = Edit. Chỉnh ảnh (5.5) tự hiện đồng hồ riêng, đồng hồ phiên đứng yên.
+    // 8 = Studio ảnh thẻ (chọn khung + chỉnh mặt) — vẫn tính giờ phiên.
+    const shouldShow = isSessionActive && ((currentStep >= 4 && currentStep <= 6 && currentStep !== 5.5) || currentStep === 8);
 
     if (!shouldShow) return null;
 

@@ -27,3 +27,17 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Anh test filter local (anh khach) - KHONG BAO GIO commit
+public/face-filters/_lab/
+
+# Ban filter CU trich tu git de so sanh A/B - KHONG commit, KHONG publish
+src/faceFilter/_old/
+
+# Trang thử tách nền ảnh thẻ — chỉ dùng lúc phát triển, không bao giờ commit
+idphoto-test.html
+tmp-test.*
+test-thay-nen.html
+
+# Trang thử / ảnh khách khi phát triển (có ảnh khách) - KHÔNG BAO GIỜ commit
+.harness_tmp/

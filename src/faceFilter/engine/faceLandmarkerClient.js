@@ -5,6 +5,11 @@
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { buildFaceFrame } from './landmarks.js';
 
+// Số khuôn mặt tối đa được nhận diện & làm đẹp trong MỘT ảnh. MediaPipe chạy bộ dò mặt 1 lần rồi
+// chạy mô hình landmark cho TỪNG mặt tìm được -> ảnh ít người KHÔNG chậm đi vì con số này lớn,
+// chỉ ảnh đông người mới tốn thêm. Đo trên máy dev: ~60ms mỗi người thêm (sau khi tối ưu canvas).
+export const MAX_FACES = 12;
+
 // Có thể tự host wasm + model trong /public để chạy OFFLINE: đặt file vào
 //   public/face-filters/mediapipe/wasm/...           (giải nén từ @mediapipe/tasks-vision/wasm)
 //   public/face-filters/mediapipe/face_landmarker.task
@@ -32,7 +37,7 @@ async function fileReallyExists(url) {
 }
 
 /** Nạp (hoặc trả lại) instance FaceLandmarker dùng chung. maxFaces: số mặt tối đa. */
-export async function getFaceLandmarker({ maxFaces = 5 } = {}) {
+export async function getFaceLandmarker({ maxFaces = MAX_FACES } = {}) {
     if (landmarkerPromise) return landmarkerPromise;
 
     landmarkerPromise = (async () => {
@@ -63,7 +68,7 @@ export async function getFaceLandmarker({ maxFaces = 5 } = {}) {
  * Nhận diện khuôn mặt trên 1 ảnh (HTMLImageElement/Canvas/ImageBitmap đã load xong).
  * Trả về { width, height, faces: [frame, ...] }.
  */
-export async function detectFaces(imageEl, { maxFaces = 5 } = {}) {
+export async function detectFaces(imageEl, { maxFaces = MAX_FACES } = {}) {
     const landmarker = await getFaceLandmarker({ maxFaces });
     const width = imageEl.naturalWidth || imageEl.width;
     const height = imageEl.naturalHeight || imageEl.height;

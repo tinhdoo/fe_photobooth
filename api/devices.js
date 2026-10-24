@@ -1,6 +1,16 @@
 import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
 import { requireActiveAdmin } from '../lib/auth.js';
 
+// Tính năng bật RIÊNG từng máy (máy có máy không), lưu ở app_configs key='device_features' (JSON, không đổi
+// schema) dạng { [device_id]: { id_photo: true } }. Nhịp tim trả về cho booth; admin bật/tắt ở trang Thiết bị.
+//   id_photo: hiện lựa chọn "Ảnh thẻ" ở màn chọn chế độ. Mặc định TẮT (máy không có thì bỏ luôn màn chọn chế độ).
+async function readFeatures(supabase) {
+    const { data } = await supabase
+        .from('app_configs').select('config').eq('key', 'device_features').maybeSingle();
+    return (data?.config && typeof data.config === 'object' && !Array.isArray(data.config)) ? data.config : {};
+}
+const idPhotoOf = (features, deviceId) => features?.[deviceId]?.id_photo === true;
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -108,8 +118,11 @@ export default async function handler(req, res) {
                 .single();
 
             if (error) throw error;
+            let features = {};
+            try { features = await readFeatures(supabase); } catch (fErr) { console.warn('device_features read failed:', fErr?.message || fErr); }
             return json(res, 200, {
                 ...data,
+                id_photo: idPhotoOf(features, deviceId),
                 mode: data.mode || 'payment',
                 name: data.name || `Máy ${deviceId.slice(-6).toUpperCase()}`,
             });
@@ -134,6 +147,10 @@ export default async function handler(req, res) {
             if (mode !== undefined && mode !== 'event' && mode !== 'payment') {
                 return json(res, 400, { error: 'Invalid mode' });
             }
+            const idPhoto = req.body?.id_photo;
+            if (idPhoto !== undefined && typeof idPhoto !== 'boolean') {
+                return json(res, 400, { error: 'Invalid id_photo' });
+            }
 
             if (hasName) updates.name = req.body.name.trim();
             if (typeof mode === 'string') updates.mode = mode;
@@ -146,7 +163,20 @@ export default async function handler(req, res) {
                 .single();
 
             if (error) throw error;
-            return json(res, 200, data);
+
+            let features = null;
+            if (typeof idPhoto === 'boolean') {
+                features = await readFeatures(supabase);
+                features[data.device_id] = { ...(features[data.device_id] || {}), id_photo: idPhoto };
+                const { error: fErr } = await supabase.from('app_configs').upsert(
+                    { key: 'device_features', config: features, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                );
+                if (fErr) throw fErr;
+            } else {
+                try { features = await readFeatures(supabase); } catch { features = {}; }
+            }
+            return json(res, 200, { ...data, id_photo: idPhotoOf(features, data.device_id) });
         }
 
         if (req.method === 'DELETE') {
@@ -188,8 +218,11 @@ export default async function handler(req, res) {
             .from('app_configs').select('config').eq('key', 'booth_machines').maybeSingle();
         const machinesAll = (mRow?.config && typeof mRow.config === 'object' && !Array.isArray(mRow.config))
             ? mRow.config : {};
+        let features = {};
+        try { features = await readFeatures(supabase); } catch (fErr) { console.warn('device_features read failed:', fErr?.message || fErr); }
         const list = (Array.isArray(data) ? data : []).map((d) => ({
             ...d,
+            id_photo: idPhotoOf(features, d.device_id),
             report: reports[d.device_id] || null,
             machines: machinesAll[d.device_id] || null,
         }));
