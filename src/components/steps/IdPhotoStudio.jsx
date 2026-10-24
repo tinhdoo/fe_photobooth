@@ -2,7 +2,7 @@
 // Hai bước trong cùng một màn (mỗi lúc khách chỉ làm một việc — dễ hiểu trên máy cảm ứng):
 //   1. Chỉnh ảnh: chọn tấm ưng nhất, màu nền, chỉnh mặt (Làm đẹp / Gương mặt / Xoá mụn — cùng bộ máy với bước 5.5,
 //      KHÔNG có Trang điểm / Màu ảnh: ảnh nộp hồ sơ phải giống người thật). Xem trước: mặt to.
-//   2. Chọn khung & in: KHUNG ảnh thẻ (admin tải lên ở Quản lý khung > Ảnh thẻ, mỗi khung thuộc một kiểu tờ).
+//   2. Chọn khung & in: KHUNG ảnh thẻ (admin tải lên ở Quản lý khung > Ảnh thẻ, ô của từng khung admin dò / chỉnh).
 //      Xem trước: nguyên tờ in. Ảnh nhỏ của khung chỉ vẽ khung + ô trống, không lặp mặt khách (rối mắt).
 // Luồng này KHÔNG đi qua Chọn ảnh (5), Chỉnh ảnh (5.5) và Chỉnh sửa (6) — các màn đó dành cho ảnh chơi.
 //
@@ -67,9 +67,8 @@ const coHan = (promise, ms, ten) => Promise.race([
 ]);
 
 const layoutCua = (khung) => KIEU_TO_ANH_THE.find((l) => l.id === khung?.layoutId) || KIEU_TO_ANH_THE[0];
-// Ô của một khung: cấu hình admin đã đục lỗ / chỉnh (nạp lúc tải danh sách), chưa có thì theo kiểu tờ.
+// Ô của một khung: cấu hình admin đã đục lỗ / chỉnh (nạp lúc tải danh sách), chưa có thì theo ô mặc định (id_photo_mixed).
 const oCua = (khung) => (khung?.boxes?.length ? khung.boxes : layoutCua(khung).boxes);
-const soAnh = (khung) => oCua(khung).filter((b) => b.type !== 'qr').length;
 
 // Kiểu có sẵn của bước 5.5 nhưng chỉ giữ phần làm đẹp da / gương mặt.
 const chiLamDep = (def) => (def ? { ...def, makeup: {}, color: {} } : null);
@@ -195,7 +194,7 @@ const IdPhotoStudio = () => {
     }, []);
 
     // Khung ảnh thẻ trên cloud + cấu hình ô của từng khung (đục lỗ / chỉnh ở admin, như khung photobooth). Lỗi /
-    // mất mạng thì vẫn còn "Không khung"; khung không tải được cấu hình thì dùng ô của kiểu tờ.
+    // mất mạng thì vẫn còn "Không khung"; khung không tải được cấu hình thì dùng ô mặc định.
     useEffect(() => {
         let alive = true;
         Promise.all(KIEU_TO_ANH_THE.map((l) => axios
@@ -570,9 +569,7 @@ const IdPhotoStudio = () => {
                         >
                             <Eye size={16} /> Giữ để xem ảnh chưa chỉnh
                         </button>
-                    ) : (
-                        <span className="shrink-0 text-sm font-bold">{khung.ten} · {soAnh(khung)} ảnh</span>
-                    )}
+                    ) : null}
                 </section>
 
                 <section className="flex min-h-0 min-w-0 flex-col gap-4">
@@ -708,13 +705,11 @@ const IdPhotoStudio = () => {
                                         key={k.id}
                                         onClick={() => setChonKhung(k.id)}
                                         disabled={khoa}
-                                        className={`flex min-h-0 min-w-0 flex-col items-center gap-1 rounded-2xl border-[3px] p-2 active:scale-95 ${chonKhung === k.id ? 'border-[#e63946] bg-[#fff4f2]' : 'border-transparent bg-[#FFF8E7]'}`}
+                                        className={`flex min-h-0 min-w-0 flex-col items-center rounded-2xl border-[3px] p-2 active:scale-95 ${chonKhung === k.id ? 'border-[#e63946] bg-[#fff4f2]' : 'border-transparent bg-[#FFF8E7]'}`}
                                     >
                                         <Fit ratio={2 / 3}>
                                             <KhungNho khung={k} />
                                         </Fit>
-                                        <span className="w-full truncate text-[13px] font-extrabold leading-tight text-[#3F3127]">{k.ten}</span>
-                                        <span className="text-[11px] font-bold leading-tight">{soAnh(k)} ảnh</span>
                                     </button>
                                 ))}
                             </div>

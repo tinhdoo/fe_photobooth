@@ -66,8 +66,8 @@ const FrameManager = () => {
     const [topFramesLoading, setTopFramesLoading] = useState(true);
     const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0 });
 
-    // Tab Ảnh thẻ: mỗi "layout" là một KIỂU TỜ (layouts.js, idPhoto) — cho ô mặc định + ảnh mẫu. Ô thật của từng khung
-    // dò / đục lỗ / chỉnh ở Cấu hình lưới như khung photobooth, chỉ là không giới hạn số ô.
+    // Tab Ảnh thẻ: một loại duy nhất (id_photo_mixed) — cho ô mặc định + ảnh mẫu. Ô thật của từng khung dò / đục lỗ /
+    // chỉnh ở Cấu hình lưới như khung photobooth, chỉ là không giới hạn số ô.
     const filteredLayouts = LAYOUTS.filter(l => (activeTab === 'upload' ? l.isMobileOnly
         : activeTab === 'idphoto' ? l.idPhoto
             : !l.isMobileOnly && !l.idPhoto));
@@ -490,8 +490,8 @@ const FrameManager = () => {
                 <IconManager apiBase={FRAME_API_URL} />
             ) : (
               <>
-            {/* Layout Selector - Tabs */}
-            <div className="mb-6 overflow-hidden">
+            {/* Layout Selector - Tabs (tab Ảnh thẻ chỉ có một loại -> không cần) */}
+            {!isIdTab && <div className="mb-6 overflow-hidden">
                 <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none -mx-4 px-4">
                     {filteredLayouts.map(l => (
                         <button
@@ -505,16 +505,16 @@ const FrameManager = () => {
                                 }
                             `}
                         >
-                            {isIdTab ? (l.sheetLabel || l.name) : l.name}
+                            {l.name}
                         </button>
                     ))}
                 </div>
-            </div>
+            </div>}
 
             {/* Sticky Toolbar / Layout Header & Upload */}
             <div className="flex items-center justify-between mb-5">
                 <h2 className="font-bold text-lg text-[#1a1a2e] flex items-center">
-                    {isIdTab ? `Ảnh thẻ · ${selectedLayoutDef?.sheetLabel || ''}` : selectedLayoutDef?.name}
+                    {isIdTab ? 'Khung ảnh thẻ' : selectedLayoutDef?.name}
                     <span className="ml-2 text-gray-400 font-semibold text-xs sm:text-sm">
                         • {framesLoading ? '…' : `${frames.length} khung`}
                     </span>
@@ -561,7 +561,7 @@ const FrameManager = () => {
                 <p className="-mt-2 mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 sm:text-sm">
                     Khung ảnh thẻ: PNG <b>1200x1800 px</b> (tờ 10x15 cm dọc), để <b>trong suốt</b> đúng các ô ảnh ("Tải ảnh mẫu"
                     có sẵn vị trí ô). Tải lên xong bấm <b>⚙ Cấu hình lưới</b> để dò lỗ trong suốt hoặc đục lỗ theo màu rồi kéo
-                    chỉnh ô — như khung photobooth, bao nhiêu lỗ thì bấy nhiêu ảnh. Khung chưa cấu hình dùng ô của kiểu tờ.
+                    chỉnh ô — như khung photobooth, bao nhiêu lỗ thì bấy nhiêu ảnh. Khung chưa cấu hình dùng ô của ảnh mẫu.
                     Khách luôn chọn được thêm "Không khung" (tờ trắng).
                 </p>
             )}

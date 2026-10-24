@@ -1,6 +1,6 @@
 // toAnhThe.js — dựng TỜ IN ảnh thẻ 4x6 inch: ô ảnh + khung PNG phủ (admin tải lên ở Quản lý khung > Ảnh thẻ).
 // Ô lấy từ cấu hình của khung (đục lỗ / tinh chỉnh ở Cấu hình lưới, như khung photobooth); khung chưa cấu hình
-// hoặc "Không khung" dùng `boxes` của kiểu tờ (layouts.js, tính bằng mm). Dùng chung cho xem trước và bản in.
+// hoặc "Không khung" dùng `boxes` mặc định của id_photo_mixed (layouts.js). Dùng chung cho xem trước và bản in.
 
 import { LAYOUTS } from '../data/layouts';
 
@@ -8,7 +8,7 @@ import { LAYOUTS } from '../data/layouts';
 export const SHEET_W = 1200;
 export const SHEET_H = 1800;
 
-/** Các kiểu tờ ảnh thẻ; phần tử đầu (id_photo_mixed) là tờ mặc định / "Không khung". */
+/** Loại ảnh thẻ (hiện chỉ id_photo_mixed): ô mặc định cho "Không khung" và khung chưa cấu hình. */
 export const KIEU_TO_ANH_THE = LAYOUTS.filter((l) => l.idPhoto);
 
 const oTrenTo = (b, W, H) => ({
@@ -21,7 +21,7 @@ const oTrenTo = (b, W, H) => ({
 /**
  * Rải ảnh MỘT ô vào từng ô của tờ rồi phủ khung (nếu có).
  * @param {CanvasImageSource & {width:number,height:number}} cell ảnh một ô đã xử lý xong
- * @param {Array<{x,y,width,height,rotation?,type?}>} boxes ô theo % tờ (cấu hình khung hoặc kiểu tờ)
+ * @param {Array<{x,y,width,height,rotation?,type?}>} boxes ô theo % tờ (cấu hình khung hoặc ô mặc định)
  * @param {HTMLImageElement|null} khung ảnh PNG khung đã nạp (crossOrigin) hoặc null = tờ trắng
  */
 export function dungToAnhThe(cell, boxes, khung = null, W = SHEET_W, H = SHEET_H) {
@@ -85,6 +85,6 @@ export function veToMau(layout, W = SHEET_W, H = SHEET_H) {
     ctx.fillStyle = '#888';
     ctx.font = 'bold 26px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`MẪU ${layout?.sheetLabel || ''} — 1200x1800 px — ô trong suốt = chỗ ảnh`, W / 2, H - 24);
+    ctx.fillText('MẪU ẢNH THẺ — 1200x1800 px — ô trong suốt = chỗ ảnh', W / 2, H - 24);
     return c;
 }

@@ -85,7 +85,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     const originalUrlRef = useRef(frame.url);
 
     const layoutDef = LAYOUTS.find(l => l.id === frame.layout) || LAYOUTS[0];
-    // Khung ẢNH THẺ: số ô do khung quyết định (4, 8, 9, 16…) -> dò KHÔNG giới hạn số ô, mặc định theo kiểu tờ,
+    // Khung ẢNH THẺ: số ô do khung quyết định (4, 8, 9, 16…) -> dò KHÔNG giới hạn số ô, mặc định theo ảnh mẫu,
     // mọi ô cùng một ảnh nên không có "Ảnh dùng cho ô".
     const laAnhThe = !!layoutDef.idPhoto;
     const soODuKien = laAnhThe ? null : layoutDef.photoCount;
