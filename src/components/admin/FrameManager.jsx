@@ -66,8 +66,8 @@ const FrameManager = () => {
     const [topFramesLoading, setTopFramesLoading] = useState(true);
     const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0 });
 
-    // Tab Ảnh thẻ: mỗi "layout" là một KIỂU TỜ (layouts.js, idPhoto). Ô ảnh cố định theo mm nên khung ảnh thẻ chỉ là
-    // PNG phủ — không có Cấu hình lưới / Tự động dò ô như khung photobooth.
+    // Tab Ảnh thẻ: mỗi "layout" là một KIỂU TỜ (layouts.js, idPhoto) — cho ô mặc định + ảnh mẫu. Ô thật của từng khung
+    // dò / đục lỗ / chỉnh ở Cấu hình lưới như khung photobooth, chỉ là không giới hạn số ô.
     const filteredLayouts = LAYOUTS.filter(l => (activeTab === 'upload' ? l.isMobileOnly
         : activeTab === 'idphoto' ? l.idPhoto
             : !l.isMobileOnly && !l.idPhoto));
@@ -313,7 +313,8 @@ const FrameManager = () => {
                 try {
                     // 1. Detect slots locally
                     const layoutDef = LAYOUTS.find(l => l.id === frame.layout);
-                    const boxes = await detectFrameSlots(frame.url, layoutDef?.photoCount);
+                    // Khung ảnh thẻ: bao nhiêu lỗ trong suốt thì bấy nhiêu ô.
+                    const boxes = await detectFrameSlots(frame.url, layoutDef?.idPhoto ? null : layoutDef?.photoCount);
 
                     if (boxes.length > 0) {
                         // 2. Save config to backend
@@ -558,8 +559,9 @@ const FrameManager = () => {
 
             {isIdTab && (
                 <p className="-mt-2 mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 sm:text-sm">
-                    Khung ảnh thẻ: PNG <b>1200x1800 px</b> (tờ 10x15 cm dọc), để <b>trong suốt</b> đúng các ô ảnh — bấm
-                    "Tải ảnh mẫu" để lấy sẵn vị trí ô. Ô ảnh do phần mềm đặt theo kiểu tờ đang chọn, không cần cấu hình lưới.
+                    Khung ảnh thẻ: PNG <b>1200x1800 px</b> (tờ 10x15 cm dọc), để <b>trong suốt</b> đúng các ô ảnh ("Tải ảnh mẫu"
+                    có sẵn vị trí ô). Tải lên xong bấm <b>⚙ Cấu hình lưới</b> để dò lỗ trong suốt hoặc đục lỗ theo màu rồi kéo
+                    chỉnh ô — như khung photobooth, bao nhiêu lỗ thì bấy nhiêu ảnh. Khung chưa cấu hình dùng ô của kiểu tờ.
                     Khách luôn chọn được thêm "Không khung" (tờ trắng).
                 </p>
             )}
@@ -576,14 +578,14 @@ const FrameManager = () => {
                     </div>
 
                     <div className="flex items-center gap-2 w-full md:w-auto justify-between">
-                        {!isIdTab && <button
+                        <button
                             onClick={confirmBulkAutoDetect}
                             disabled={isProcessing}
                             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-purple-600 hover:bg-purple-50 px-3 py-2.5 md:py-1.5 rounded-xl md:rounded-lg font-bold border border-purple-100 md:border-transparent transition-colors text-xs md:text-sm"
                         >
                             {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <WandIcon size={16} />}
                             <span className="whitespace-nowrap">Tự động</span>
-                        </button>}
+                        </button>
 
                         <button
                             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-red-500 hover:bg-red-50 px-3 py-2.5 md:py-1.5 rounded-xl md:rounded-lg font-bold border border-red-100 md:border-transparent transition-colors text-xs md:text-sm"
@@ -789,30 +791,23 @@ const FrameManager = () => {
                                                 }}
                                             />
 
-                                            {LAYOUTS.find(l => l.id === frame.layout)?.idPhoto && LAYOUTS.find(l => l.id === frame.layout).boxes.map((b, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="absolute z-0 bg-sky-300/60"
-                                                    style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.width}%`, height: `${b.height}%` }}
-                                                />
-                                            ))}
                                             <img
                                                 src={frame.thumb_url || frame.url}
                                                 alt={frame.name}
                                                 loading="lazy"
                                                 decoding="async"
-                                                className={`relative z-10 w-full h-full object-contain ${LAYOUTS.find(l => l.id === frame.layout)?.idPhoto ? '' : 'p-2'}`}
+                                                className="relative z-10 w-full h-full object-contain p-2"
                                             />
 
                                             {/* Hover Actions Overlay */}
                                             <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex items-center justify-center gap-4 z-20">
-                                                {!LAYOUTS.find(l => l.id === frame.layout)?.idPhoto && <button
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
                                                     className="bg-white text-gray-700 hover:bg-[#e63946] hover:text-white p-3 rounded-full shadow-lg transition-all transform hover:scale-110 border border-gray-100 duration-200"
                                                     title="Cấu hình lưới"
                                                 >
                                                     <Settings size={20} />
-                                                </button>}
+                                                </button>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); confirmDelete(frame); }}
                                                     className="bg-[#e63946] text-white hover:bg-[#c1121f] p-3 rounded-full shadow-lg transition-all transform hover:scale-110 duration-200"

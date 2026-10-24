@@ -25,7 +25,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         try {
             const parsed = JSON.parse(saved);
             if (parsed && Array.isArray(parsed.boxes)) {
-                if (parsed.boxes.length !== layoutDef.photoCount) {
+                if (!laAnhThe && parsed.boxes.length !== layoutDef.photoCount) {
                     setConfirmDialog({
                         isOpen: true,
                         title: 'Dán cấu hình?',
@@ -85,6 +85,10 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     const originalUrlRef = useRef(frame.url);
 
     const layoutDef = LAYOUTS.find(l => l.id === frame.layout) || LAYOUTS[0];
+    // Khung ẢNH THẺ: số ô do khung quyết định (4, 8, 9, 16…) -> dò KHÔNG giới hạn số ô, mặc định theo kiểu tờ,
+    // mọi ô cùng một ảnh nên không có "Ảnh dùng cho ô".
+    const laAnhThe = !!layoutDef.idPhoto;
+    const soODuKien = laAnhThe ? null : layoutDef.photoCount;
 
     const closeConfirmDialog = () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -92,6 +96,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
     // Helper to calculate default grid positions (in %)
     const getDefaultBoxes = () => {
+        if (laAnhThe) return (layoutDef.boxes || []).map(({ photoIndex, ...b }) => ({ ...b, rotation: 0 }));
         const boxes = [];
         const gap = 2; // 2% gap
         const totalW = 100;
@@ -368,7 +373,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
     const runAutoDetect = async () => {
         setBusy(true);
         try {
-            const detectedBoxes = await detectFrameSlots(originalUrlRef.current, layoutDef.photoCount);
+            const detectedBoxes = await detectFrameSlots(originalUrlRef.current, soODuKien);
             if (detectedBoxes.length > 0) {
                 // Just use detected boxes as photo slots
                 const finalBoxes = detectedBoxes.map(b => ({
@@ -396,7 +401,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
         setBusy(true);
         try {
             const { boxes, blob, previewUrl } = await analyzeColorFrame(
-                originalUrlRef.current, markerColor, tolerance, layoutDef.photoCount
+                originalUrlRef.current, markerColor, tolerance, soODuKien
             );
             if (!boxes.length) {
                 setNotification({ show: true, message: 'Không thấy ô nào khớp màu. Thử hút lại đúng màu ô hoặc tăng "Dung sai màu".', type: 'error' });
@@ -592,8 +597,8 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                         >
                             {/* Photo Previews */}
                             {config.boxes.map((box, i) => {
-                                const fallbackIndex = (i % (layoutDef.photoCount || 4)) + 1;
-                                const displayNum = box.photoIndex !== undefined ? box.photoIndex + 1 : fallbackIndex;
+                                const fallbackIndex = laAnhThe ? i + 1 : (i % (layoutDef.photoCount || 4)) + 1;
+                                const displayNum = !laAnhThe && box.photoIndex !== undefined ? box.photoIndex + 1 : fallbackIndex;
                                 return (
                                     <div
                                         key={`preview-${i}`}
@@ -746,6 +751,25 @@ const FrameConfigEditor = ({ frame, onClose }) => {
 
                                         </div>
 
+                                        {laAnhThe ? (
+                                        <div className="space-y-2 pt-1">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Cỡ ảnh khi in</p>
+                                            <p className="text-sm font-bold text-gray-800">
+                                                {(primaryBox.width * 0.1016).toFixed(1).replace('.', ',')} x {(primaryBox.height * 0.1524).toFixed(1).replace('.', ',')} cm
+                                                <span className="font-normal text-[11px] text-gray-500"> (tờ 10,2 x 15,2 cm)</span>
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setConfig({ ...config, boxes: config.boxes.filter((_, idx) => !selectedBoxIndices.includes(idx)) });
+                                                    setSelectedBoxIndices([]);
+                                                }}
+                                                className="w-full py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100"
+                                            >
+                                                Xoá {isMulti ? `${selectedBoxIndices.length} ô` : 'ô này'} (dò nhầm)
+                                            </button>
+                                        </div>
+                                        ) : (<>
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 pt-1">Ảnh dùng cho ô</p>
                                         <label className="text-[11px] md:text-xs font-bold text-gray-600">
                                             Ô này lấy tấm ảnh nào?
@@ -769,6 +793,7 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                                 Để "Tự động" thì các ô lần lượt lấy ảnh 1, 2, 3… Chọn một tấm cụ thể khi muốn ép ô này luôn lấy đúng tấm đó.
                                             </span>
                                         </label>
+                                        </>)}
                                         </div>
 
                                         <div className="space-y-3">

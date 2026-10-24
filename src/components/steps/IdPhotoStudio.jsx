@@ -42,7 +42,7 @@ const SPOT_R = 0.03;          // bán kính chấm xoá mụn = 3% bề rộng m
 const SPOT_R_NO_FACE = 0.012;
 const KHUNG_MOI_TRANG = 6;
 
-const KHONG_KHUNG = { id: 'none', ten: 'Không khung', layoutId: KIEU_TO_ANH_THE[0]?.id, url: null, thumb: null };
+const KHONG_KHUNG = { id: 'none', ten: 'Không khung', layoutId: KIEU_TO_ANH_THE[0]?.id, url: null, thumb: null, boxes: null };
 
 const RANGE_CSS = `
 .pe-range{-webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:999px;background:#ead8bd;outline:none;touch-action:none}
@@ -67,6 +67,9 @@ const coHan = (promise, ms, ten) => Promise.race([
 ]);
 
 const layoutCua = (khung) => KIEU_TO_ANH_THE.find((l) => l.id === khung?.layoutId) || KIEU_TO_ANH_THE[0];
+// Ô của một khung: cấu hình admin đã đục lỗ / chỉnh (nạp lúc tải danh sách), chưa có thì theo kiểu tờ.
+const oCua = (khung) => (khung?.boxes?.length ? khung.boxes : layoutCua(khung).boxes);
+const soAnh = (khung) => oCua(khung).filter((b) => b.type !== 'qr').length;
 
 // Kiểu có sẵn của bước 5.5 nhưng chỉ giữ phần làm đẹp da / gương mặt.
 const chiLamDep = (def) => (def ? { ...def, makeup: {}, color: {} } : null);
@@ -90,16 +93,15 @@ function Fit({ ratio, children }) {
     );
 }
 
-/** Ảnh thu nhỏ một khung: ô trống (hình người) đúng vị trí kiểu tờ + PNG khung phủ lên. */
+/** Ảnh thu nhỏ một khung: ô trống (hình người) đúng vị trí ô của khung + PNG khung phủ lên. */
 function KhungNho({ khung }) {
-    const layout = layoutCua(khung);
     return (
         <div className="relative h-full w-full overflow-hidden rounded-sm bg-white shadow ring-1 ring-black/5">
-            {layout.boxes.map((b, i) => (
+            {oCua(khung).filter((b) => b.type !== 'qr').map((b, i) => (
                 <div
                     key={i}
                     className="absolute flex items-end justify-center overflow-hidden bg-[#e4dccf]"
-                    style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.width}%`, height: `${b.height}%` }}
+                    style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.width}%`, height: `${b.height}%`, transform: b.rotation ? `rotate(${b.rotation}deg)` : undefined }}
                 >
                     <User className="h-[80%] w-[80%] translate-y-[18%] text-[#cfc4b3]" />
                 </div>
@@ -145,7 +147,6 @@ const IdPhotoStudio = () => {
     const src = anhDaChup[chonAnh];
     const edit = (src && edits[src]) || EMPTY_EDIT;
     const khung = dsKhung.find((k) => k.id === chonKhung) || KHONG_KHUNG;
-    const layoutTo = layoutCua(khung);
 
     const anhLonRef = useRef(null);   // canvas ảnh lớn (một ô)
     const toRef = useRef(null);       // canvas tờ in xem trước
@@ -193,7 +194,8 @@ const IdPhotoStudio = () => {
         return () => { alive = false; };
     }, []);
 
-    // Khung ảnh thẻ trên cloud, mỗi kiểu tờ một danh sách. Lỗi / mất mạng thì vẫn còn "Không khung".
+    // Khung ảnh thẻ trên cloud + cấu hình ô của từng khung (đục lỗ / chỉnh ở admin, như khung photobooth). Lỗi /
+    // mất mạng thì vẫn còn "Không khung"; khung không tải được cấu hình thì dùng ô của kiểu tờ.
     useEffect(() => {
         let alive = true;
         Promise.all(KIEU_TO_ANH_THE.map((l) => axios
@@ -208,9 +210,15 @@ const IdPhotoStudio = () => {
                     layoutId: f.layout,
                     url: f.url,
                     thumb: f.thumb_url || f.url,
+                    tenFile: f.name,
+                    boxes: null,
                 }));
-                setDsKhung([KHONG_KHUNG, ...ds]);
-            });
+                return Promise.all(ds.map((k) => axios
+                    .get(`${FRAME_API_URL}/api/frames`, { params: { layout: k.layoutId, name: k.tenFile, resource: 'config' }, timeout: 8000 })
+                    .then((r) => (Array.isArray(r.data?.boxes) && r.data.boxes.length ? { ...k, boxes: r.data.boxes } : k))
+                    .catch(() => k)));
+            })
+            .then((ds) => { if (alive && ds) setDsKhung([KHONG_KHUNG, ...ds]); });
         return () => { alive = false; };
     }, []);
 
@@ -339,7 +347,7 @@ const IdPhotoStudio = () => {
 
                 if (!cur.goc) { ketQuaRef.current = ra; setCoAnhIn(true); } // "xem ảnh chưa chỉnh" chỉ để nhìn, không đổi thứ sẽ in
                 veVao(anhLonRef.current, ra);
-                veVao(toRef.current, dungToAnhThe(ra, layoutCua(cur.khung), kAnh, 800, 1200));
+                veVao(toRef.current, dungToAnhThe(ra, oCua(cur.khung), kAnh, 800, 1200));
                 if (cur.khung?.url && !kAnh) setCanhBao('Không tải được khung này — tờ in sẽ không có khung.');
                 await new Promise((r) => setTimeout(r, 0)); // cho sự kiện kéo thanh trượt kịp tới
             } while (dirtyRef.current);
@@ -405,7 +413,7 @@ const IdPhotoStudio = () => {
             // Khung chưa tải xong thì chờ thêm chút; vẫn hỏng thì in tờ trắng (khách đã trả tiền, không kẹt ở đây).
             const k = latestRef.current.khung;
             const kAnh = k?.url ? await coHan(anhKhung(k), HAN_TAI_KHUNG_MS, 'Tải khung').catch(() => null) : null;
-            const to = dungToAnhThe(cell, layoutCua(k), kAnh);
+            const to = dungToAnhThe(cell, oCua(k), kAnh);
             // Đã in ở lần trước (ví dụ request quá giờ nhưng máy vẫn in) -> không gửi lệnh nữa, chỉ đi tiếp.
             if (sessionData.printedSessionId) {
                 updateSessionData('finalImage', to.toDataURL('image/jpeg', 0.92));
@@ -563,7 +571,7 @@ const IdPhotoStudio = () => {
                             <Eye size={16} /> Giữ để xem ảnh chưa chỉnh
                         </button>
                     ) : (
-                        <span className="shrink-0 text-sm font-bold">{khung.ten} · {layoutTo.sheetLabel}</span>
+                        <span className="shrink-0 text-sm font-bold">{khung.ten} · {soAnh(khung)} ảnh</span>
                     )}
                 </section>
 
@@ -706,7 +714,7 @@ const IdPhotoStudio = () => {
                                             <KhungNho khung={k} />
                                         </Fit>
                                         <span className="w-full truncate text-[13px] font-extrabold leading-tight text-[#3F3127]">{k.ten}</span>
-                                        <span className="text-[11px] font-bold leading-tight">{layoutCua(k).sheetLabel}</span>
+                                        <span className="text-[11px] font-bold leading-tight">{soAnh(k)} ảnh</span>
                                     </button>
                                 ))}
                             </div>

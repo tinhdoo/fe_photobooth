@@ -1,6 +1,6 @@
-// toAnhThe.js — dựng TỜ IN ảnh thẻ 4x6 inch: ô ảnh theo `layout.boxes` (layouts.js, tính bằng mm) + khung PNG phủ
-// (admin tải lên ở Quản lý khung > Ảnh thẻ). Dùng chung cho xem trước, bản in và ảnh mẫu tải về cho người thiết kế
-// khung -> ba thứ luôn khớp nhau.
+// toAnhThe.js — dựng TỜ IN ảnh thẻ 4x6 inch: ô ảnh + khung PNG phủ (admin tải lên ở Quản lý khung > Ảnh thẻ).
+// Ô lấy từ cấu hình của khung (đục lỗ / tinh chỉnh ở Cấu hình lưới, như khung photobooth); khung chưa cấu hình
+// hoặc "Không khung" dùng `boxes` của kiểu tờ (layouts.js, tính bằng mm). Dùng chung cho xem trước và bản in.
 
 import { LAYOUTS } from '../data/layouts';
 
@@ -21,10 +21,10 @@ const oTrenTo = (b, W, H) => ({
 /**
  * Rải ảnh MỘT ô vào từng ô của tờ rồi phủ khung (nếu có).
  * @param {CanvasImageSource & {width:number,height:number}} cell ảnh một ô đã xử lý xong
- * @param {object} layout một phần tử KIEU_TO_ANH_THE
+ * @param {Array<{x,y,width,height,rotation?,type?}>} boxes ô theo % tờ (cấu hình khung hoặc kiểu tờ)
  * @param {HTMLImageElement|null} khung ảnh PNG khung đã nạp (crossOrigin) hoặc null = tờ trắng
  */
-export function dungToAnhThe(cell, layout, khung = null, W = SHEET_W, H = SHEET_H) {
+export function dungToAnhThe(cell, boxes, khung = null, W = SHEET_W, H = SHEET_H) {
     const to = document.createElement('canvas');
     to.width = W;
     to.height = H;
@@ -33,7 +33,8 @@ export function dungToAnhThe(cell, layout, khung = null, W = SHEET_W, H = SHEET_
     ctx.fillRect(0, 0, W, H);
     ctx.imageSmoothingQuality = 'high';
 
-    for (const b of layout?.boxes || []) {
+    for (const b of boxes || []) {
+        if (b.type === 'qr') continue;
         const { x, y, w, h } = oTrenTo(b, W, H);
         // Ô 3x4 có tỉ lệ 0,75 còn ô 2x3 và 4x6 là 0,667 -> phải cắt "phủ kín" cho từng ô,
         // nếu kéo giãn thẳng thì mặt người trong ô 3x4 sẽ bị bè ra.
@@ -42,7 +43,14 @@ export function dungToAnhThe(cell, layout, khung = null, W = SHEET_W, H = SHEET_
         let sx = 0, sy = 0, sw = cell.width, sh = cell.height;
         if (sRatio > dRatio) { sw = cell.height * dRatio; sx = (cell.width - sw) / 2; }
         else { sh = cell.width / dRatio; sy = (cell.height - sh) / 2; }
+        ctx.save();
+        if (b.rotation) { // ô nghiêng trên khung (như Edit.jsx): xoay quanh tâm ô
+            ctx.translate(x + w / 2, y + h / 2);
+            ctx.rotate((b.rotation * Math.PI) / 180);
+            ctx.translate(-(x + w / 2), -(y + h / 2));
+        }
         ctx.drawImage(cell, sx, sy, sw, sh, x, y, w, h);
+        ctx.restore();
     }
     if (khung) ctx.drawImage(khung, 0, 0, W, H);
     return to;
