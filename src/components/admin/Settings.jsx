@@ -47,6 +47,8 @@ const Settings = ({ forceLocalAdmin = false }) => {
         mode_switch_password: '',
         photo_edit_enabled: 'false',
         photo_edit_timeout: '200',
+        id_photo_price: '',
+        id_photo_print_price: '',
     });
     const [priceScheduleForm, setPriceScheduleForm] = useState({
         run_at: '',
@@ -711,7 +713,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
                     <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
                 </div>
 
-                {isLocalAdmin && (
+                {!isLocalAdmin && (
                     <nav className="flex gap-2 shrink-0">
                         <button
                             onClick={() => setActiveTab('general')}
@@ -850,6 +852,43 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     <p className="mt-2 text-xs text-gray-400">Ví dụ: RX1HS, DNP DS-RX1HS, DS-RX1.</p>
                                                 </div>
                                             )}
+                                        </div>
+
+                                        {/* Ảnh thẻ: giá riêng. Để trống = theo giá photobooth (kể cả lịch đổi giá). */}
+                                        <div className="col-span-1 md:col-span-2 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
+                                            <div className="flex items-center gap-3 pb-1">
+                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a6abb]/10 text-2xl">🪪</div>
+                                                <div>
+                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Ảnh thẻ</h4>
+                                                    <p className="text-xs font-semibold text-gray-400">Để trống thì dùng giá chụp tại quầy. Bật ảnh thẻ cho từng máy ở tab Quản lý Thiết bị.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                                <div className="group">
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                        Giá ảnh thẻ
+                                                    </label>
+                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                        <input type="number" name="id_photo_price" value={configs.id_photo_price ?? ''} onChange={handleChange} placeholder={`Theo photobooth: ${configs.price}`} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="group">
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
+                                                        In thêm ảnh thẻ
+                                                    </label>
+                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
+                                                        <input type="number" name="id_photo_print_price" value={configs.id_photo_print_price ?? ''} onChange={handleChange} placeholder={`Theo photobooth: ${configs.print_price}`} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
+                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         {/* Cân chỉnh ảnh in */}

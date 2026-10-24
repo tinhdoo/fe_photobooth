@@ -50,6 +50,8 @@ const CLOUD_SYNC_KEYS = [
     'price_updated_at',
     // Bước 5.5 "Chỉnh ảnh": bật/tắt + thời gian từ trang Cài đặt trên cloud, không phải thao tác trên máy booth.
     'photo_edit_enabled', 'photo_edit_timeout',
+    // Giá riêng ảnh thẻ (trang Cài đặt trên cloud); rỗng = theo giá photobooth (PrintQuantity).
+    'id_photo_price', 'id_photo_print_price',
 ];
 
 const DEFAULT_CONFIGS = {

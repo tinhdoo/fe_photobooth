@@ -9,8 +9,11 @@ const PrintQuantity = () => {
     const isUploadFlow = sessionData.source === 'upload';
 
     const pricing = getCurrentPricing(configs);
-    const basePrice = isUploadFlow ? pricing.mobile_price : pricing.price;
-    const increment = isUploadFlow ? pricing.mobile_print_price : pricing.print_price;
+    // Ảnh thẻ có giá riêng (Cài đặt > Ảnh thẻ); ô để trống / 0 thì theo giá photobooth hiện hành.
+    const giaThe = layout.idPhoto ? parseInt(configs?.id_photo_price, 10) || 0 : 0;
+    const themThe = layout.idPhoto ? parseInt(configs?.id_photo_print_price, 10) || 0 : 0;
+    const basePrice = isUploadFlow ? pricing.mobile_price : giaThe || pricing.price;
+    const increment = isUploadFlow ? pricing.mobile_print_price : themThe || pricing.print_price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
 
