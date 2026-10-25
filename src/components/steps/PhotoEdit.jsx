@@ -82,10 +82,11 @@ const RANGE_CSS = `
 `;
 
 const PhotoEdit = () => {
-    const { nextStep, prevStep, sessionData, updateSessionData, timedOut, configs } = useWorkflow();
+    // Giờ của bước = chặng "Chỉnh ảnh" của đồng hồ phiên (photo_edit_timeout + phần dư của Chụp / Chọn ảnh, xem
+    // WorkflowContext). Trước 0.0.30 bước này có đồng hồ riêng và đồng hồ phiên đứng yên.
+    const { nextStep, prevStep, sessionData, updateSessionData, timedOut, timeLeft, configs } = useWorkflow();
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
-    const limit = Math.max(30, parseInt(configs?.photo_edit_timeout, 10) || 200);
 
     // Các ô theo thứ tự in; một ảnh có thể nằm ở nhiều ô -> chỉnh theo ảnh (url), không theo ô.
     const slotUrls = useMemo(() => (sessionData.photos || []).map(getPhotoUrl), [sessionData.photos]);
@@ -103,11 +104,6 @@ const PhotoEdit = () => {
     const [loading, setLoading] = useState(false);
     const [previewError, setPreviewError] = useState(false);
     const [finishing, setFinishing] = useState(null);  // { done, total } khi đang làm ảnh gốc
-    // Thời gian của bước tính cho cả lượt: vào lại (từ Chỉnh sửa / Chọn ảnh) chạy tiếp phần còn lại.
-    const [timeLeft, setTimeLeft] = useState(() => {
-        const left = sessionData.photoEditTimeLeft;
-        return typeof left === 'number' && left > 0 ? Math.min(left, limit) : limit;
-    });
     const [canvasSize, setCanvasSize] = useState(null); // cỡ thật của ảnh xem trước
     const [stage, setStage] = useState({ w: 0, h: 0 });  // chỗ trống để hiện ảnh
     const [toast, setToast] = useState(null);
@@ -127,8 +123,6 @@ const PhotoEdit = () => {
     const finishingRef = useRef(false);
     const editsRef = useRef(edits);
     editsRef.current = edits;
-    const timeLeftRef = useRef(timeLeft);
-    timeLeftRef.current = timeLeft;
     const failedRef = useRef(new Set());       // ảnh dò nền bị lỗi -> không thử lại liên tục
     const applyingRef = useRef(false);
 
@@ -403,25 +397,18 @@ const PhotoEdit = () => {
         });
         updateSessionData('photoEditState', all);
         updateSessionData('photoEdits', next);
-        updateSessionData('photoEditTimeLeft', timeLeftRef.current);
         nextStep();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urls, getBase, sessionData.photoEdits]);
 
-    // Đồng hồ riêng của bước (đồng hồ phiên đứng yên trong lúc này). Hết giờ -> tự đi tiếp.
+    // Hết giờ chặng -> tự đi tiếp.
     useEffect(() => {
-        if (finishing) return undefined;
-        const t = setInterval(() => setTimeLeft((s) => Math.max(0, s - 1)), 1000);
-        return () => clearInterval(t);
-    }, [finishing]);
-    useEffect(() => {
-        if (timeLeft === 0 || timedOut) finish();
-    }, [timeLeft, timedOut, finish]);
+        if (timedOut) finish();
+    }, [timedOut, finish]);
 
     const handleBack = () => {
         if (finishingRef.current) return;
         updateSessionData('photoEditState', editsRef.current);
-        updateSessionData('photoEditTimeLeft', timeLeftRef.current);
         prevStep();
     };
 

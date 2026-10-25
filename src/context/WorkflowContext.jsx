@@ -45,6 +45,8 @@ const CONFIG_CACHE_KEY = 'ptb_configs_cache';
 const CLOUD_SYNC_KEYS = [
     'price', 'print_price', 'mobile_price', 'mobile_print_price', 'price_schedule',
     'session_timeout', 'mobile_session_timeout', 'countdown', 'hotfolder_capture_timeout', 'canon_capture_timeout',
+    // Đồng hồ phiên theo chặng (0.0.30): Chụp / Chọn ảnh / Chọn khung & in / Studio ảnh thẻ (Chỉnh ảnh = photo_edit_timeout).
+    'session_capture_timeout', 'session_review_timeout', 'session_frame_timeout', 'id_studio_timeout',
     'bg_welcome', 'bg_mode-selection', 'bg_choose-slot', 'bg_select-photo-number', 'bg_payment', 'bg_payment-wait',
     'bg_select-photo', 'bg_filter-adjustment', 'bg_preview-when', 'bg_qr-photo', 'bg_id-photo',
     'brand_text_primary', 'brand_text_secondary',
@@ -66,6 +68,10 @@ const DEFAULT_CONFIGS = {
     mobile_print_price: 10000,
     session_timeout: 600,
     mobile_session_timeout: 300,
+    session_capture_timeout: 300,
+    session_review_timeout: 120,
+    session_frame_timeout: 180,
+    id_studio_timeout: 300,
     countdown: 5,
     hotfolder_capture_timeout: 30,
     canon_capture_timeout: 30,
@@ -85,6 +91,32 @@ const DEFAULT_CONFIGS = {
     photo_edit_timeout: 200,
 };
 
+// ĐỒNG HỒ PHIÊN THEO CHẶNG (0.0.30). Trước đây một đồng hồ chung cho cả lượt (session_timeout): hết giờ là mọi bước còn
+// lại tự chạy một mạch tới in. Giờ mỗi chặng có số giây riêng (trang Cài đặt); chặng trước dùng không hết thì phần dư
+// CỘNG DỒN sang chặng sau. Tải ảnh từ điện thoại vẫn một đồng hồ chung (mobile_session_timeout).
+export const TEN_CHANG = { chup: 'Chụp', chon: 'Chọn ảnh', chinh: 'Chỉnh ảnh', khung: 'Chọn khung', the: 'Ảnh thẻ', tai_len: '' };
+export const changCuaBuoc = (step, laTaiLen) => {
+    if (step === 8) return laTaiLen ? 'tai_len' : 'the';
+    if (step >= 7) return null; // Kết quả: không tính giờ phiên (màn này tự về trang chủ theo luật riêng)
+    if (laTaiLen) return 'tai_len';
+    if (step === 5) return 'chon';
+    if (step === 5.5) return 'chinh';
+    if (step === 6) return 'khung';
+    return 'chup'; // Chuẩn bị (3.5) + Chụp (4); trước khi vào lượt đồng hồ chưa chạy
+};
+export const soGiayChang = (chang, cfg) => {
+    const so = (k) => Math.max(10, parseInt(cfg?.[k], 10) || DEFAULT_CONFIGS[k]);
+    switch (chang) {
+        case 'tai_len': return so('mobile_session_timeout');
+        case 'chup': return so('session_capture_timeout');
+        case 'chon': return so('session_review_timeout');
+        case 'chinh': return Math.max(30, parseInt(cfg?.photo_edit_timeout, 10) || DEFAULT_CONFIGS.photo_edit_timeout);
+        case 'khung': return so('session_frame_timeout');
+        case 'the': return so('id_studio_timeout');
+        default: return 0;
+    }
+};
+
 // Bước 5.5 "Chỉnh ảnh" (giữa Chọn ảnh 5 và Chỉnh sửa 6). Mặc định tắt: booth chạy y như cũ tới khi admin bật.
 export const isPhotoEditEnabled = (configs) => String(configs?.photo_edit_enabled ?? 'false') === 'true';
 
@@ -97,6 +129,10 @@ const normalizeConfigs = (nextConfigs = {}, fallback = DEFAULT_CONFIGS) => ({
     mobile_print_price: parseInt(nextConfigs.mobile_print_price ?? fallback.mobile_print_price) || DEFAULT_CONFIGS.mobile_print_price,
     session_timeout: parseInt(nextConfigs.session_timeout ?? fallback.session_timeout) || DEFAULT_CONFIGS.session_timeout,
     mobile_session_timeout: parseInt(nextConfigs.mobile_session_timeout ?? fallback.mobile_session_timeout) || DEFAULT_CONFIGS.mobile_session_timeout,
+    session_capture_timeout: parseInt(nextConfigs.session_capture_timeout ?? fallback.session_capture_timeout) || DEFAULT_CONFIGS.session_capture_timeout,
+    session_review_timeout: parseInt(nextConfigs.session_review_timeout ?? fallback.session_review_timeout) || DEFAULT_CONFIGS.session_review_timeout,
+    session_frame_timeout: parseInt(nextConfigs.session_frame_timeout ?? fallback.session_frame_timeout) || DEFAULT_CONFIGS.session_frame_timeout,
+    id_studio_timeout: parseInt(nextConfigs.id_studio_timeout ?? fallback.id_studio_timeout) || DEFAULT_CONFIGS.id_studio_timeout,
     countdown: parseInt(nextConfigs.countdown ?? fallback.countdown) || DEFAULT_CONFIGS.countdown,
     hotfolder_capture_timeout: parseInt(nextConfigs.hotfolder_capture_timeout ?? fallback.hotfolder_capture_timeout) || DEFAULT_CONFIGS.hotfolder_capture_timeout,
     canon_capture_timeout: parseInt(nextConfigs.canon_capture_timeout ?? fallback.canon_capture_timeout) || DEFAULT_CONFIGS.canon_capture_timeout,
@@ -515,11 +551,9 @@ export const WorkflowProvider = ({ children }) => {
     };
 
     const photoEditOn = isPhotoEditEnabled(configs) && sessionData.captureMode !== 'id';
-    // Thời gian bước 5.5 tính cho CẢ lượt (PhotoEdit lưu phần còn lại vào photoEditTimeLeft): dùng hết rồi thì không
-    // vào lại nữa. Không có giới hạn này, khách đi qua lại 5.5 <-> 6 được thêm nguyên thời gian mỗi lần trong khi
-    // đồng hồ phiên đứng yên ở 5.5 -> giữ máy vô hạn.
-    const photoEditLeft = sessionData.photoEditTimeLeft;
-    const canPhotoEdit = photoEditOn && !(typeof photoEditLeft === 'number' && photoEditLeft <= 0);
+    // Đi qua lại 5.5 <-> 6 không được thêm giờ: quay lại bước trước dùng chung hạn của chặng xa nhất đã tới (đồng hồ
+    // theo chặng bên dưới), nên không còn cần giới hạn riêng cho 5.5 như trước 0.0.30.
+    const canPhotoEdit = photoEditOn;
 
     const nextStep = () => {
         const isIdPhoto = sessionData.captureMode === 'id';
@@ -547,9 +581,9 @@ export const WorkflowProvider = ({ children }) => {
             // Event Mode: Skip Quantity + Payment. Layout -> qua màn Chuẩn bị (3.5).
             if (isEventMode && prev === 2) return 3.5;
 
-            // Chọn ảnh (5) -> Chỉnh ảnh (5.5) -> Chỉnh sửa (6). Hết giờ phiên thì bỏ qua 5.5 để chuỗi tự in
-            // không phải chờ thêm một màn.
-            if (prev === 5) return canPhotoEdit && !timedOut ? 5.5 : 6;
+            // Chọn ảnh (5) -> Chỉnh ảnh (5.5) -> Chỉnh sửa (6). Hết giờ chặng Chọn ảnh vẫn vào 5.5: chặng Chỉnh ảnh có
+            // giờ riêng (0.0.30), khách bỏ đi thì nó tự hết rồi đi tiếp.
+            if (prev === 5) return canPhotoEdit ? 5.5 : 6;
             if (prev === 5.5) return 6;
 
             return Math.min(prev + 1, 7);
@@ -585,27 +619,38 @@ export const WorkflowProvider = ({ children }) => {
 
     const goToStep = (step) => setCurrentStep(step);
 
-    // Session Timer
-    const SESSION_DURATION = sessionData.source === 'upload'
-        ? configs.mobile_session_timeout
-        : configs.session_timeout;
-    const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
+    // ĐỒNG HỒ PHIÊN THEO CHẶNG (xem changCuaBuoc / soGiayChang). `han` = tổng số giây của các chặng ĐÃ VÀO, `daChay` = số
+    // giây đã trôi từ lúc vào lượt; còn lại = han - daChay -> giờ chặng trước dùng không hết tự cộng sang chặng sau.
+    // Quay lại bước trước (chụp lại từ Chọn ảnh, lùi từ Chọn khung) KHÔNG cộng thêm giờ: dùng chung hạn của chặng xa nhất
+    // đã tới. Hết hạn thì chỉ bước đang đứng tự hoàn tất (timedOut); sang chặng mới là có giờ của chặng đó.
+    // han / chặng đã vào là ref cập nhật NGAY trong lúc render: bước mới mount đã thấy timedOut=false — cập nhật bằng
+    // effect thì bước mới (effect con chạy trước effect cha) thấy timedOut cũ của chặng trước và tự hoàn tất luôn.
+    const laTaiLen = sessionData.source === 'upload';
     const [isSessionActive, setIsSessionActive] = useState(false);
-    // Cờ BỀN VỮNG: phiên đã hết giờ. Giữ true tới hết flow để CHUỖI auto-chuyển-bước + auto-in
-    // không bị đứt (isSessionActive tắt ngay khi hết giờ, không dùng để gate các bước được).
-    const [timedOut, setTimedOut] = useState(false);
+    const [daChay, setDaChay] = useState(0);
+    const hanRef = useRef(0);
+    const changDaVaoRef = useRef(new Set());
+    const changHienTai = changCuaBuoc(currentStep, laTaiLen);
+    if (isSessionActive && changHienTai && !changDaVaoRef.current.has(changHienTai)) {
+        changDaVaoRef.current.add(changHienTai);
+        hanRef.current += soGiayChang(changHienTai, configs);
+    }
+    const timeLeft = isSessionActive ? Math.max(0, hanRef.current - daChay) : 0;
+    const timedOut = isSessionActive && !!changHienTai && hanRef.current > 0 && daChay >= hanRef.current;
+    const SESSION_DURATION = soGiayChang(changHienTai || (laTaiLen ? 'tai_len' : 'chup'), configs);
+    const batDauDongHo = () => {
+        changDaVaoRef.current = new Set();
+        hanRef.current = 0;
+        setDaChay(0);
+        setIsSessionActive(true);
+    };
     // Đang chờ upload ảnh nền hoàn tất trước khi reset -> hiện overlay "Đang lưu ảnh...".
     const [savingBeforeReset, setSavingBeforeReset] = useState(false);
 
     // Start timer when payment is completed — read configs fresh at this moment
     useEffect(() => {
         if (sessionData.paymentStatus === 'completed' && !isSessionActive) {
-            const freshDuration = sessionData.source === 'upload'
-                ? configs.mobile_session_timeout
-                : configs.session_timeout;
-            setIsSessionActive(true);
-            setTimedOut(false);
-            setTimeLeft(freshDuration);
+            batDauDongHo(); // số giây từng chặng đọc lúc vào chặng đó (cấu hình mới nhất)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionData.paymentStatus]);
@@ -615,9 +660,7 @@ export const WorkflowProvider = ({ children }) => {
     // để có timeout tự hoàn tất/in/reset như luồng trả phí.
     useEffect(() => {
         if (isEventMode && !isSessionActive && currentStep >= 3.5 && currentStep <= 6) {
-            setIsSessionActive(true);
-            setTimedOut(false);
-            setTimeLeft(configs.session_timeout);
+            batDauDongHo();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEventMode, currentStep]);
@@ -683,26 +726,16 @@ export const WorkflowProvider = ({ children }) => {
         };
     }, [currentStep, isSessionActive]);
 
-    // Timer Countdown
-    // Bước Chỉnh ảnh (5.5) có đồng hồ riêng (photo_edit_timeout) nên đồng hồ phiên đứng yên trong lúc đó:
-    // khách chỉnh ảnh không bị ăn vào thời gian chọn khung/in.
-    const sessionTimerPaused = currentStep === 5.5;
+    // Đếm giờ: chỉ khi đang ở một chặng (màn Kết quả không tính). Tới hạn thì DỪNG ở đó, không trôi tiếp: bước đang
+    // đứng tự hoàn tất, chặng sau vẫn nhận đủ giờ của nó dù bước kia mất vài giây mới xong.
+    const coDemGio = isSessionActive && !!changHienTai;
     useEffect(() => {
-        if (!isSessionActive || sessionTimerPaused) return undefined;
-
+        if (!coDemGio) return undefined;
         const interval = setInterval(() => {
-            setTimeLeft((prev) => Math.max(0, prev - 1));
+            setDaChay((d) => (d < hanRef.current ? d + 1 : d));
         }, 1000);
-
         return () => clearInterval(interval);
-    }, [isSessionActive, sessionTimerPaused]);
-
-    useEffect(() => {
-        if (timeLeft === 0 && isSessionActive) {
-            setIsSessionActive(false); // dừng đếm giờ
-            setTimedOut(true);         // ...nhưng đánh dấu đã hết giờ để các bước tự hoàn tất + in
-        }
-    }, [timeLeft, isSessionActive]);
+    }, [coDemGio]);
 
     // --- Điều khiển Live View Canon theo bước ---
     // Bật từ bước Thanh toán (step 3) để khi vào Chụp (step 4) có hình ngay; tắt khi ở
@@ -838,7 +871,8 @@ export const WorkflowProvider = ({ children }) => {
                 updateSessionData,
                 isEventMode,
                 toggleEventMode,
-                timeLeft, // Expose timer
+                timeLeft, // giây còn lại của chặng hiện tại (đã cộng phần dư chặng trước)
+                changHienTai,
                 isSessionActive,
                 photoEditOn,
                 idPhotoOn,

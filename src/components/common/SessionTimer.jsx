@@ -1,12 +1,12 @@
-import { useWorkflow } from '../../context/WorkflowContext';
+import { useWorkflow, TEN_CHANG } from '../../context/WorkflowContext';
 import { Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const SessionTimer = () => {
-    const { timeLeft, isSessionActive, currentStep } = useWorkflow();
+    const { timeLeft, isSessionActive, currentStep, changHienTai } = useWorkflow();
 
     // Only show timer in active steps (Capture, Review, Edit)
-    // Step 4 = Capture, 5 = Review, 6 = Edit. Chỉnh ảnh (5.5) tự hiện đồng hồ riêng, đồng hồ phiên đứng yên.
+    // Step 4 = Capture, 5 = Review, 6 = Edit. Chỉnh ảnh (5.5) tự hiện giờ của chặng trong bố cục của nó.
     // 8 = Studio ảnh thẻ (chọn khung + chỉnh mặt) — vẫn tính giờ phiên.
     const shouldShow = isSessionActive && ((currentStep >= 4 && currentStep <= 6 && currentStep !== 5.5) || currentStep === 8);
 
@@ -32,6 +32,8 @@ const SessionTimer = () => {
                 `}
             >
                 <Clock size={20} className={isCritical ? 'animate-bounce' : ''} />
+                {/* Giờ theo chặng (0.0.30): ghi tên chặng để khách biết đây là giờ của bước này, không phải cả lượt. */}
+                {TEN_CHANG[changHienTai] && <span className="text-sm font-semibold opacity-80">{TEN_CHANG[changHienTai]}</span>}
                 <span className="text-xl tabular-nums">
                     {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
                 </span>

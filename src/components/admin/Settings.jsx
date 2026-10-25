@@ -23,6 +23,10 @@ const Settings = ({ forceLocalAdmin = false }) => {
         mobile_print_price: '10000',
         session_timeout: '600',
         mobile_session_timeout: '300',
+        session_capture_timeout: '300',
+        session_review_timeout: '120',
+        session_frame_timeout: '180',
+        id_studio_timeout: '300',
         countdown: '5',
         hotfolder_capture_timeout: '30',
         canon_capture_timeout: '30',
@@ -153,7 +157,13 @@ const Settings = ({ forceLocalAdmin = false }) => {
         setSaving(true);
         setMessage(null);
         try {
-            await axios.post('/api/config', configs, { headers: authHeader() });
+            // Booth bản cũ (<= 0.0.29) chỉ đọc một đồng hồ chung session_timeout: ghi bằng tổng Chụp + Chọn ảnh + Chọn
+            // khung (không tính Chỉnh ảnh: bản cũ dừng đồng hồ phiên ở bước đó) để booth chưa cập nhật có cùng tổng giờ.
+            const giay = (k, d) => parseInt(configs[k], 10) || d;
+            const tong = giay('session_capture_timeout', 300) + giay('session_review_timeout', 120)
+                + giay('session_frame_timeout', 180);
+            await axios.post('/api/config', { ...configs, session_timeout: String(tong) }, { headers: authHeader() });
+            setConfigs((prev) => ({ ...prev, session_timeout: String(tong) }));
             setMessage({ type: 'success', text: 'Cài đặt đã được lưu thành công!' });
         } catch (error) {
             console.error("Error saving configs:", error);
@@ -1056,10 +1066,29 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Thời gian 1 phiên chụp (giây)
-                                                </label>
-                                                <input type="number" name="session_timeout" value={configs.session_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                                <span className="block text-xs font-bold text-gray-700">Thời gian từng chặng (giây)</span>
+                                                <span className="mt-1 mb-3 block text-xs text-gray-500">
+                                                    Mỗi chặng có đồng hồ riêng; khách xong sớm thì giờ còn dư cộng sang chặng sau. Hết giờ chặng
+                                                    nào thì bước đó tự hoàn tất (chụp xong, tự chọn ảnh, tự in). Chặng Chỉnh ảnh dùng ô bên phải.
+                                                </span>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chụp</label>
+                                                    <input type="number" name="session_capture_timeout" min="10" placeholder="300" value={configs.session_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chọn ảnh</label>
+                                                    <input type="number" name="session_review_timeout" min="10" placeholder="120" value={configs.session_review_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chọn khung & in</label>
+                                                    <input type="number" name="session_frame_timeout" min="10" placeholder="180" value={configs.session_frame_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Studio ảnh thẻ</label>
+                                                    <input type="number" name="id_studio_timeout" min="10" placeholder="300" value={configs.id_studio_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                                </div>
+                                                </div>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
@@ -1092,14 +1121,14 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                                     <span className="block text-xs font-bold text-gray-700">Bước "Chỉnh ảnh" (thử nghiệm)</span>
                                                     <span className="mt-1 block text-xs text-gray-500">
                                                         Thêm một màn sau Chọn ảnh để khách chọn kiểu làm đẹp cho từng ảnh. Bật thì các kiểu
-                                                        làm đẹp chuyển hẳn sang màn này, màn chọn khung chỉ còn filter màu. Đồng hồ phiên
-                                                        tạm dừng trong lúc khách chỉnh.
+                                                        làm đẹp chuyển hẳn sang màn này, màn chọn khung chỉ còn filter màu. Đây là một
+                                                        chặng của đồng hồ phiên (cộng dồn giờ dư như các chặng khác).
                                                     </span>
                                                 </span>
                                             </label>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Thời gian bước Chỉnh ảnh (giây)
+                                                    Thời gian chặng Chỉnh ảnh (giây)
                                                 </label>
                                                 <input type="number" name="photo_edit_timeout" min="30" value={configs.photo_edit_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
                                             </div>
