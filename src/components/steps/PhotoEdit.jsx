@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Clock, Copy, Eye, Loader2, RotateCcw, Undo2, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Clock, Copy, Eye, Loader2, RotateCcw, Undo2, Users, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useWorkflow } from '../../context/WorkflowContext';
 import {
     SLIDER_TABS, SWATCHES, EMPTY_EDIT, editFromPreset, sliderValue, colorValue, setEditValue, resetFace,
@@ -106,7 +107,9 @@ const PhotoEdit = () => {
     const [finishing, setFinishing] = useState(null);  // { done, total } khi đang làm ảnh gốc
     const [canvasSize, setCanvasSize] = useState(null); // cỡ thật của ảnh xem trước
     const [stage, setStage] = useState({ w: 0, h: 0 });  // chỗ trống để hiện ảnh
-    const [toast, setToast] = useState(null);
+    const [toast, setToastRaw] = useState(null);       // { text, loai: 'nhac' | 'xong' | 'dang' }
+    const setToast = (text, loai = 'nhac') => setToastRaw(text ? { text, loai } : null);
+    const [loe, setLoe] = useState([]);                // lóe sáng tạm ở chỗ vừa chạm xoá mụn
 
     const edit =(active && edits[active]) || EMPTY_EDIT;
     const info = active ? infos[active] : null;
@@ -268,7 +271,7 @@ const PhotoEdit = () => {
             let ids = null;
             if (own.length) {
                 // Thường đã dò xong ở nền; chưa xong thì chờ (có báo). Ảnh dò lỗi coi như không có ai.
-                if (urls.some((u) => !infos[u] && !failedRef.current.has(u))) setToast('Đang tìm từng người trong các ảnh khác…');
+                if (urls.some((u) => !infos[u] && !failedRef.current.has(u))) setToast('Đang tìm từng người trong các ảnh khác…', 'dang');
                 const all = await Promise.all(urls.map((u) => (failedRef.current.has(u)
                     ? Promise.resolve([])
                     : getBase(u).then((r) => r.match || [], () => []))));
@@ -294,14 +297,14 @@ const PhotoEdit = () => {
             const parts = [];
             if (seen.length) parts.push(`chỉnh riêng ${seen.map((i) => `${name(i)} (${found[i]}/${others.length} ảnh)`).join(', ')}`);
             if (unseen.length) parts.push(`${unseen.map(name).join(', ')} không có ở ảnh khác nên chỉ chép phần chung`);
-            setToast(`Đã áp cho ${others.length} ảnh khác${parts.length ? ` — ${parts.join('; ')}` : ''}`);
+            setToast(`Đã áp cho ${others.length} ảnh khác${parts.length ? ` — ${parts.join('; ')}` : ''}`, 'xong');
         } finally {
             applyingRef.current = false;
         }
     };
     useEffect(() => {
         if (!toast) return undefined;
-        const t = setTimeout(() => setToast(null), Math.max(2500, toast.length * 60)); // câu dài -> đủ thời gian đọc
+        const t = setTimeout(() => setToast(null), Math.max(2500, toast.text.length * 60)); // câu dài -> đủ thời gian đọc
         return () => clearTimeout(t);
     }, [toast]);
 
@@ -334,8 +337,12 @@ const PhotoEdit = () => {
                 const d = Math.hypot(((bx.x0 + bx.x1) / 2 - x) * aspect, (bx.y0 + bx.y1) / 2 - y);
                 if (d < best) { best = d; rad = Math.max(0.003, (bx.x1 - bx.x0) * aspect * SPOT_R); }
             });
-            if ((edit.spots || []).length >= MAX_SPOTS) { setToast(`Tối đa ${MAX_SPOTS} chỗ mỗi ảnh`); return; }
+            if ((edit.spots || []).length >= MAX_SPOTS) { setToast(`Mỗi ảnh xoá được tối đa ${MAX_SPOTS} chỗ`); return; }
             update((e) => addSpot(e, { x, y, r: rad }));
+            // Lóe sáng tại chỗ chạm rồi tắt: không để lại dấu nào trên ảnh (vòng đánh dấu cũ làm khách khó hiểu).
+            const id = Date.now() + Math.random();
+            setLoe((ds) => [...ds, { id, x, y, r: rad }]);
+            setTimeout(() => setLoe((ds) => ds.filter((d) => d.id !== id)), 700);
             return;
         }
         if (!info?.boxes.length) return;
@@ -419,7 +426,6 @@ const PhotoEdit = () => {
     const personHasOwn = tgt !== 'all' && !!edit.faces?.[tgt];
     const showBoxes = !showOriginal && currentTab.scope === 'face' && faceCount > 0;
     const spots = edit.spots || [];
-    const showSpots = !showOriginal && currentTab.scope === 'heal' && canvasSize;
 
     const mm = Math.floor(timeLeft / 60);
     const ss = timeLeft % 60;
@@ -455,28 +461,61 @@ const PhotoEdit = () => {
                                 onPointerUp={onPreviewTap}
                             >
                                 <canvas ref={canvasRef} className="block h-full w-full rounded-xl shadow-md" />
+                                {/* Không vẽ khung đè lên mặt (khách thấy vướng): mỗi người một nhãn số nhỏ trên đỉnh đầu, người
+                                    đang chỉnh riêng nhãn đỏ. Chọn một người thì khung chỉ lóe lên rồi tắt để biết đã chọn ai. */}
                                 {showBoxes && info.boxes.map((b, i) => (
-                                    <div
+                                    <span
                                         key={i}
-                                        className={`pointer-events-none absolute rounded-[40%] border-[3px] ${
-                                            tgt === i ? 'border-[#e63946] shadow-[0_0_0_3px_rgba(255,255,255,0.8)]' : tgt === 'all' ? 'border-white/70' : 'border-dashed border-white/60'
+                                        className={`pointer-events-none absolute rounded-full px-2 py-0.5 text-xs font-extrabold shadow ${
+                                            tgt === i ? 'bg-[#e63946] text-white' : 'bg-white/85 text-[#7B5E43]'
                                         }`}
-                                        style={{ left: `${b.x0 * 100}%`, top: `${b.y0 * 100}%`, width: `${(b.x1 - b.x0) * 100}%`, height: `${(b.y1 - b.y0) * 100}%` }}
-                                    />
+                                        style={{ left: `${((b.x0 + b.x1) / 2) * 100}%`, top: `${b.y0 * 100}%`, transform: 'translate(-50%, -115%)' }}
+                                    >
+                                        {personNo(i)}
+                                    </span>
                                 ))}
-                                {showSpots && spots.map((sp, i) => (
-                                    <div
-                                        key={i}
-                                        className="pointer-events-none absolute rounded-full border-2 border-dashed border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
-                                        style={{
-                                            left: `${sp.x * 100}%`,
-                                            top: `${sp.y * 100}%`,
-                                            width: `${(2 * sp.r * canvasSize.h * 100) / canvasSize.w}%`,
-                                            height: `${2 * sp.r * 100}%`,
-                                            transform: 'translate(-50%, -50%)',
-                                        }}
-                                    />
-                                ))}
+                                <AnimatePresence>
+                                    {showBoxes && typeof tgt === 'number' && info.boxes[tgt] && (
+                                        <motion.div
+                                            key={`chon-${tgt}-${active}`}
+                                            className="pointer-events-none absolute rounded-[40%] border-[3px] border-[#e63946]"
+                                            style={{
+                                                left: `${info.boxes[tgt].x0 * 100}%`,
+                                                top: `${info.boxes[tgt].y0 * 100}%`,
+                                                width: `${(info.boxes[tgt].x1 - info.boxes[tgt].x0) * 100}%`,
+                                                height: `${(info.boxes[tgt].y1 - info.boxes[tgt].y0) * 100}%`,
+                                            }}
+                                            initial={{ opacity: 1 }}
+                                            animate={{ opacity: 0 }}
+                                            transition={{ duration: 0.4, delay: 0.5 }}
+                                        />
+                                    )}
+                                </AnimatePresence>
+                                <AnimatePresence>
+                                    {canvasSize && loe.map((d) => {
+                                        // Cỡ lóe ~3 lần vùng xoá, tối thiểu 36 px trên màn hình cho dễ thấy.
+                                        const px = Math.max(36, 6 * d.r * canvasSize.h * fitScale);
+                                        return (
+                                            <motion.div
+                                                key={d.id}
+                                                className="pointer-events-none absolute rounded-full"
+                                                style={{
+                                                    left: `${d.x * 100}%`,
+                                                    top: `${d.y * 100}%`,
+                                                    width: px,
+                                                    height: px,
+                                                    marginLeft: -px / 2,
+                                                    marginTop: -px / 2,
+                                                    background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,250,235,0.6) 35%, rgba(255,255,255,0) 70%)',
+                                                }}
+                                                initial={{ scale: 0.3, opacity: 1 }}
+                                                animate={{ scale: 1.2, opacity: 0 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.6, ease: 'easeOut' }}
+                                            />
+                                        );
+                                    })}
+                                </AnimatePresence>
                             </div>
                         </div>
                         {(loading || !engineReady) && (
@@ -705,11 +744,24 @@ const PhotoEdit = () => {
                 </button>
             </footer>
 
-            {toast && (
-                <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 max-w-[80vw] -translate-x-1/2 rounded-3xl bg-[#4A5D4E] px-6 py-3 text-center text-base font-extrabold text-white shadow-xl">
-                    {toast}
-                </div>
-            )}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        key={toast.text}
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.2 }}
+                        className="pointer-events-none fixed bottom-24 left-1/2 z-50 flex w-max max-w-[80vw] -translate-x-1/2 items-center gap-3 rounded-2xl border-2 border-[#D5B895] bg-white/95 px-5 py-3 text-base font-bold shadow-[0_10px_30px_rgba(123,94,67,0.25)] backdrop-blur"
+                        style={{ color: primaryTextColor }}
+                    >
+                        {toast.loai === 'xong' ? <CheckCircle2 size={22} className="shrink-0 text-[#52796f]" />
+                            : toast.loai === 'dang' ? <Loader2 size={22} className="shrink-0 animate-spin text-[#D5B895]" />
+                                : <AlertCircle size={22} className="shrink-0 text-[#C8A47A]" />}
+                        <span>{toast.text}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {finishing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
