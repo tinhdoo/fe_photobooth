@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images, Download } from 'lucide-react';
+import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images, Download, Camera, IdCard, Smile } from 'lucide-react';
 import { LAYOUTS } from '../../data/layouts';
 import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
@@ -409,99 +409,65 @@ const FrameManager = () => {
     return (
         <div className="animate-fadeIn">
 
-            {/* Top Frames Section — compact horizontal */}
-            {(topFramesLoading || topFrames.length > 0) && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 mb-6 flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-500 shrink-0 mr-1">
-                        <Award size={14} />
-                        <span className="uppercase tracking-wide">Top frame</span>
-                    </div>
+            <h1 className="mb-4 text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Khung hình</h1>
 
+            {/* Top frame: một hàng cuộn ngang (điện thoại không bị xuống nhiều dòng) */}
+            {(topFramesLoading || topFrames.length > 0) && (
+                <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex shrink-0 items-center gap-1.5 pr-1 text-xs font-bold text-amber-500">
+                        <Award size={14} />
+                        <span>Top</span>
+                    </div>
                     {topFramesLoading ? (
                         <Loader2 size={16} className="animate-spin text-gray-300" />
-                    ) : (() => {
-                        const medals = ['🥇', '🥈', '🥉', '4', '5'];
-                        return topFrames.map((frame, idx) => (
-                            <div key={frame.frame_url} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-xl px-2 py-1">
-                                <span className="text-sm leading-none">{medals[idx]}</span>
-                                <div className="w-7 h-7 rounded-lg overflow-hidden bg-white border border-gray-100 shrink-0">
-                                    <img src={frame.frame_url} alt={frame.frame_name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
-                                </div>
-                                <span className="text-xs font-semibold text-[#1a1a2e] max-w-[80px] truncate" title={frame.frame_name}>
-                                    {frame.frame_name}
-                                </span>
-                                <span className="text-[10px] font-black text-[#e63946] bg-[#e63946]/10 px-1.5 py-0.5 rounded-full shrink-0">
-                                    {frame.count}x
-                                </span>
+                    ) : topFrames.map((frame, idx) => (
+                        <div key={frame.frame_url} className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 py-1 pl-1 pr-2">
+                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white">
+                                <img src={frame.frame_url} alt={frame.frame_name} loading="lazy" decoding="async" className="h-full w-full object-contain" />
+                                <span className="absolute left-0 top-0 rounded-br-md bg-[#1a1a2e] px-1 text-[9px] font-bold leading-[14px] text-white">{idx + 1}</span>
                             </div>
-                        ));
-                    })()}
+                            <span className="max-w-[90px] truncate text-xs font-semibold text-[#1a1a2e]" title={frame.frame_name}>{frame.frame_name}</span>
+                            <span className="shrink-0 text-[11px] font-black text-[#e63946]">{frame.count}×</span>
+                        </div>
+                    ))}
                 </div>
             )}
 
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 lg:gap-6">
-                <div className="w-full lg:w-auto">
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Quản lý khung hình</h1>
-                    <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý khung viền cho máy ảnh của bạn</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-                    {/* Tab Switcher */}
-                    <div className="inline-flex bg-gray-100/80 rounded-full p-0.5 border border-gray-200/50">
-                        <button
-                            onClick={() => { setActiveTab('photobooth'); setSelectedLayout(LAYOUTS.find(l => !l.isMobileOnly && !l.idPhoto)?.id || LAYOUTS[0].id); }}
-                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
-                                ${activeTab === 'photobooth'
-                                    ? 'bg-white shadow text-[#e63946]'
-                                    : 'text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            📷 Photobooth
-                        </button>
-                        <button
-                            onClick={() => { setActiveTab('idphoto'); setSelectedLayout(LAYOUTS.find(l => l.idPhoto)?.id || LAYOUTS[0].id); }}
-                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
-                                ${activeTab === 'idphoto'
-                                    ? 'bg-white shadow text-[#e63946]'
-                                    : 'text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            🪪 Ảnh thẻ
-                        </button>
-                        {/* Tab "📱 Upload" (khung cho luồng tải ảnh từ điện thoại) đã ẩn: tính năng
-                            tải trực tuyến không còn dùng, xem phần giá đã gỡ khỏi Cài đặt. Khung
-                            isMobileOnly VẪN CÒN trên máy chủ, chỉ là không vào được từ màn này nữa.
-                            Muốn bật lại thì trả nút này về, activeTab === 'upload' vẫn xử lý đủ. */}
-                        <button
-                            onClick={() => setActiveTab('icons')}
-                            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200
-                                ${activeTab === 'icons'
-                                    ? 'bg-white shadow text-[#e63946]'
-                                    : 'text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            🎭 Icons
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <nav className="mb-4 grid grid-cols-3 gap-1 rounded-2xl bg-gray-100 p-1 sm:inline-grid sm:min-w-[420px]">
+                {[
+                    ['photobooth', 'Photobooth', Camera, () => setSelectedLayout(LAYOUTS.find(l => !l.isMobileOnly && !l.idPhoto)?.id || LAYOUTS[0].id)],
+                    ['idphoto', 'Ảnh thẻ', IdCard, () => setSelectedLayout(LAYOUTS.find(l => l.idPhoto)?.id || LAYOUTS[0].id)],
+                    // Tab "Upload" (khung isMobileOnly cho luồng tải ảnh từ điện thoại) đã ẩn: tính năng không còn dùng;
+                    // khung vẫn còn trên máy chủ, activeTab === 'upload' vẫn xử lý đủ nếu muốn bật lại.
+                    ['icons', 'Icons', Smile, null],
+                ].map(([k, ten, Icon, chonLayout]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        onClick={() => { setActiveTab(k); chonLayout?.(); setSelectedFrames(new Set()); }}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition-all ${activeTab === k ? 'bg-white text-[#e63946] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Icon size={16} /> {ten}
+                    </button>
+                ))}
+            </nav>
 
             {activeTab === 'icons' ? (
                 <IconManager apiBase={FRAME_API_URL} />
             ) : (
               <>
             {/* Layout Selector - Tabs (tab Ảnh thẻ chỉ có một loại -> không cần) */}
-            {!isIdTab && <div className="mb-6 overflow-hidden">
-                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none -mx-4 px-4">
+            {!isIdTab && <div className="mb-4 overflow-hidden">
+                <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {filteredLayouts.map(l => (
                         <button
                             key={l.id}
                             onClick={() => setSelectedLayout(l.id)}
                             className={`
-                                px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap border
+                                px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap border
                                 ${selectedLayout === l.id
-                                    ? 'bg-[#e63946] text-white border-[#e63946] shadow-sm shadow-[#e63946]/10'
-                                    : 'bg-white text-gray-500 border-gray-100 hover:text-[#e63946] hover:border-red-100'
+                                    ? 'bg-[#1a1a2e] text-white border-[#1a1a2e]'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                                 }
                             `}
                         >
@@ -511,59 +477,43 @@ const FrameManager = () => {
                 </div>
             </div>}
 
-            {/* Sticky Toolbar / Layout Header & Upload */}
-            <div className="flex items-center justify-between mb-5">
-                <h2 className="font-bold text-lg text-[#1a1a2e] flex items-center">
+            {/* Thanh công cụ: tên bố cục + số khung | chọn tất cả | (tải mẫu) | tải lên */}
+            <div className="mb-4 flex items-center gap-2">
+                <h2 className="min-w-0 flex-1 truncate text-base font-bold text-[#1a1a2e]">
                     {isIdTab ? 'Khung ảnh thẻ' : selectedLayoutDef?.name}
-                    <span className="ml-2 text-gray-400 font-semibold text-xs sm:text-sm">
-                        • {framesLoading ? '…' : `${frames.length} khung`}
-                    </span>
+                    <span className="ml-1.5 text-xs font-semibold text-gray-400">{framesLoading ? '…' : frames.length}</span>
                 </h2>
-
+                {frames.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        title="Chọn tất cả"
+                        className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${selectedFrames.size === frames.length ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                    >
+                        {selectedFrames.size === frames.length ? <CheckSquare size={16} /> : <Square size={16} />}
+                        <span className="hidden sm:inline">Chọn tất cả</span>
+                    </button>
+                )}
                 {isIdTab && (
                     <button
                         type="button"
                         onClick={taiToMau}
-                        className="ml-auto mr-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:border-red-200 hover:text-[#e63946] sm:px-5 sm:py-2.5"
-                        title="Ảnh 1200x1800 có sẵn các ô ảnh trong suốt để thiết kế khung"
+                        className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-600 transition-colors hover:border-gray-300"
+                        title="Ảnh mẫu 1200×1800 có sẵn các ô ảnh trong suốt để thiết kế khung"
                     >
-                        <Download size={18} />
-                        <span>Tải ảnh mẫu</span>
+                        <Download size={16} />
+                        <span>Mẫu</span>
                     </button>
                 )}
-                <label className={`
-                    ${isIdTab ? '' : 'ml-auto'}
-                    bg-[#e63946] hover:bg-[#c1121f]
-                    text-white
-                    px-4 py-2 sm:px-5 sm:py-2.5
-                    rounded-xl
-                    flex items-center gap-2
-                    font-bold text-sm
-                    shadow-md hover:shadow-lg hover:shadow-[#e63946]/10
-                    transition-all duration-200
-                    active:scale-95
-                    cursor-pointer
-                    ${uploading ? 'opacity-70 pointer-events-none' : ''}
-                `}>
-                    {uploading ? (
-                        <span className="animate-pulse text-sm">Đang tải...</span>
-                    ) : (
-                        <>
-                            <Upload size={18} />
-                            <span className="text-sm">Tải lên</span>
-                        </>
-                    )}
+                <label className={`flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#e63946] px-4 text-sm font-bold text-white shadow-md shadow-[#e63946]/15 transition-all hover:bg-[#c1121f] active:scale-95 ${uploading ? 'pointer-events-none opacity-70' : ''}`}>
+                    {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    <span>{uploading ? 'Đang tải' : 'Tải lên'}</span>
                     <input type="file" className="hidden" accept="image/png" multiple onChange={handleUpload} disabled={uploading} />
                 </label>
             </div>
 
             {isIdTab && (
-                <p className="-mt-2 mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 sm:text-sm">
-                    Khung ảnh thẻ: PNG <b>1200x1800 px</b> (tờ 10x15 cm dọc), để <b>trong suốt</b> đúng các ô ảnh ("Tải ảnh mẫu"
-                    có sẵn vị trí ô). Tải lên xong bấm <b>⚙ Cấu hình lưới</b> để dò lỗ trong suốt hoặc đục lỗ theo màu rồi kéo
-                    chỉnh ô — như khung photobooth, bao nhiêu lỗ thì bấy nhiêu ảnh. Khung chưa cấu hình dùng ô của ảnh mẫu.
-                    Khách luôn chọn được thêm "Không khung" (tờ trắng).
-                </p>
+                <p className="mb-4 text-xs text-gray-500">PNG 1200×1800 px, ô ảnh để trong suốt.</p>
             )}
 
             {/* Bulk Toolbar */}
@@ -613,26 +563,6 @@ const FrameManager = () => {
             )
             }
 
-            {/* Selection Header */}
-            {
-                frames.length > 0 && (
-                    <div className="flex items-center gap-2 mb-4">
-                        <button
-                            onClick={toggleSelectAll}
-                            className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#e63946] transition-colors"
-                        >
-                            {selectedFrames.size === frames.length && frames.length > 0 ? (
-                                <CheckSquare size={20} className="text-[#e63946]" />
-                            ) : (
-                                <Square size={20} />
-                            )}
-                            Chọn tất cả
-                        </button>
-                    </div>
-                )
-            }
-
-
             {/* Drop Zone + Frames Grid */}
             <div
                 onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
@@ -648,50 +578,23 @@ const FrameManager = () => {
                     </div>
                 )}
 
-                {/* Upload Area */}
-                {
-                    frames.length === 0 && (
-                        <div className="mb-8 bg-gradient-to-br from-[#FFF8F8] to-white border-2 border-dashed border-red-100 rounded-3xl p-8">
-                            <label className="flex flex-col items-center justify-center cursor-pointer group">
-                                <div className="w-20 h-20 bg-[#e63946]/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-[#e63946]/20 transition-all">
-                                    <Plus size={40} className="text-[#e63946]" />
-                                </div>
-                                <h3 className="text-xl font-bold text-[#e63946] mb-2">Tải lên khung hình</h3>
-                                <p className="text-sm text-gray-500 mb-4">Định dạng PNG có độ trong suốt</p>
-                                <div className="bg-[#e63946] hover:bg-[#c1121f] text-white px-6 py-2 rounded-full flex items-center gap-2 transition-colors">
-                                    <Upload size={18} />
-                                    <span className="font-medium">Chọn tệp</span>
-                                </div>
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/png"
-                                    multiple
-                                    onChange={handleUpload}
-                                    disabled={uploading}
-                                />
-                            </label>
-                        </div>
-                    )
-                }
-
                 {/* Banner tạo bù thumbnail — chỉ hiện khi API đã hỗ trợ thumbnail VÀ còn frame thiếu */}
                 {!framesLoading && framesSupportThumb(frames) && frames.some((f) => !f.thumb_url) && (
-                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 animate-fadeIn">
-                        <Images size={18} className="text-amber-600 shrink-0" />
-                        <span className="text-sm font-medium text-amber-800">
+                    <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 py-2 pl-3 pr-2 animate-fadeIn">
+                        <Images size={16} className="text-amber-600 shrink-0" />
+                        <span className="min-w-0 flex-1 text-xs font-medium text-amber-800 sm:text-sm">
                             {backfill.running
                                 ? `Đang tạo thumbnail... ${backfill.done}/${backfill.total}`
-                                : `${frames.filter((f) => !f.thumb_url).length} khung chưa có ảnh thu nhỏ nên tải chậm hơn.`}
+                                : `${frames.filter((f) => !f.thumb_url).length} khung chưa có ảnh thu nhỏ (tải chậm)`}
                         </span>
                         <button
                             type="button"
                             onClick={handleBackfillThumbnails}
                             disabled={backfill.running}
-                            className="ml-auto inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {backfill.running ? <Loader2 size={16} className="animate-spin" /> : <Images size={16} />}
-                            {backfill.running ? 'Đang xử lý...' : 'Tạo ảnh thu nhỏ'}
+                            {backfill.running ? <Loader2 size={14} className="animate-spin" /> : <Images size={14} />}
+                            {backfill.running ? 'Đang tạo…' : 'Tạo ngay'}
                         </button>
                     </div>
                 )}
@@ -704,7 +607,7 @@ const FrameManager = () => {
                             <p className="text-gray-400 font-medium">Đang tải khung hình...</p>
                         </div>
                     ) : frames.length > 0 ? (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4 mb-20 animate-fadeIn">
+                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 mb-20 animate-fadeIn">
                             {frames.map((frame) => {
                                 const isSelected = selectedFrames.has(frame.id);
                                 return (
@@ -714,10 +617,8 @@ const FrameManager = () => {
                                         // -> mở grid nhiều frame nhẹ hơn hẳn. 'auto 340px' giữ chỗ để
                                         // thanh cuộn không nhảy.
                                         style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 340px' }}
-                                        className={`group relative bg-white rounded-2xl overflow-hidden
-                                            transition-all duration-300
-                                            hover:-translate-y-1 hover:shadow-xl cursor-pointer
-                                            ${isSelected ? 'ring-2 ring-[#e63946] shadow-lg' : 'border border-gray-100 hover:border-red-200'}
+                                        className={`group relative bg-white rounded-2xl overflow-hidden cursor-pointer transition-shadow
+                                            ${isSelected ? 'ring-2 ring-[#e63946] shadow-md' : 'border border-gray-100 hover:shadow-md'}
                                         `}
                                         onClick={() => toggleSelectFrame(frame.id)}
                                         onDragOver={(e) => {
@@ -758,7 +659,7 @@ const FrameManager = () => {
                                         }}
                                     >
                                         {/* Selection Checkbox (Visible on hover or selected) */}
-                                        <div className={`absolute top-2 left-2 z-30 transition-all duration-200 ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
+                                        <div className={`absolute top-1.5 left-1.5 z-30 transition-all duration-200 ${isSelected || selectedFrames.size > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
                                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#e63946] border-[#e63946] text-white' : 'bg-white border-gray-300 text-transparent hover:border-[#e63946]'}`}>
                                                 <CheckSquare size={14} fill="currentColor" />
                                             </div>
@@ -766,14 +667,14 @@ const FrameManager = () => {
 
                                         {/* ICON PREVIEW (If exists) */}
                                         {frame.icon_url && (
-                                            <div className="absolute top-2 right-2 z-30 w-10 h-10 rounded-full border-2 border-white shadow-md bg-white overflow-hidden" title="Biểu tượng đã gán">
+                                            <div className="absolute top-1.5 right-1.5 z-30 w-7 h-7 rounded-full border-2 border-white shadow bg-white overflow-hidden" title="Biểu tượng đã gán">
                                                 <img src={frame.icon_url} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="Icon" />
                                             </div>
                                         )}
 
                                         {/* Frame Preview */}
                                         <div
-                                            className="bg-gray-50 relative overflow-hidden"
+                                            className="bg-gray-50/70 relative overflow-hidden"
                                             style={{
                                                 aspectRatio: (() => {
                                                     const layoutDef = LAYOUTS.find(l => l.id === frame.layout);
@@ -796,54 +697,39 @@ const FrameManager = () => {
                                                 alt={frame.name}
                                                 loading="lazy"
                                                 decoding="async"
-                                                className="relative z-10 w-full h-full object-contain p-2"
+                                                className="relative z-10 w-full h-full object-contain p-1"
                                             />
 
-                                            {/* Hover Actions Overlay */}
-                                            <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex items-center justify-center gap-4 z-20">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
-                                                    className="bg-white text-gray-700 hover:bg-[#e63946] hover:text-white p-3 rounded-full shadow-lg transition-all transform hover:scale-110 border border-gray-100 duration-200"
-                                                    title="Cấu hình lưới"
-                                                >
-                                                    <Settings size={20} />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); confirmDelete(frame); }}
-                                                    className="bg-[#e63946] text-white hover:bg-[#c1121f] p-3 rounded-full shadow-lg transition-all transform hover:scale-110 duration-200"
-                                                    title="Xóa khung hình"
-                                                >
-                                                    <Trash2 size={20} />
-                                                </button>
-                                            </div>
                                         </div>
 
-                                        {/* Frame Info */}
-                                        <div className="p-3 border-t border-gray-100">
-                                            <h3
-                                                className="font-semibold text-[#1a1a2e] truncate text-sm mb-1"
-                                                title={frame.name}
+                                        {/* Chân thẻ: tên + nút cấu hình lưới / xoá (luôn hiện, không phủ lên ảnh khung) */}
+                                        <div className="flex items-center border-t border-gray-100 py-1 pl-2 pr-0.5 sm:pl-3 sm:pr-1">
+                                            <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#1a1a2e] sm:text-xs" title={frame.name}>{frame.name}</p>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
+                                                className="grid h-8 w-7 shrink-0 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#1a1a2e]"
+                                                title="Cấu hình lưới"
                                             >
-                                                {frame.name}
-                                            </h3>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] bg-gray-50 text-[#e63946] px-1.5 py-0.5 rounded-full font-medium">
-                                                    {frame.layout}
-                                                </span>
-                                            </div>
+                                                <Settings size={15} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); confirmDelete(frame); }}
+                                                className="grid h-8 w-7 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                title="Xóa khung hình"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
                     ) : (
-                        <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 p-16 text-center">
-                            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <Upload size={48} className="text-gray-300" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-400 mb-2">Chưa có khung hình nào</h3>
-                            <p className="text-gray-400">Tải lên khung hình PNG cho bố cục <span className="font-semibold text-[#e63946]">{selectedLayout}</span> để bắt đầu!</p>
-                        </div>
+                        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm font-semibold text-gray-400 transition-colors hover:border-[#e63946]/40 hover:text-[#e63946]">
+                            <Upload size={28} />
+                            Chưa có khung nào — bấm hoặc thả PNG vào đây
+                            <input type="file" className="hidden" accept="image/png" multiple onChange={handleUpload} disabled={uploading} />
+                        </label>
                     )
                 }
 
