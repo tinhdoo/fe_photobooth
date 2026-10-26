@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket, Search } from 'lucide-react';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket, Search, Pencil, ChevronDown } from 'lucide-react';
 import { authHeader, isStaffRole, getUsername } from '../../utils/auth';
 import { errorMessage } from '../../utils/errorMessage';
 
@@ -28,7 +28,7 @@ const denomLabel = (value) => {
 // Ô ghi chú sửa trực tiếp: gõ xong bấm ✓ (hoặc Enter/rời ô) để lưu. Chỉ lưu khi có thay đổi.
 // Định nghĩa ở MODULE SCOPE (không lồng trong CodeManager) để không bị remount -> mất focus.
 // canEdit=false -> chỉ hiển thị ghi chú (mã của nhân viên khác), không cho sửa.
-const NoteCell = ({ code, onSave, canEdit = true }) => {
+const NoteCell = ({ code, onSave, canEdit = true, autoFocus = false }) => {
     const [value, setValue] = useState(code.note || '');
     const [saving, setSaving] = useState(false);
     const dirty = value !== (code.note || '');
@@ -54,6 +54,7 @@ const NoteCell = ({ code, onSave, canEdit = true }) => {
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
                 onBlur={commit}
+                autoFocus={autoFocus}
                 placeholder="Ghi chú…"
                 maxLength={500}
                 className="w-full min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm outline-none transition-all focus:border-[#e63946] focus:bg-white focus:ring-1 focus:ring-[#e63946]/20"
@@ -138,6 +139,19 @@ const CodeManager = () => {
     const [claimedCode, setClaimedCode] = useState(null); // mã vừa lấy để đọc cho khách
     // Số lượng mã còn trong kho theo mệnh giá — lấy từ API (KHÔNG lộ chuỗi mã cho nhân viên).
     const [stock, setStock] = useState([]); // [{ value, count }]
+    // Màn nhân viên chia 2 tab: 'lay' (lấy mã đưa khách) | 'cua_toi' (mã mình đã lấy + ghi chú).
+    const [tab, setTab] = useState('lay');
+    const [khoDaTai, setKhoDaTai] = useState(false); // chưa tải xong kho thì đừng báo "hết mã"
+    const [moGhiChu, setMoGhiChu] = useState(null); // id mã đang mở ô ghi chú (màn nhân viên)
+    // Menu lọc mệnh giá tự vẽ: <select> gốc mở ra danh sách hệ điều hành, chữ to viền vuông, lạc tông hẳn.
+    const [moMenuGia, setMoMenuGia] = useState(false);
+    const menuGiaRef = useRef(null);
+    useEffect(() => {
+        if (!moMenuGia) return undefined;
+        const dong = (e) => { if (menuGiaRef.current && !menuGiaRef.current.contains(e.target)) setMoMenuGia(false); };
+        document.addEventListener('pointerdown', dong);
+        return () => document.removeEventListener('pointerdown', dong);
+    }, [moMenuGia]);
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
     const stockTotal = stock.reduce((s, d) => s + d.count, 0);
@@ -176,6 +190,8 @@ const CodeManager = () => {
             setStock([]);
             // Lộ lỗi thật (vd cột claimed_by chưa có / chưa chạy SQL) thay vì âm thầm báo "hết mã".
             setNotification({ show: true, message: errorMessage(error, 'Không tải được kho mã.'), type: 'error' });
+        } finally {
+            setKhoDaTai(true);
         }
     };
 
@@ -338,6 +354,324 @@ const CodeManager = () => {
         if (code.claimed_by) return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Đã lấy</span>;
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-600">Trong kho</span>;
     };
+
+    const hopThoai = (
+        <>
+            {/* Export Confirmation Modal */}
+            {exportPrompt.show && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 p-4 rounded-full bg-emerald-50 text-emerald-500">
+                                <FileSpreadsheet size={40} strokeWidth={2.5} />
+                            </div>
+
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                Đã tạo {exportPrompt.codes.length} mã
+                            </h3>
+                            <p className="text-gray-500 mb-5 font-medium">
+                                Bạn có muốn xuất file Excel cho lô mã vừa tạo không?
+                            </p>
+
+                            {/* Tóm tắt theo mệnh giá */}
+                            <div className="w-full mb-6 max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-100 text-sm">
+                                {Object.entries(
+                                    exportPrompt.codes.reduce((acc, c) => {
+                                        acc[c.value] = (acc[c.value] || 0) + 1;
+                                        return acc;
+                                    }, {})
+                                )
+                                    .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                    .map(([value, count]) => (
+                                        <div key={value} className="flex justify-between items-center px-4 py-2">
+                                            <span className="font-semibold text-emerald-600">{formatCurrency(value)}</span>
+                                            <span className="text-gray-500">x{count}</span>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <div className="w-full flex gap-3">
+                                <button
+                                    onClick={skipExport}
+                                    className="flex-1 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all active:scale-[0.98]"
+                                >
+                                    Để sau
+                                </button>
+                                <button
+                                    onClick={confirmExport}
+                                    className="flex-1 py-3.5 rounded-xl font-bold text-white bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    <FileSpreadsheet size={18} /> Xuất Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notification Modal */}
+            {notification.show && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className={`mb-4 p-4 rounded-full ${notification.type === 'success' ? 'bg-green-50 text-emerald-500' : 'bg-red-50 text-red-500'}`}>
+                                {notification.type === 'success' ? <CheckCircle size={40} strokeWidth={2.5} /> : <XCircle size={40} strokeWidth={2.5} />}
+                            </div>
+
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                {notification.type === 'success' ? 'Thành công' : 'Đã xảy ra lỗi'}
+                            </h3>
+
+                            <p className="text-gray-500 mb-6 font-medium">
+                                {String(notification.message ?? '')}
+                            </p>
+
+                            <button
+                                onClick={() => setNotification({ ...notification, show: false })}
+                                className={`w-full py-3.5 rounded-xl font-bold text-white transition-all active:scale-[0.98] ${notification.type === 'success'
+                                    ? 'bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30'
+                                    : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30'
+                                    }`}
+                            >
+                                Đã hiểu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+
+    // ---------------- MÀN NHÂN VIÊN (điện thoại) ----------------
+    // Hai tab thay cho một trang dài: "Lấy mã" chiếm cả màn để thao tác nhanh trước mặt khách; "Mã của tôi"
+    // là danh sách gọn mỗi mã một khối nhỏ, ghi chú chỉ mở khi bấm. Nhân viên chỉ thấy mã DO MÌNH lấy
+    // (api/codes lọc claimed_by) nên không có lọc "Trong kho".
+    if (staffOnly) {
+        const chuaDung = codes.filter((c) => codeStatus(c) === 'claimed').length;
+        const dangChon = stock.find((d) => d.value === claimValue);
+        const TRANG_THAI = {
+            claimed: { ten: 'Chưa dùng', cham: 'bg-amber-400', chu: 'text-amber-700' },
+            used: { ten: 'Đã dùng', cham: 'bg-gray-300', chu: 'text-gray-500' },
+            expired: { ten: 'Hết hạn', cham: 'bg-red-400', chu: 'text-red-600' },
+            stock: { ten: 'Trong kho', cham: 'bg-emerald-400', chu: 'text-emerald-600' },
+        };
+        return (
+            <div className="animate-fadeIn mx-auto w-full max-w-xl">
+                <h1 className="mb-3 text-2xl font-bold tracking-tight text-[#1a1a2e]">Mã thanh toán</h1>
+
+                <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-gray-100 p-1">
+                    {[['lay', 'Lấy mã'], ['cua_toi', 'Mã của tôi']].map(([k, ten]) => (
+                        <button
+                            key={k}
+                            type="button"
+                            onClick={() => setTab(k)}
+                            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition-all ${tab === k ? 'bg-white text-[#e63946] shadow-sm' : 'text-gray-500'}`}
+                        >
+                            {ten}
+                            {k === 'cua_toi' && chuaDung > 0 && (
+                                <span className="min-w-[20px] rounded-full bg-[#e63946] px-1.5 py-0.5 text-[11px] leading-none text-white">{chuaDung}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === 'lay' ? (
+                    <div className="space-y-4">
+                        <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-gray-700">Chọn mệnh giá</span>
+                            <span className="text-xs text-gray-400">{khoDaTai ? `Kho còn ${stockTotal} mã` : 'Đang tải kho…'}</span>
+                        </div>
+
+                        {!khoDaTai ? (
+                            <div className="grid grid-cols-3 gap-2.5">
+                                {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-[74px] animate-pulse rounded-2xl bg-gray-100" />)}
+                            </div>
+                        ) : stockTotal === 0 ? (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700">
+                                Kho hết mã. Báo quản lý tạo thêm.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-3 gap-2.5">
+                                {stock.map((d) => {
+                                    const on = claimValue === d.value;
+                                    return (
+                                        <button
+                                            key={d.value}
+                                            type="button"
+                                            onClick={() => setClaimValue(d.value)}
+                                            className={`rounded-2xl border-2 py-3.5 text-center transition-all active:scale-95 ${on ? 'border-[#e63946] bg-[#e63946] text-white shadow-lg shadow-[#e63946]/25' : 'border-gray-100 bg-white text-[#1a1a2e]'}`}
+                                        >
+                                            <div className="text-2xl font-black leading-none">{denomLabel(d.value)}</div>
+                                            <div className={`mt-1.5 text-xs font-medium ${on ? 'text-white/80' : 'text-gray-400'}`}>còn {d.count}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleClaim}
+                            disabled={claiming || stockTotal === 0}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#e63946] py-4 text-lg font-bold text-white shadow-lg shadow-[#e63946]/20 transition-all hover:bg-[#c1121f] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {claiming
+                                ? <><RefreshCw className="animate-spin" size={20} /> Đang lấy...</>
+                                : <><Ticket size={20} /> Lấy mã {dangChon ? denomLabel(dangChon.value) : ''}</>}
+                        </button>
+
+                        {claimedCode && (
+                            <div className="rounded-3xl border-2 border-emerald-300 bg-emerald-50 p-5 text-center">
+                                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Mã cho khách · {formatCurrency(claimedCode.value)}</p>
+                                <p className="my-3 font-mono text-5xl font-black tracking-[0.18em] text-[#1a1a2e]">{String(claimedCode.code ?? '')}</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(String(claimedCode.code ?? ''))}
+                                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 font-bold text-blue-600 active:scale-95"
+                                    >
+                                        <Copy size={18} /> Chép mã
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setTab('cua_toi'); setStatusFilter('all'); setValueFilter('all'); setSearch(''); setMoGhiChu(claimedCode.id); }}
+                                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 font-bold text-gray-700 active:scale-95"
+                                    >
+                                        <Pencil size={18} /> Ghi chú
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="flex gap-2">
+                            <div className="relative min-w-0 flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Tìm mã hoặc ghi chú…"
+                                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#e63946]"
+                                />
+                            </div>
+                            {denomOptions.length > 1 && (
+                                <div ref={menuGiaRef} className="relative shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setMoMenuGia((m) => !m)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={moMenuGia}
+                                        className={`flex h-[42px] items-center gap-1 rounded-xl border bg-white px-3 text-sm font-semibold transition-all ${valueFilter !== 'all' ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 text-gray-700'}`}
+                                    >
+                                        {valueFilter === 'all' ? 'Mọi giá' : denomLabel(valueFilter)}
+                                        <ChevronDown size={14} className={`transition-transform ${moMenuGia ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {moMenuGia && (
+                                        <div role="listbox" className="absolute right-0 top-full z-20 mt-1.5 w-32 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1 shadow-xl shadow-black/10">
+                                            {['all', ...denomOptions.map(String)].map((v) => {
+                                                const on = String(valueFilter) === v;
+                                                return (
+                                                    <button
+                                                        key={v}
+                                                        type="button"
+                                                        role="option"
+                                                        aria-selected={on}
+                                                        onClick={() => { setValueFilter(v); setMoMenuGia(false); }}
+                                                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold ${on ? 'bg-[#e63946]/10 text-[#e63946]' : 'text-gray-700 active:bg-gray-50'}`}
+                                                    >
+                                                        {v === 'all' ? 'Mọi giá' : denomLabel(v)}
+                                                        {on && <Check size={14} />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => { fetchCodes(); fetchStock(); }}
+                                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-gray-200 bg-white text-gray-600 active:scale-95"
+                                title="Làm mới"
+                            >
+                                <RefreshCw size={16} />
+                            </button>
+                        </div>
+
+                        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1">
+                            {[['all', 'Tất cả'], ['claimed', 'Chưa dùng'], ['used', 'Đã dùng'], ['expired', 'Hết hạn']].map(([k, ten]) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => setStatusFilter(k)}
+                                    className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs font-bold transition-all active:scale-95 ${statusFilter === k ? 'border-[#1a1a2e] bg-[#1a1a2e] text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+                                >
+                                    {ten}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                            {filteredCodes.length === 0 ? (
+                                <div className="p-8 text-center text-sm italic text-gray-400">{codes.length === 0 ? 'Bạn chưa lấy mã nào.' : 'Không có mã khớp bộ lọc.'}</div>
+                            ) : filteredCodes.map((code) => {
+                                const tt = TRANG_THAI[codeStatus(code)];
+                                return (
+                                    <div key={code.id} className="px-4 py-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className={`font-mono text-xl font-bold tracking-widest ${codeStatus(code) === 'claimed' ? 'text-[#1a1a2e]' : 'text-gray-400'}`}>{code.code}</span>
+                                                    <span className="text-sm font-bold text-emerald-600">{denomLabel(code.value)}</span>
+                                                </div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                                                    <span className={`inline-flex items-center gap-1.5 font-semibold ${tt.chu}`}>
+                                                        <span className={`h-2 w-2 rounded-full ${tt.cham}`} />{tt.ten}
+                                                    </span>
+                                                    <span>· {new Date(code.claimed_at || code.created_at).toLocaleDateString('vi-VN')}</span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(code.code)}
+                                                aria-label={`Chép mã ${code.code}`}
+                                                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 transition-all active:scale-95 active:bg-blue-100"
+                                            >
+                                                <Copy size={18} />
+                                            </button>
+                                        </div>
+                                        {moGhiChu === code.id ? (
+                                            <div className="mt-2">
+                                                <NoteCell
+                                                    code={code}
+                                                    autoFocus
+                                                    onSave={async (id, note) => { const ok = await saveNote(id, note); if (ok) setMoGhiChu(null); return ok; }}
+                                                    canEdit={canEditNote(code)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => canEditNote(code) && setMoGhiChu(code.id)}
+                                                className="mt-1.5 flex w-full items-center gap-1.5 text-left text-sm"
+                                            >
+                                                {code.note
+                                                    ? <span className="min-w-0 truncate text-gray-700"><Pencil size={12} className="mr-1 inline text-gray-400" />{code.note}</span>
+                                                    : <span className="text-gray-400">+ Ghi chú dùng làm gì</span>}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {hopThoai}
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fadeIn">
@@ -725,88 +1059,7 @@ const CodeManager = () => {
                 </div>
             </div>
 
-            {/* Export Confirmation Modal */}
-            {exportPrompt.show && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex flex-col items-center text-center">
-                            <div className="mb-4 p-4 rounded-full bg-emerald-50 text-emerald-500">
-                                <FileSpreadsheet size={40} strokeWidth={2.5} />
-                            </div>
-
-                            <h3 className="text-xl font-bold text-gray-800 mb-2">
-                                Đã tạo {exportPrompt.codes.length} mã
-                            </h3>
-                            <p className="text-gray-500 mb-5 font-medium">
-                                Bạn có muốn xuất file Excel cho lô mã vừa tạo không?
-                            </p>
-
-                            {/* Tóm tắt theo mệnh giá */}
-                            <div className="w-full mb-6 max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-100 text-sm">
-                                {Object.entries(
-                                    exportPrompt.codes.reduce((acc, c) => {
-                                        acc[c.value] = (acc[c.value] || 0) + 1;
-                                        return acc;
-                                    }, {})
-                                )
-                                    .sort((a, b) => Number(a[0]) - Number(b[0]))
-                                    .map(([value, count]) => (
-                                        <div key={value} className="flex justify-between items-center px-4 py-2">
-                                            <span className="font-semibold text-emerald-600">{formatCurrency(value)}</span>
-                                            <span className="text-gray-500">x{count}</span>
-                                        </div>
-                                    ))}
-                            </div>
-
-                            <div className="w-full flex gap-3">
-                                <button
-                                    onClick={skipExport}
-                                    className="flex-1 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all active:scale-[0.98]"
-                                >
-                                    Để sau
-                                </button>
-                                <button
-                                    onClick={confirmExport}
-                                    className="flex-1 py-3.5 rounded-xl font-bold text-white bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                                >
-                                    <FileSpreadsheet size={18} /> Xuất Excel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Notification Modal */}
-            {notification.show && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex flex-col items-center text-center">
-                            <div className={`mb-4 p-4 rounded-full ${notification.type === 'success' ? 'bg-green-50 text-emerald-500' : 'bg-red-50 text-red-500'}`}>
-                                {notification.type === 'success' ? <CheckCircle size={40} strokeWidth={2.5} /> : <XCircle size={40} strokeWidth={2.5} />}
-                            </div>
-
-                            <h3 className="text-xl font-bold text-gray-800 mb-2">
-                                {notification.type === 'success' ? 'Thành công' : 'Đã xảy ra lỗi'}
-                            </h3>
-
-                            <p className="text-gray-500 mb-6 font-medium">
-                                {String(notification.message ?? '')}
-                            </p>
-
-                            <button
-                                onClick={() => setNotification({ ...notification, show: false })}
-                                className={`w-full py-3.5 rounded-xl font-bold text-white transition-all active:scale-[0.98] ${notification.type === 'success'
-                                    ? 'bg-[#e63946] hover:bg-[#c1121f] shadow-lg shadow-[#e63946]/30'
-                                    : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30'
-                                    }`}
-                            >
-                                Đã hiểu
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {hopThoai}
         </div>
     );
 };
