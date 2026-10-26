@@ -106,15 +106,19 @@ function normalizeSessionTransaction(session, source = 'session') {
     };
 }
 
+// Tên bucket không đổi giữa các lần gọi -> nhớ trong lambda còn ấm, khỏi listBuckets mỗi lần mở trang.
+let bucketDaDo = null;
 async function resolveBucket(supabase) {
+    if (bucketDaDo) return bucketDaDo;
     const configuredBucket = process.env.SUPABASE_BUCKET || 'tomato';
     const { data, error } = await supabase.storage.listBuckets();
     if (error) throw error;
 
     const buckets = Array.isArray(data) ? data : [];
-    if (buckets.some((item) => item.name === configuredBucket)) return configuredBucket;
-    if (buckets.length > 0) return buckets[0].name;
-    return configuredBucket;
+    if (buckets.some((item) => item.name === configuredBucket)) bucketDaDo = configuredBucket;
+    else if (buckets.length > 0) bucketDaDo = buckets[0].name;
+    else return configuredBucket;
+    return bucketDaDo;
 }
 
 async function listFilesRecursive(supabase, bucket, prefix) {
@@ -204,22 +208,26 @@ async function hardResetRevenueData(supabase) {
     };
 }
 
-async function listStorageSessions(supabase, startDate = '', endDate = '', dbUuids = null) {
+// Liệt kê file session trong storage (một lần gọi) -> chạy SONG SONG với truy vấn DB.
+async function listStorageSessionFiles(supabase) {
     const bucket = await resolveBucket(supabase);
-    // Session được ghi CẢ vào bảng photo_sessions (đã phân trang đầy đủ ở listDbSessions) LẪN storage
-    // JSON -> nguồn storage này chỉ là BẢN TRÙNG (dedup theo uuid trong mergeTransactions). Vì vậy KHÔNG
-    // phân trang/không tải hết ở đây (tránh tải hàng nghìn JSON mỗi lần mở dashboard -> timeout serverless);
-    // giữ trần 1000 gần nhất như cũ. Doanh thu đầy đủ đã lấy từ DB.
     const { data, error } = await supabase.storage
         .from(bucket)
         .list('sessions', {
             limit: 1000,
             sortBy: { column: 'created_at', order: 'desc' },
         });
+    if (error) return { bucket, files: [] };
+    return { bucket, files: Array.isArray(data) ? data.filter((item) => item.name?.endsWith('.json')) : [] };
+}
 
-    if (error) return [];
-
-    let files = Array.isArray(data) ? data.filter((item) => item.name?.endsWith('.json')) : [];
+async function listStorageSessions(supabase, startDate = '', endDate = '', dbUuids = null, daLietKe = null) {
+    const { bucket, files: tatCa } = daLietKe || await listStorageSessionFiles(supabase);
+    // Session được ghi CẢ vào bảng photo_sessions (đã phân trang đầy đủ ở listDbSessions) LẪN storage
+    // JSON -> nguồn storage này chỉ là BẢN TRÙNG (dedup theo uuid trong mergeTransactions). Vì vậy KHÔNG
+    // phân trang/không tải hết ở đây (tránh tải hàng nghìn JSON mỗi lần mở dashboard -> timeout serverless);
+    // giữ trần 1000 gần nhất như cũ. Doanh thu đầy đủ đã lấy từ DB.
+    let files = tatCa;
 
     // ĐIỂM NẶNG NHẤT: trước đây tải HẾT tới 1000 file JSON mỗi lần mở dashboard. Storage session
     // chỉ là BẢN TRÙNG của DB (dedup theo uuid) và sẽ bị inRange lọc bỏ nếu ngoài khoảng ->
@@ -281,12 +289,35 @@ async function fetchAllPaged(buildPage, pageSize = 1000, maxPages = 500) {
     return all;
 }
 
+// Khoá meta_data mà normalizeSessionTransaction đọc. CHỈ lấy các khoá này, không lấy cả meta_data:
+// mỗi lượt chụp còn mang frame_config, photo_positions, cash_trace (vết byte máy đọc tiền)... nặng
+// hàng KB, nhân với mọi lượt từ trước tới nay là vài MB phải kéo từ Supabase mỗi lần mở trang Doanh thu.
+// Thêm khoá mới vào normalizeSessionTransaction thì PHẢI thêm vào đây, không thì nó luôn rỗng.
+const META_KEYS = [
+    'payment_method', 'payment_code', 'paymentCode', 'code', 'voucher_code', 'voucherCode',
+    'sepay_order_code', 'sepayOrderCode', 'sepay_code', 'sepay_order_codes',
+    'payment_code_value', 'paymentCodeValue', 'payment_code_applied', 'paymentCodeApplied',
+    'cash_inserted', 'device_id', 'loai',
+];
+// `->` (không phải `->>`) giữ nguyên kiểu JSON: số vẫn là số, mảng vẫn là mảng.
+const SESSION_SELECT = ['id', 'uuid', 'payment_method', 'amount', 'status', 'created_at',
+    ...META_KEYS.map((k) => `m_${k}:meta_data->${k}`)].join(', ');
+
+function ghepMeta(row) {
+    const meta = {};
+    META_KEYS.forEach((k) => {
+        const v = row[`m_${k}`];
+        if (v !== null && v !== undefined) meta[k] = v;
+    });
+    return { ...row, meta_data: meta };
+}
+
 async function listDbSessions(supabase, startDate = '', endDate = '') {
     // txDate session = created_at (chính xác) -> lọc created_at là an toàn tuyệt đối, không sót.
     const rows = await fetchAllPaged((from, to) => {
         let q = supabase
             .from('photo_sessions')
-            .select('id, uuid, payment_method, amount, meta_data, status, created_at');
+            .select(SESSION_SELECT);
         if (startDate) q = q.gte('created_at', startDate);
         if (endDate) q = q.lte('created_at', endDate);
         return q
@@ -296,7 +327,7 @@ async function listDbSessions(supabase, startDate = '', endDate = '') {
     });
 
     return rows
-        .map((session) => normalizeSessionTransaction(session, 'db-session'))
+        .map((session) => normalizeSessionTransaction(ghepMeta(session), 'db-session'))
         .filter((session) => session.id);
 }
 
@@ -315,7 +346,8 @@ async function listPaymentTransactions(supabase, startDate = '', endDate = '') {
     const rows = await fetchAllPaged((from, to) => {
         let q = supabase
             .from('payments')
-            .select('*')
+            // Không select('*'): raw_payload còn giữ cả nội dung chuyển khoản SePay, ở đây chỉ cần device_id.
+            .select('id, session_id, code, amount, status, paid_at, created_at, device_id:raw_payload->device_id')
             .eq('status', 'paid');
         if (startBuf) q = q.gte('created_at', startBuf);
         if (endDate) q = q.lte('created_at', endDate);
@@ -326,7 +358,6 @@ async function listPaymentTransactions(supabase, startDate = '', endDate = '') {
     });
 
     return rows.map((payment) => {
-        const payload = normalizeMeta(payment.raw_payload);
         return {
             id: payment.session_id || payment.id,
             code: payment.code,
@@ -340,23 +371,27 @@ async function listPaymentTransactions(supabase, startDate = '', endDate = '') {
             method_label: methodLabel('qr'),
             detail_label: detailLabel('qr', null, payment.code),
             source: 'payment',
-            device_id: payload.device_id || null,
+            device_id: payment.device_id || null,
         };
     });
 }
 
-async function readRevenueResetAt(supabase) {
+// Mốc xoá doanh thu + booth bị ẩn trong MỘT lần đọc, chỉ 2 khoá (config 'app' còn chứa báo cáo booth...).
+async function readRevenueFilters(supabase) {
     const { data, error } = await supabase
         .from('app_configs')
-        .select('config')
+        .select('reset_at:config->revenue_reset_at, hidden:config->hidden_booths')
         .eq('key', 'app')
         .maybeSingle();
 
-    if (error && isMissingTable(error)) return null;
+    if (error && isMissingTable(error)) return { revenueResetAt: null, hiddenBooths: [] };
     if (error) throw error;
 
-    const value = data?.config?.revenue_reset_at;
-    return value ? new Date(value).toISOString() : null;
+    const resetAt = data?.reset_at ? new Date(data.reset_at) : null;
+    return {
+        revenueResetAt: resetAt && !Number.isNaN(resetAt.getTime()) ? resetAt.toISOString() : null,
+        hiddenBooths: Array.isArray(data?.hidden) ? data.hidden.map(String) : [],
+    };
 }
 
 async function writeRevenueResetAt(supabase) {
@@ -400,20 +435,6 @@ async function clearBoothReports(supabase) {
         }, { onConflict: 'key' });
 
     if (error && !isMissingTable(error)) throw error;
-}
-
-async function readHiddenBooths(supabase) {
-    const { data, error } = await supabase
-        .from('app_configs')
-        .select('config')
-        .eq('key', 'app')
-        .maybeSingle();
-
-    if (error && isMissingTable(error)) return [];
-    if (error) throw error;
-
-    const list = data?.config?.hidden_booths;
-    return Array.isArray(list) ? list.map(String) : [];
 }
 
 async function hideBooth(supabase, deviceId) {
@@ -548,16 +569,28 @@ export default async function handler(req, res) {
         const endDate = req.query?.endDate || '';
         const paymentMethod = req.query?.paymentMethod || '';
 
-        const [payments, dbSessions, revenueResetAt, hiddenBooths] = await Promise.all([
-            listPaymentTransactions(supabase, startDate, endDate),
-            listDbSessions(supabase, startDate, endDate),
-            readRevenueResetAt(supabase),
-            readHiddenBooths(supabase),
+        const t0 = Date.now();
+        const moc = {};
+        // Liệt kê storage chạy song song ngay từ đầu (không phụ thuộc gì).
+        const lietKeStorage = listStorageSessionFiles(supabase).catch(() => ({ bucket: null, files: [] }));
+        const { revenueResetAt, hiddenBooths } = await readRevenueFilters(supabase);
+        moc.config = Date.now() - t0;
+        // Giao dịch trước mốc xoá doanh thu vốn bị lọc bỏ ở dưới -> đừng kéo về: cận dưới = mốc muộn hơn.
+        const tuNgay = [startDate, revenueResetAt].filter(Boolean)
+            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || '';
+        const [payments, dbSessions] = await Promise.all([
+            listPaymentTransactions(supabase, tuNgay, endDate),
+            listDbSessions(supabase, tuNgay, endDate),
         ]);
+        moc.db = Date.now() - t0;
         // Storage session chỉ là BẢN TRÙNG của DB -> chỉ tải file mà DB CHƯA có (uuid).
         // DB đầy đủ => 0 file phải tải (thay vì cả trăm/nghìn) mà KHÔNG mất giao dịch nào.
         const dbUuids = new Set(dbSessions.map((s) => String(s.id)));
-        const storageSessions = await listStorageSessions(supabase, startDate, endDate, dbUuids);
+        const daLietKe = await lietKeStorage;
+        const storageSessions = daLietKe.bucket
+            ? await listStorageSessions(supabase, tuNgay, endDate, dbUuids, daLietKe)
+            : [];
+        moc.storage = Date.now() - t0;
 
         const hiddenSet = new Set(hiddenBooths.map(String));
         const transactions = mergeTransactions(payments, dbSessions, storageSessions)
@@ -604,6 +637,12 @@ export default async function handler(req, res) {
             acc[key] = (acc[key] || 0) + toNumber(tx.value);
             return acc;
         }, {});
+
+        moc.tong = Date.now() - t0;
+        // Đo từng chặng để lần sau trang chậm thì mở DevTools > Network > Timing là biết chậm ở đâu.
+        res.setHeader('Server-Timing', Object.entries(moc).map(([k, v]) => `${k};dur=${v}`).join(', '));
+        console.log('[revenue] ms', JSON.stringify(moc), 'tx', transactions.length,
+            'rows', payments.length, dbSessions.length, 'storage', storageSessions.length);
 
         return json(res, 200, {
             totalRevenue,
