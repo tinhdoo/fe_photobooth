@@ -25,10 +25,14 @@ export function getAuth() {
     }
 }
 
+// Bản nhớ số liệu trang Doanh thu (RevenueDashboard) để mở trang hiện ngay. Đăng xuất là xoá.
+export const KHOA_CACHE_DOANH_THU = 'ptb_doanh_thu_cache';
+
 export function clearAuth() {
     [localStorage, sessionStorage].forEach((s) => {
         s.removeItem(KEY);
         s.removeItem('isAuthenticated');
+        s.removeItem(KHOA_CACHE_DOANH_THU);
     });
 }
 

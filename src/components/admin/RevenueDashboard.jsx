@@ -1,11 +1,27 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2, Pencil, X } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, ChevronUp, Clock, CheckCircle, Banknote, QrCode, Hash, Check, Trash2, Pencil, X, Loader2 } from 'lucide-react';
 import { io } from "socket.io-client";
 
 import { CLOUD_API_URL } from '../../config/api';
-import { authHeader } from '../../utils/auth';
+import { authHeader, getUsername, KHOA_CACHE_DOANH_THU } from '../../utils/auth';
 const apiPath = (path) => `${CLOUD_API_URL}${path}`;
+
+// Vào trang là THẤY NGAY: nhớ kết quả lần tải gần nhất của chế độ xem mặc định (không lọc) trong trình duyệt,
+// mở trang hiện bản nhớ trước rồi tải bản mới ở nền và thay vào. Gắn theo tài khoản; đăng xuất là xoá (clearAuth).
+const docCache = () => {
+    try {
+        const c = JSON.parse(localStorage.getItem(KHOA_CACHE_DOANH_THU) || 'null');
+        return c && c.u === getUsername() ? c : null;
+    } catch {
+        return null;
+    }
+};
+const ghiCache = (phan) => {
+    try {
+        localStorage.setItem(KHOA_CACHE_DOANH_THU, JSON.stringify({ ...(docCache() || {}), ...phan, u: getUsername() }));
+    } catch { /* đầy bộ nhớ / bị chặn -> chỉ mất phần hiện nhanh */ }
+};
 
 // --- Voucher (mã thanh toán) KHÔNG tính vào doanh thu ---
 // payment_code_applied = số tiền voucher đã che cho giao dịch (backend cloud trả về).
@@ -48,7 +64,9 @@ const vnNowBounds = () => {
 };
 
 const RevenueDashboard = () => {
-    const [stats, setStats] = useState({ totalRevenue: 0, transactions: [] });
+    const [stats, setStats] = useState(() => docCache()?.stats || { totalRevenue: 0, transactions: [] });
+    // Thời điểm của số liệu đang hiện (bản nhớ hoặc vừa tải) -> ghi "Cập nhật lúc ..." cho admin biết.
+    const [capNhatLuc, setCapNhatLuc] = useState(() => docCache()?.at || null);
     const [loading, setLoading] = useState(false);
     const [showMobileFilter, setShowMobileFilter] = useState(false);
     const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
@@ -71,7 +89,7 @@ const RevenueDashboard = () => {
     const [notification, setNotification] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [chartHover, setChartHover] = useState(null); // { chart: 'line'|'bar', i }
-    const [devices, setDevices] = useState([]);
+    const [devices, setDevices] = useState(() => docCache()?.devices || []);
     const [editingDevice, setEditingDevice] = useState(null);
     const [editNameValue, setEditNameValue] = useState('');
 
@@ -103,7 +121,11 @@ const RevenueDashboard = () => {
     // Lấy danh sách booth (để map device_id -> tên booth)
     const fetchDevices = () => {
         axios.get(apiPath('/api/devices'), { headers: authHeader() })
-            .then((res) => setDevices(Array.isArray(res.data) ? res.data : []))
+            .then((res) => {
+                const ds = Array.isArray(res.data) ? res.data : [];
+                setDevices(ds);
+                ghiCache({ devices: ds });
+            })
             .catch(() => {});
     };
     useEffect(() => { fetchDevices(); }, []);
@@ -258,12 +280,17 @@ const RevenueDashboard = () => {
             console.log("Fetching revenue with params:", params);
             const res = await axios.get(apiPath('/api/revenue'), { params, headers: authHeader() });
             const data = res.data && typeof res.data === 'object' ? res.data : {};
-            setStats({
+            const moi = {
                 totalRevenue: Number(data.totalRevenue || 0),
                 transactions: Array.isArray(data.transactions) ? data.transactions : [],
                 chartData: Array.isArray(data.chartData) ? data.chartData : [],
                 paymentBreakdown: data.paymentBreakdown && typeof data.paymentBreakdown === 'object' ? data.paymentBreakdown : {},
-            });
+            };
+            setStats(moi);
+            const luc = Date.now();
+            setCapNhatLuc(luc);
+            // Chỉ nhớ chế độ xem mặc định (không lọc) — đó là thứ hiện ra lúc mở trang.
+            if (!Object.keys(params).length) ghiCache({ stats: moi, at: luc });
             setShowMobileFilter(false);
         } catch (error) {
             console.error("Failed to fetch revenue:", error);
@@ -514,6 +541,13 @@ const RevenueDashboard = () => {
                     <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Thống kê doanh thu</h1>
                     <p className="text-gray-500 mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
                 </div>
+                {(loading || capNhatLuc) && (
+                    <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500">
+                        {loading
+                            ? <><Loader2 size={14} className="animate-spin" /> Đang cập nhật số mới…</>
+                            : <>Cập nhật lúc {new Date(capNhatLuc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</>}
+                    </div>
+                )}
             </div>
 
             {notification && (

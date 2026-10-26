@@ -504,11 +504,92 @@ function mergeTransactions(payments, dbSessions, storageSessions) {
     return merged.sort((a, b) => new Date(txDate(b)).getTime() - new Date(txDate(a)).getTime());
 }
 
+// Mã thanh toán -> tên nhân viên đã lấy mã. Đọc HẾT mã đã có người lấy + danh sách nhân viên, chạy song song
+// với truy vấn giao dịch (trước đây chờ giao dịch xong mới hỏi mã, rồi mới hỏi nhân viên: thêm 2 lượt nối đuôi).
+async function tenNhanVienTheoMa(supabase) {
+    const [ma, nv] = await Promise.all([
+        fetchAllPaged((from, to) => supabase
+            .from('payment_codes')
+            .select('code, claimed_by')
+            .not('claimed_by', 'is', null)
+            .order('code', { ascending: true })
+            .range(from, to)),
+        supabase.from('staff_accounts').select('username, display_name'),
+    ]);
+    const ten = {};
+    (nv.data || []).forEach((a) => { ten[a.username] = a.display_name || a.username; });
+    const kq = new Map();
+    ma.forEach((r) => { if (r.claimed_by) kq.set(r.code, ten[r.claimed_by] || r.claimed_by); });
+    return kq;
+}
+
+// Toàn bộ phần đọc doanh thu. MỌI truy vấn chạy song song: Vercel (hkg1) hỏi Supabase mỗi lượt ~0,4 s, bản cũ
+// nối đuôi 5 lượt (tài khoản -> cấu hình -> giao dịch -> mã -> nhân viên) nên mất ~2 s dù dữ liệu chỉ vài trăm dòng.
+async function taiDoanhThu(supabase, query) {
+    const startDate = query.startDate || '';
+    const endDate = query.endDate || '';
+    const paymentMethod = query.paymentMethod || '';
+
+    const t0 = Date.now();
+    const moc = {};
+    const xong = (ten) => (v) => { moc[ten] = Date.now() - t0; return v; };
+    const [{ revenueResetAt, hiddenBooths }, payments, dbSessions, daLietKe, maNhanVien] = await Promise.all([
+        readRevenueFilters(supabase).then(xong('config')),
+        listPaymentTransactions(supabase, startDate, endDate).then(xong('qr')),
+        listDbSessions(supabase, startDate, endDate).then(xong('luot')),
+        listStorageSessionFiles(supabase).catch(() => ({ bucket: null, files: [] })),
+        // Lỗi phụ (thiếu bảng nhân viên...) -> bỏ qua tên, doanh thu vẫn trả bình thường.
+        tenNhanVienTheoMa(supabase).catch((e) => { console.warn('Enrich staff_name failed:', e?.message || e); return new Map(); }),
+    ]);
+    // Giao dịch trước mốc xoá doanh thu bị lọc bỏ ở dưới -> storage cũng chỉ xét từ mốc muộn hơn.
+    const tuNgay = [startDate, revenueResetAt].filter(Boolean)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || '';
+    // Storage session chỉ là BẢN TRÙNG của DB -> chỉ tải file mà DB CHƯA có (uuid).
+    // DB đầy đủ => 0 file phải tải (thay vì cả trăm/nghìn) mà KHÔNG mất giao dịch nào.
+    const dbUuids = new Set(dbSessions.map((s) => String(s.id)));
+    const storageSessions = daLietKe.bucket
+        ? await listStorageSessions(supabase, tuNgay, endDate, dbUuids, daLietKe)
+        : [];
+    moc.storage = Date.now() - t0;
+
+    const hiddenSet = new Set(hiddenBooths.map(String));
+    const transactions = mergeTransactions(payments, dbSessions, storageSessions)
+        .filter((tx) => !revenueResetAt || new Date(txDate(tx)).getTime() >= new Date(revenueResetAt).getTime())
+        .filter((tx) => !hiddenSet.has(String(tx.device_id || '')))
+        .filter((tx) => inRange(tx, startDate, endDate))
+        .filter((tx) => matchesMethod(tx, paymentMethod));
+
+    // Gắn TÊN nhân viên đã lấy mã cho các giao dịch trả bằng Mã thanh toán.
+    transactions.forEach((t) => {
+        const ten = t.payment_code ? maNhanVien.get(t.payment_code) : null;
+        if (ten) t.staff_name = ten;
+    });
+
+    const totalRevenue = transactions.reduce((sum, tx) => sum + toNumber(tx.value), 0);
+    const paymentBreakdown = transactions.reduce((acc, tx) => {
+        const key = tx.payment_method || 'unknown';
+        acc[key] = (acc[key] || 0) + toNumber(tx.value);
+        return acc;
+    }, {});
+
+    moc.tong = Date.now() - t0;
+    console.log('[revenue] ms', JSON.stringify(moc), 'tx', transactions.length,
+        'rows', payments.length, dbSessions.length, 'storage', storageSessions.length);
+    return {
+        moc,
+        body: { totalRevenue, transactions, paymentBreakdown, chartData: [], revenueResetAt },
+    };
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
     try {
         const supabase = getSupabaseAdmin();
+
+        // Xem doanh thu: bắt đầu đọc dữ liệu NGAY, song song với bước kiểm tài khoản (cũng là một lần hỏi
+        // Supabase ~0,4 s). Kiểm không qua thì dữ liệu bị bỏ, không gửi đi đâu.
+        const duLieu = req.method === 'GET' ? taiDoanhThu(supabase, req.query || {}).catch((loi) => ({ loi })) : null;
 
         // Mọi thao tác ở đây (xem doanh thu, ẩn booth, sửa booth của giao dịch, xoá doanh thu) chỉ cho
         // admin đã đăng nhập. Mã 8686 viết cứng đã bỏ (2026-10-03).
@@ -565,92 +646,11 @@ export default async function handler(req, res) {
 
         if (req.method !== 'GET') return methodNotAllowed(res);
 
-        const startDate = req.query?.startDate || '';
-        const endDate = req.query?.endDate || '';
-        const paymentMethod = req.query?.paymentMethod || '';
-
-        const t0 = Date.now();
-        const moc = {};
-        // Liệt kê storage chạy song song ngay từ đầu (không phụ thuộc gì).
-        const lietKeStorage = listStorageSessionFiles(supabase).catch(() => ({ bucket: null, files: [] }));
-        const { revenueResetAt, hiddenBooths } = await readRevenueFilters(supabase);
-        moc.config = Date.now() - t0;
-        // Giao dịch trước mốc xoá doanh thu vốn bị lọc bỏ ở dưới -> đừng kéo về: cận dưới = mốc muộn hơn.
-        const tuNgay = [startDate, revenueResetAt].filter(Boolean)
-            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || '';
-        const [payments, dbSessions] = await Promise.all([
-            listPaymentTransactions(supabase, tuNgay, endDate),
-            listDbSessions(supabase, tuNgay, endDate),
-        ]);
-        moc.db = Date.now() - t0;
-        // Storage session chỉ là BẢN TRÙNG của DB -> chỉ tải file mà DB CHƯA có (uuid).
-        // DB đầy đủ => 0 file phải tải (thay vì cả trăm/nghìn) mà KHÔNG mất giao dịch nào.
-        const dbUuids = new Set(dbSessions.map((s) => String(s.id)));
-        const daLietKe = await lietKeStorage;
-        const storageSessions = daLietKe.bucket
-            ? await listStorageSessions(supabase, tuNgay, endDate, dbUuids, daLietKe)
-            : [];
-        moc.storage = Date.now() - t0;
-
-        const hiddenSet = new Set(hiddenBooths.map(String));
-        const transactions = mergeTransactions(payments, dbSessions, storageSessions)
-            .filter((tx) => !revenueResetAt || new Date(txDate(tx)).getTime() >= new Date(revenueResetAt).getTime())
-            .filter((tx) => !hiddenSet.has(String(tx.device_id || '')))
-            .filter((tx) => inRange(tx, startDate, endDate))
-            .filter((tx) => matchesMethod(tx, paymentMethod));
-
-        // Gắn TÊN nhân viên đã lấy mã cho các giao dịch trả bằng Mã thanh toán:
-        //   payment_code -> payment_codes.claimed_by (username) -> staff_accounts.display_name.
-        try {
-            const codeStrings = [...new Set(transactions.map((t) => t.payment_code).filter(Boolean))];
-            if (codeStrings.length) {
-                const { data: codeRows } = await supabase
-                    .from('payment_codes')
-                    .select('code, claimed_by')
-                    .in('code', codeStrings);
-                const codeToUser = {};
-                (codeRows || []).forEach((r) => { if (r.claimed_by) codeToUser[r.code] = r.claimed_by; });
-
-                const usernames = [...new Set(Object.values(codeToUser))];
-                const userToName = {};
-                if (usernames.length) {
-                    const { data: accs } = await supabase
-                        .from('staff_accounts')
-                        .select('username, display_name')
-                        .in('username', usernames);
-                    (accs || []).forEach((a) => { userToName[a.username] = a.display_name || a.username; });
-                }
-
-                transactions.forEach((t) => {
-                    const u = t.payment_code ? codeToUser[t.payment_code] : null;
-                    if (u) t.staff_name = userToName[u] || u;
-                });
-            }
-        } catch (enrichError) {
-            // Không có bảng staff_accounts / lỗi phụ -> bỏ qua, doanh thu vẫn trả bình thường.
-            console.warn('Enrich staff_name failed:', enrichError?.message || enrichError);
-        }
-
-        const totalRevenue = transactions.reduce((sum, tx) => sum + toNumber(tx.value), 0);
-        const paymentBreakdown = transactions.reduce((acc, tx) => {
-            const key = tx.payment_method || 'unknown';
-            acc[key] = (acc[key] || 0) + toNumber(tx.value);
-            return acc;
-        }, {});
-
-        moc.tong = Date.now() - t0;
+        const kq = await duLieu;
+        if (kq.loi) throw kq.loi;
         // Đo từng chặng để lần sau trang chậm thì mở DevTools > Network > Timing là biết chậm ở đâu.
-        res.setHeader('Server-Timing', Object.entries(moc).map(([k, v]) => `${k};dur=${v}`).join(', '));
-        console.log('[revenue] ms', JSON.stringify(moc), 'tx', transactions.length,
-            'rows', payments.length, dbSessions.length, 'storage', storageSessions.length);
-
-        return json(res, 200, {
-            totalRevenue,
-            transactions,
-            paymentBreakdown,
-            chartData: [],
-            revenueResetAt,
-        });
+        res.setHeader('Server-Timing', Object.entries(kq.moc).map(([k, v]) => `${k};dur=${v}`).join(', '));
+        return json(res, 200, kq.body);
     } catch (error) {
         console.error('Revenue API failed:', error);
         return json(res, 500, { error: error.message || 'Revenue API failed' });
