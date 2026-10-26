@@ -121,6 +121,52 @@ const exportCodesToExcel = (list, fileName) => {
     XLSX.writeFile(wb, fileName);
 };
 
+// Menu lọc mệnh giá tự vẽ: <select> gốc mở ra danh sách hệ điều hành, chữ to viền vuông, lạc tông hẳn.
+const MenuGia = ({ value, options, onChange }) => {
+    const [mo, setMo] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+        if (!mo) return undefined;
+        const dong = (e) => { if (ref.current && !ref.current.contains(e.target)) setMo(false); };
+        document.addEventListener('pointerdown', dong);
+        return () => document.removeEventListener('pointerdown', dong);
+    }, [mo]);
+    return (
+        <div ref={ref} className="relative shrink-0">
+            <button
+                type="button"
+                onClick={() => setMo((m) => !m)}
+                aria-haspopup="listbox"
+                aria-expanded={mo}
+                className={`flex h-[42px] items-center gap-1 rounded-xl border bg-white px-3 text-sm font-semibold transition-all ${value !== 'all' ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}
+            >
+                {value === 'all' ? 'Mọi giá' : denomLabel(value)}
+                <ChevronDown size={14} className={`transition-transform ${mo ? 'rotate-180' : ''}`} />
+            </button>
+            {mo && (
+                <div role="listbox" className="absolute right-0 top-full z-20 mt-1.5 w-32 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1 shadow-xl shadow-black/10">
+                    {['all', ...options.map(String)].map((v) => {
+                        const on = String(value) === v;
+                        return (
+                            <button
+                                key={v}
+                                type="button"
+                                role="option"
+                                aria-selected={on}
+                                onClick={() => { onChange(v); setMo(false); }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold ${on ? 'bg-[#e63946]/10 text-[#e63946]' : 'text-gray-700 hover:bg-gray-50 active:bg-gray-50'}`}
+                            >
+                                {v === 'all' ? 'Mọi giá' : denomLabel(v)}
+                                {on && <Check size={14} />}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const CodeManager = () => {
     const staffOnly = isStaffRole(); // nhân viên: chỉ "Lấy mã" từ kho, không tạo mã
     const myUsername = getUsername();
@@ -143,15 +189,6 @@ const CodeManager = () => {
     const [tab, setTab] = useState('lay');
     const [khoDaTai, setKhoDaTai] = useState(false); // chưa tải xong kho thì đừng báo "hết mã"
     const [moGhiChu, setMoGhiChu] = useState(null); // id mã đang mở ô ghi chú (màn nhân viên)
-    // Menu lọc mệnh giá tự vẽ: <select> gốc mở ra danh sách hệ điều hành, chữ to viền vuông, lạc tông hẳn.
-    const [moMenuGia, setMoMenuGia] = useState(false);
-    const menuGiaRef = useRef(null);
-    useEffect(() => {
-        if (!moMenuGia) return undefined;
-        const dong = (e) => { if (menuGiaRef.current && !menuGiaRef.current.contains(e.target)) setMoMenuGia(false); };
-        document.addEventListener('pointerdown', dong);
-        return () => document.removeEventListener('pointerdown', dong);
-    }, [moMenuGia]);
 
     const totalQuantity = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
     const stockTotal = stock.reduce((s, d) => s + d.count, 0);
@@ -168,15 +205,17 @@ const CodeManager = () => {
         if (c.claimed_by) return 'claimed';
         return 'stock';
     };
-    const filteredCodes = codes.filter((c) => {
-        if (statusFilter !== 'all' && codeStatus(c) !== statusFilter) return false;
+    const tuKhoa = search.trim().toLowerCase();
+    const khopGiaVaTim = codes.filter((c) => {
         if (valueFilter !== 'all' && (Number(c.value) || 0) !== Number(valueFilter)) return false;
-        const q = search.trim().toLowerCase();
-        if (!q) return true;
-        return String(c.code).toLowerCase().includes(q)
-            || String(c.claimed_by_name || c.claimed_by || '').toLowerCase().includes(q)
-            || String(c.note || '').toLowerCase().includes(q);
+        if (!tuKhoa) return true;
+        return String(c.code).toLowerCase().includes(tuKhoa)
+            || String(c.claimed_by_name || c.claimed_by || '').toLowerCase().includes(tuKhoa)
+            || String(c.note || '').toLowerCase().includes(tuKhoa);
     });
+    const filteredCodes = statusFilter === 'all' ? khopGiaVaTim : khopGiaVaTim.filter((c) => codeStatus(c) === statusFilter);
+    // Số mã mỗi trạng thái trong phạm vi giá + từ khoá đang chọn (hiện ngay trên ô lọc của admin).
+    const demTrangThai = khopGiaVaTim.reduce((m, c) => { const k = codeStatus(c); m[k] = (m[k] || 0) + 1; return m; }, { all: khopGiaVaTim.length });
 
     const fetchStock = async () => {
         try {
@@ -556,38 +595,7 @@ const CodeManager = () => {
                                 />
                             </div>
                             {denomOptions.length > 1 && (
-                                <div ref={menuGiaRef} className="relative shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => setMoMenuGia((m) => !m)}
-                                        aria-haspopup="listbox"
-                                        aria-expanded={moMenuGia}
-                                        className={`flex h-[42px] items-center gap-1 rounded-xl border bg-white px-3 text-sm font-semibold transition-all ${valueFilter !== 'all' ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 text-gray-700'}`}
-                                    >
-                                        {valueFilter === 'all' ? 'Mọi giá' : denomLabel(valueFilter)}
-                                        <ChevronDown size={14} className={`transition-transform ${moMenuGia ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {moMenuGia && (
-                                        <div role="listbox" className="absolute right-0 top-full z-20 mt-1.5 w-32 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1 shadow-xl shadow-black/10">
-                                            {['all', ...denomOptions.map(String)].map((v) => {
-                                                const on = String(valueFilter) === v;
-                                                return (
-                                                    <button
-                                                        key={v}
-                                                        type="button"
-                                                        role="option"
-                                                        aria-selected={on}
-                                                        onClick={() => { setValueFilter(v); setMoMenuGia(false); }}
-                                                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold ${on ? 'bg-[#e63946]/10 text-[#e63946]' : 'text-gray-700 active:bg-gray-50'}`}
-                                                    >
-                                                        {v === 'all' ? 'Mọi giá' : denomLabel(v)}
-                                                        {on && <Check size={14} />}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
+                                <MenuGia value={valueFilter} options={denomOptions} onChange={setValueFilter} />
                             )}
                             <button
                                 type="button"
@@ -858,78 +866,63 @@ const CodeManager = () => {
 
                 {/* --- 2. CODES LIST --- */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 w-full overflow-hidden flex flex-col">
-                    <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50 space-y-2.5">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">{staffOnly ? 'Mã đã lấy' : 'Danh sách mã'}</h3>
-                                <p className="text-xs text-gray-500 mt-0.5">{staffOnly ? 'Ghi chú "dùng làm gì" ngay tại đây.' : `${filteredCodes.length}/${codes.length} mã`}</p>
-                            </div>
-                            <button
-                                onClick={() => { fetchCodes(); if (staffOnly) fetchStock(); }}
-                                className="p-2.5 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl text-gray-600 transition-all shadow-sm active:scale-95"
-                                title="Làm mới"
-                            >
-                                <RefreshCw size={18} />
-                            </button>
-                        </div>
+                    <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50 space-y-3">
+                        <h3 className="text-lg md:text-xl font-bold text-[#1a1a2e]">
+                            Danh sách mã
+                            <span className="ml-2 text-sm font-semibold text-gray-400">
+                                {filteredCodes.length === codes.length ? codes.length : `${filteredCodes.length}/${codes.length}`}
+                            </span>
+                        </h3>
 
-                        {/* Lọc + tìm kiếm */}
-                        <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="flex gap-2">
                             <div className="relative flex-1 min-w-0">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                 <input
                                     type="text"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Tìm mã, tên nhân viên, ghi chú…"
-                                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-white text-sm"
+                                    placeholder="Tìm mã, ghi chú…"
+                                    className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-white text-sm"
                                 />
                             </div>
-                            <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
-                                {[
-                                    { key: 'all', label: 'Tất cả' },
-                                    { key: 'claimed', label: 'Đã lấy' },
-                                    { key: 'stock', label: 'Trong kho' },
-                                    { key: 'used', label: 'Đã dùng' },
-                                    { key: 'expired', label: 'Hết hạn' },
-                                ].map((f) => (
+                            {denomOptions.length > 1 && (
+                                <MenuGia value={valueFilter} options={denomOptions} onChange={setValueFilter} />
+                            )}
+                            <button
+                                type="button"
+                                onClick={fetchCodes}
+                                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-gray-200 bg-white text-gray-600 transition-all hover:border-gray-300 active:scale-95"
+                                title="Làm mới"
+                            >
+                                <RefreshCw size={16} />
+                            </button>
+                        </div>
+
+                        {/* Trạng thái: một dải 5 ô kèm số đếm (thay 2 hàng chip) — nhìn là biết kho còn bao nhiêu,
+                            đã phát bao nhiêu mà không phải bấm từng chip. Số tô màu theo trạng thái. */}
+                        <div className="grid grid-cols-5 gap-1 rounded-2xl bg-gray-100 p-1">
+                            {[
+                                { key: 'all', label: 'Tất cả', mau: 'text-[#1a1a2e]' },
+                                { key: 'stock', label: 'Trong kho', mau: 'text-emerald-600' },
+                                { key: 'claimed', label: 'Đã lấy', mau: 'text-amber-600' },
+                                { key: 'used', label: 'Đã dùng', mau: 'text-gray-500' },
+                                { key: 'expired', label: 'Hết hạn', mau: 'text-red-500' },
+                            ].map((f) => {
+                                const on = statusFilter === f.key;
+                                return (
                                     <button
                                         key={f.key}
                                         type="button"
                                         onClick={() => setStatusFilter(f.key)}
-                                        className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${statusFilter === f.key ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
+                                        aria-pressed={on}
+                                        className={`min-w-0 rounded-xl px-1 py-1.5 text-center transition-all active:scale-95 ${on ? 'bg-white shadow-sm ring-1 ring-[#e63946]/30' : 'hover:bg-white/60'}`}
                                     >
-                                        {f.label}
+                                        <div className={`text-base md:text-lg font-black leading-tight ${f.mau}`}>{demTrangThai[f.key] || 0}</div>
+                                        <div className={`truncate text-[11px] md:text-xs font-semibold ${on ? 'text-[#e63946]' : 'text-gray-500'}`}>{f.label}</div>
                                     </button>
-                                ))}
-                            </div>
+                                );
+                            })}
                         </div>
-
-                        {/* Mệnh giá phải là hàng RIÊNG. Đã thử gộp chung hàng với trạng thái: đo
-                            trên khổ 390px thì 267px bị đẩy ra ngoài màn -> đúng nhóm nút này bị
-                            khuất hết, phải vuốt ngang mới thấy. Gộp chỉ tiết kiệm ~38px, không
-                            đáng. Bù lại bằng cách bóp nhỏ chip (py-1.5, text-[11px]) trên điện thoại. */}
-                        {denomOptions.length > 1 && (
-                            <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => setValueFilter('all')}
-                                            className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${valueFilter === 'all' ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
-                                        >
-                                            Mọi giá
-                                        </button>
-                                        {denomOptions.map((v) => (
-                                            <button
-                                                key={v}
-                                                type="button"
-                                                onClick={() => setValueFilter(String(v))}
-                                                className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs rounded-xl font-bold border transition-all active:scale-95 ${String(valueFilter) === String(v) ? 'bg-[#e63946] text-white border-[#e63946]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#e63946]/40'}`}
-                                            >
-                                                {denomLabel(v)}
-                                            </button>
-                                        ))}
-                            </div>
-                        )}
                     </div>
 
                     {/* --- MOBILE VIEW: CARDS --- */}
