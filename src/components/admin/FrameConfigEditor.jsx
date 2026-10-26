@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { detectFrameSlots, analyzeColorFrame, samplePixelColor } from '../../utils/frameDetection';
 import { makeThumbnailBlob } from '../../utils/imageThumb';
 import ConfirmDialog from './ConfirmDialog';
+import MenuChon from '../common/MenuChon';
 
 import { FRAME_API_URL } from '../../config/api';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
@@ -771,28 +772,28 @@ const FrameConfigEditor = ({ frame, onClose }) => {
                                         </div>
                                         ) : (<>
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 pt-1">Ảnh dùng cho ô</p>
-                                        <label className="text-[11px] md:text-xs font-bold text-gray-600">
+                                        <div className="text-[11px] md:text-xs font-bold text-gray-600">
                                             Ô này lấy tấm ảnh nào?
-                                            <select
-                                                className="w-full border border-gray-300 p-2 rounded-lg mt-1 text-gray-800 font-normal"
+                                            <div className="mt-1 font-normal">
+                                            <MenuChon
+                                                ariaLabel="Ô này lấy tấm ảnh nào"
                                                 value={primaryBox.photoIndex ?? ''}
-                                                onChange={e => {
-                                                    const val = e.target.value;
+                                                onChange={(val) => {
                                                     const numVal = val === '' ? undefined : Number(val);
                                                     const newBoxes = [...config.boxes];
                                                     selectedBoxIndices.forEach(idx => newBoxes[idx].photoIndex = numVal);
                                                     setConfig({ ...config, boxes: newBoxes });
                                                 }}
-                                            >
-                                                <option value="">Tự động (Theo thứ tự / Lặp lại)</option>
-                                                {Array.from({ length: layoutDef.photoCount || 4 }).map((_, i) => (
-                                                    <option key={i} value={i}>Ảnh chụp số {i + 1}</option>
-                                                ))}
-                                            </select>
+                                                options={[
+                                                    { value: '', label: 'Tự động (Theo thứ tự / Lặp lại)' },
+                                                    ...Array.from({ length: layoutDef.photoCount || 4 }, (_, i) => ({ value: i, label: `Ảnh chụp số ${i + 1}` })),
+                                                ]}
+                                            />
+                                            </div>
                                             <span className="font-normal text-[10px] text-gray-500 block mt-1 leading-snug">
                                                 Để "Tự động" thì các ô lần lượt lấy ảnh 1, 2, 3… Chọn một tấm cụ thể khi muốn ép ô này luôn lấy đúng tấm đó.
                                             </span>
-                                        </label>
+                                        </div>
                                         </>)}
                                         </div>
 

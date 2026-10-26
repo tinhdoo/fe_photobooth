@@ -3,6 +3,7 @@ import axios from 'axios';
 import { RefreshCw, UserPlus, User, Lock, ShieldCheck, KeyRound, CheckCircle, XCircle, Ban, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { authHeader } from '../../utils/auth';
 import { errorMessage } from '../../utils/errorMessage';
+import MenuChon from '../common/MenuChon';
 
 const roleLabel = (role) => (role === 'admin' ? 'Quản trị' : 'Nhân viên');
 
@@ -169,14 +170,15 @@ const StaffManager = () => {
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Vai trò</label>
-                            <select
+                            <MenuChon
                                 value={form.role}
-                                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e63946] bg-gray-50 focus:bg-white text-sm"
-                            >
-                                <option value="staff">Nhân viên (chỉ Mã thanh toán)</option>
-                                <option value="admin">Quản trị (toàn quyền)</option>
-                            </select>
+                                onChange={(role) => setForm({ ...form, role })}
+                                ariaLabel="Vai trò"
+                                options={[
+                                    { value: 'staff', label: 'Nhân viên (chỉ Mã thanh toán)' },
+                                    { value: 'admin', label: 'Quản trị (toàn quyền)' },
+                                ]}
+                            />
                         </div>
                         <button
                             type="submit"

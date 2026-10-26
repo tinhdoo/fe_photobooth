@@ -4,6 +4,7 @@ import { DollarSign, Calendar, TrendingUp, Download, Eye, Filter, ChevronDown, C
 import { io } from "socket.io-client";
 
 import { CLOUD_API_URL } from '../../config/api';
+import MenuChon from '../common/MenuChon';
 import { authHeader, getUsername, KHOA_CACHE_DOANH_THU } from '../../utils/auth';
 const apiPath = (path) => `${CLOUD_API_URL}${path}`;
 
@@ -69,8 +70,6 @@ const RevenueDashboard = () => {
     const [capNhatLuc, setCapNhatLuc] = useState(() => docCache()?.at || null);
     const [loading, setLoading] = useState(false);
     const [showMobileFilter, setShowMobileFilter] = useState(false);
-    const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
-    const dropdownRef = useRef(null);
     const [dateRange, setDateRange] = useState({
         startDate: '',
         endDate: '',
@@ -230,24 +229,11 @@ const RevenueDashboard = () => {
     }, [stats.transactions]);
 
     const PAYMENT_METHODS = [
-        { value: '', label: 'Tất cả phương thức', icon: <DollarSign size={18} /> },
-        { value: 'cash', label: 'Tiền mặt (Cash)', icon: <Banknote size={18} /> },
-        { value: 'qr', label: 'Chuyển khoản (QR)', icon: <QrCode size={18} /> },
-        { value: 'code', label: 'Mã thanh toán (Code)', icon: <Hash size={18} /> },
+        { value: '', label: 'Mọi phương thức', icon: <DollarSign size={15} /> },
+        { value: 'cash', label: 'Tiền mặt', icon: <Banknote size={15} /> },
+        { value: 'qr', label: 'Chuyển khoản', icon: <QrCode size={15} /> },
+        { value: 'code', label: 'Mã thanh toán', icon: <Hash size={15} /> },
     ];
-
-    // Helper to find selected method for consistent display
-    const selectedMethod = PAYMENT_METHODS.find(m => m.value === paymentMethod) || PAYMENT_METHODS[0];
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setShowPaymentDropdown(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
     const getFilterRange = () => {
         const hasFilter = dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime;
@@ -449,6 +435,7 @@ const RevenueDashboard = () => {
         const { startOfDay, startOfWeek, startOfMonth } = vnNowBounds();
 
         let today = 0;
+        let todayCount = 0;
         let week = 0;
         let month = 0;
 
@@ -456,12 +443,12 @@ const RevenueDashboard = () => {
             if (!tx.used_at) return;
             const txTime = new Date(tx.used_at).getTime();
             const val = realRevenue(tx); // voucher đã bị loại khỏi doanh thu
-            if (txTime >= startOfDay) today += val;
+            if (txTime >= startOfDay) { today += val; todayCount += 1; }
             if (txTime >= startOfWeek) week += val;
             if (txTime >= startOfMonth) month += val;
         });
 
-        return { today, week, month };
+        return { today, todayCount, week, month };
     }, [stats.transactions]);
 
     // Tổng thu THẬT (đã loại voucher) + thống kê voucher đã dùng cho ô riêng.
@@ -517,7 +504,7 @@ const RevenueDashboard = () => {
         while (curU <= endU) {
             const cd = new Date(curU);
             const key = `${cd.getUTCFullYear()}-${String(cd.getUTCMonth() + 1).padStart(2, '0')}-${String(cd.getUTCDate()).padStart(2, '0')}`;
-            days.push({ key, label: `${String(cd.getUTCDate()).padStart(2, '0')}/${String(cd.getUTCMonth() + 1).padStart(2, '0')}`, total: 0 });
+            days.push({ key, label: `${String(cd.getUTCDate()).padStart(2, '0')}/${String(cd.getUTCMonth() + 1).padStart(2, '0')}`, total: 0, voucher: 0 });
             curU += 24 * 60 * 60 * 1000;
         }
 
@@ -526,7 +513,7 @@ const RevenueDashboard = () => {
             if (!tx.used_at) return;
             const key = vnDateKey(tx.used_at);
             const found = days.find(day => day.key === key);
-            if (found) found.total += realRevenue(tx);
+            if (found) { found.total += realRevenue(tx); found.voucher += voucherApplied(tx); }
         });
 
         return days;
@@ -534,92 +521,190 @@ const RevenueDashboard = () => {
     }, [stats.transactions, dateRange]);
 
     return (
-        <div className="space-y-6 md:space-y-8 animate-fadeIn pb-20 md:pb-0">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 lg:mb-8">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Thống kê doanh thu</h1>
-                    <p className="text-gray-500 mt-1 text-sm md:text-base">Theo dõi hiệu quả kinh doanh của bạn.</p>
+        <div className="space-y-4 md:space-y-6 animate-fadeIn pb-20 md:pb-0">
+            {/* Đầu trang: tiêu đề + giờ cập nhật + nút bộ lọc (điện thoại; máy tính luôn hiện thanh lọc) */}
+            <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Doanh thu</h1>
+                    {(loading || capNhatLuc) && (
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
+                            {loading
+                                ? <><Loader2 size={12} className="animate-spin" /> Đang cập nhật…</>
+                                : <>Cập nhật {new Date(capNhatLuc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</>}
+                        </p>
+                    )}
                 </div>
-                {(loading || capNhatLuc) && (
-                    <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500">
-                        {loading
-                            ? <><Loader2 size={14} className="animate-spin" /> Đang cập nhật số mới…</>
-                            : <>Cập nhật lúc {new Date(capNhatLuc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</>}
-                    </div>
-                )}
+                <button
+                    type="button"
+                    onClick={() => setShowMobileFilter(!showMobileFilter)}
+                    className={`lg:hidden relative flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-bold transition-all active:scale-95 ${showMobileFilter ? 'border-[#e63946] bg-[#e63946]/5 text-[#e63946]' : 'border-gray-200 bg-white text-gray-700'}`}
+                >
+                    <Filter size={16} /> Lọc
+                    {(dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime || paymentMethod) && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#e63946] ring-2 ring-white" />}
+                </button>
             </div>
 
             {notification && (
-                <div className="p-4 rounded-xl mb-6 bg-green-50 text-green-700 border border-green-100 flex items-center gap-2 animate-fadeIn">
-                    <CheckCircle size={20} />
-                    <span className="font-bold">{notification}</span>
+                <div className="p-3 rounded-xl bg-green-50 text-green-700 border border-green-100 flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle size={18} />
+                    <span className="font-bold text-sm">{notification}</span>
                 </div>
             )}
 
-            {/* Stats Cards - Đã sửa lỗi bị khuất số */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6">
-                {[
-                    { label: 'Hôm nay', value: periodStats.today, icon: <Calendar size={20} />, color: 'emerald', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
-                    { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={20} />, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
-                    { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={20} />, color: 'purple', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
-                    { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={20} />, color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-                    { label: 'Voucher', value: voucherStats.total, note: `Hôm nay ${voucherStats.today.toLocaleString('vi-VN')}đ · ${voucherStats.count} lượt`, icon: <Hash size={20} />, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100', span: 'col-span-2 lg:col-span-1' },
-                ].map((item, idx) => (
-                    // SỬA: p-4 -> p-3 (giảm lề) để tăng diện tích hiển thị
-                    <div key={idx} className={`bg-white p-3 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${item.border} ${item.span || ''} flex flex-col gap-2 md:gap-3 hover:shadow-md transition-all h-full justify-between`}>
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <div className={`w-8 h-8 md:w-10 md:h-10 shrink-0 ${item.bg} ${item.text} rounded-xl flex items-center justify-center`}>
-                                {item.icon}
-                            </div>
-                            <p className="text-gray-400 text-[10px] md:text-xs uppercase tracking-wider font-bold truncate">{item.label}</p>
+            {/* Bộ lọc — THANH NGANG gọn (áp cho biểu đồ + booth + giao dịch bên dưới) */}
+            <div className={`${showMobileFilter ? 'block' : 'hidden'} lg:block bg-white rounded-2xl shadow-sm border border-gray-100`}>
+                <div className="p-4">
+                    {errorMsg && (
+                        <div className="p-3 mb-3 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-bold animate-fadeIn">
+                            {errorMsg}
                         </div>
-
-                        {/* SỬA: Bỏ 'truncate', thêm 'break-words', chỉnh font size mobile xuống text-base */}
-                        <div>
-                            <h2 className="text-base sm:text-lg md:text-2xl font-black text-[#1a1a2e] break-words leading-tight">
-                                {formatCurrency(item.value)}
-                            </h2>
-                            {item.note && (
-                                <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-wide text-gray-400 mt-1 truncate">
-                                    {item.note}
-                                </p>
+                    )}
+                    <form onSubmit={handleFilter} className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-end">
+                        <div className="hidden lg:flex items-center gap-2 self-center pr-1 text-[#1a1a2e] font-bold shrink-0">
+                            <Filter size={18} className="text-[#e63946]" /> Bộ lọc
+                        </div>
+                        <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-40">
+                            <label htmlFor="startDate" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Từ ngày</label>
+                            <input type="date" id="startDate" name="startDate"
+                                className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                value={dateRange.startDate}
+                                onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, startDate: e.target.value }); }} />
+                        </div>
+                        <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-40">
+                            <label htmlFor="endDate" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Đến ngày</label>
+                            <input type="date" id="endDate" name="endDate"
+                                className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                value={dateRange.endDate}
+                                onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, endDate: e.target.value }); }} />
+                        </div>
+                        <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-28">
+                            <label htmlFor="startTime" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Từ giờ</label>
+                            <input type="time" id="startTime" name="startTime"
+                                className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                value={dateRange.startTime}
+                                onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, startTime: e.target.value }); }} />
+                        </div>
+                        <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-28">
+                            <label htmlFor="endTime" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Đến giờ</label>
+                            <input type="time" id="endTime" name="endTime"
+                                className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
+                                value={dateRange.endTime}
+                                onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, endTime: e.target.value }); }} />
+                        </div>
+                        <div className="col-span-2 flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-52">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phương thức</label>
+                            <MenuChon
+                                value={paymentMethod}
+                                onChange={setPaymentMethod}
+                                ariaLabel="Phương thức"
+                                nutClassName="flex h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 text-left text-xs font-bold text-[#1a1a2e] transition-all hover:border-gray-200 md:text-sm"
+                                options={PAYMENT_METHODS.map((m) => ({ value: m.value, label: <span className="inline-flex items-center gap-2"><span className="text-gray-400">{m.icon}</span>{m.label}</span> }))}
+                            />
+                        </div>
+                        <div className="col-span-2 flex items-center gap-2 sm:ml-auto">
+                            <button type="submit" disabled={loading}
+                                className="bg-[#e63946] text-white px-5 py-2 rounded-xl font-bold hover:bg-[#c1121f] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 active:scale-[0.98] disabled:opacity-50 text-sm h-[38px]">
+                                {loading ? 'Đang tải...' : <><Filter size={16} /> Áp dụng</>}
+                            </button>
+                            {(dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime || paymentMethod) && (
+                                <button type="button"
+                                    onClick={() => { setErrorMsg(''); setDateRange({ startDate: '', endDate: '', startTime: '', endTime: '' }); setPaymentMethod(''); }}
+                                    className="px-3 py-2 text-gray-400 hover:text-red-500 font-bold text-xs transition-colors whitespace-nowrap">
+                                    Đặt lại
+                                </button>
                             )}
                         </div>
+                    </form>
+                </div>
+            </div>
+
+            {/* Doanh thu theo booth — full chiều rộng */}
+
+            {/* Số liệu: "Hôm nay" là thẻ lớn (xem nhiều nhất), còn lại là danh sách gọn số đủ chữ số
+                — 5 thẻ nhỏ cũ trên điện thoại vừa dài vừa phải bóp chữ. */}
+            <div className="grid gap-3 md:gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                <div className="flex flex-col justify-between rounded-3xl bg-gradient-to-br from-[#1a1a2e] to-[#33334f] p-5 text-white shadow-lg shadow-[#1a1a2e]/15 md:p-6">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
+                        <Calendar size={14} /> Hôm nay
                     </div>
-                ))}
+                    <div className="mt-2">
+                        <p className="break-words text-3xl font-black leading-tight tracking-tight md:text-4xl">{formatCurrency(periodStats.today)}</p>
+                        <p className="mt-1 text-xs text-white/50">{periodStats.todayCount} lượt</p>
+                    </div>
+                </div>
+                <div className="divide-y divide-gray-100 rounded-3xl border border-gray-100 bg-white px-4 shadow-sm md:px-5">
+                    {[
+                        { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={15} />, mau: 'bg-blue-50 text-blue-600' },
+                        { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={15} />, mau: 'bg-purple-50 text-purple-600' },
+                        { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={15} />, mau: 'bg-amber-50 text-amber-600' },
+                        { label: 'Voucher', note: `${voucherStats.count} lượt · hôm nay ${voucherStats.today.toLocaleString('vi-VN')}đ`, value: voucherStats.total, icon: <Hash size={15} />, mau: 'bg-orange-50 text-orange-600', phu: true },
+                    ].map((item) => (
+                        <div key={item.label} className="flex items-center gap-3 py-3">
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${item.mau}`}>{item.icon}</span>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-gray-600">{item.label}</p>
+                                {item.note && <p className="truncate text-[11px] text-gray-400">{item.note}</p>}
+                            </div>
+                            <p className={`shrink-0 text-right font-black ${item.phu ? 'text-sm text-gray-500' : 'text-base text-[#1a1a2e] md:text-lg'}`}>{formatCurrency(item.value)}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {/* Charts — 2 col grid */}
             {chartData.length > 0 && (() => {
-                const formatK = v => v === 0 ? '0' : v >= 1000000 ? `${(v / 1000000).toFixed(1)}tr` : v >= 1000 ? `${Math.round(v / 1000)}k` : v;
-                const maxVal = Math.max(...chartData.map(d => d.total), 1);
-                const yMax = (() => {
-                    const mag = Math.pow(10, Math.floor(Math.log10(maxVal)));
-                    return Math.ceil(maxVal / mag) * mag;
-                })();
-                const todayKey = new Date().toISOString().slice(0, 10);
+                // Số gọn cho trục: 0 / 500k / 1tr / 1,5tr
+                const formatK = (v) => (v === 0 ? '0' : v >= 1e6 ? `${(v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}tr` : `${Math.round(v / 1000)}k`);
+                const maxVal = Math.max(...chartData.map((d) => Math.max(d.total, d.voucher)), 1);
+                // Mốc trục tròn: bước 1 / 2 / 2,5 / 5 × 10^k, chia 3 hoặc 4 bước — lấy cách nào ít thừa khoảng trống trên đầu hơn.
+                const [yStep, soBuoc] = [3, 4].map((k) => {
+                    const tho = maxVal / k;
+                    const mag = Math.pow(10, Math.floor(Math.log10(tho)));
+                    return [[1, 2, 2.5, 5, 10].map((m) => m * mag).find((b) => b >= tho), k];
+                }).sort((a, b) => a[0] * a[1] - b[0] * b[1])[0];
+                const yMax = yStep * soBuoc;
+                const todayKey = vnDateKey(Date.now());
                 const n = chartData.length;
-                const yTicks = [0, 0.25, 0.5, 0.75, 1];
 
-                // --- Bar chart geometry ---
-                const BW = 700, BH = 200, BP_L = 72, BP_R = 16, BP_T = 20, BP_B = 36;
+                // --- Bar chart geometry --- (khung hẹp để chữ trục đọc được trên điện thoại; máy tính phóng to theo)
+                const BW = 360, BH = 180, BP_L = 30, BP_R = 4, BP_T = 10, BP_B = 20;
                 const bPlotW = BW - BP_L - BP_R, bPlotH = BH - BP_T - BP_B;
-                const barW = Math.max(4, Math.min(28, Math.floor(bPlotW / n) - 4));
-                const bLabelStep = Math.ceil(n / 8);
+                const day = BP_T + bPlotH;
+                const oW = bPlotW / n; // mỗi ngày một ô, cột nằm giữa ô (cột đầu/cuối không tràn ra ngoài)
+                // Mỗi ngày 2 cột đứng cạnh nhau (doanh thu | voucher), cách nhau khe 1; phần còn lại của ô là khoảng thở.
+                const KHE = 1;
+                const barW = Math.max(2, Math.min(12, (oW * 0.78 - KHE) / 2));
+                const bLabelStep = Math.ceil(n / 7);
+                const hoverI = chartHover?.chart === 'bar' ? chartHover.i : null;
 
-                // Tooltip dùng chung cho 2 chart: hộp nổi hiển thị ngày + doanh thu.
+                // 2 màu: đỏ là doanh thu thật (tiền mặt + QR), hổ phách là phần voucher che trong ngày.
+                // Cặp đỏ thương hiệu + hổ phách đã chạy kiểm tra màu (phân biệt được cả với người mù màu).
+                const MAU_THU = '#e63946', MAU_VOUCHER = '#eda100';
+                // Cột vuông góc (user thấy đầu bo tròn khó nhìn).
+                const cot = (x, y, w, h) => `M${x},${y + h}V${y}H${x + w}V${y + h}Z`;
                 const fmtVnd = v => `${new Intl.NumberFormat('vi-VN').format(v)}đ`;
-                const renderTip = (cx, anchorY, label, total, leftBound, rightBound, plotTop) => {
-                    const tw = 104, th = 40;
-                    let tx = Math.max(leftBound, Math.min(cx - tw / 2, rightBound - tw));
-                    let ty = anchorY - th - 10;
-                    if (ty < plotTop) ty = anchorY + 12; // không đủ chỗ phía trên -> lật xuống dưới
+                // Tooltip: ngày + từng phần (chấm màu nhận dạng, chữ giữ màu trung tính).
+                const renderTip = (cx, anchorY, d) => {
+                    const dong = [['Doanh thu', d.total, MAU_THU], ...(d.voucher > 0 ? [['Voucher', d.voucher, MAU_VOUCHER]] : [])];
+                    const tw = 140, th = 22 + dong.length * 15;
+                    let tx = Math.max(BP_L, Math.min(cx - tw / 2, BW - BP_R - tw));
+                    let ty = anchorY - th - 8;
+                    if (ty < BP_T) {
+                        // Cột cao, không đủ chỗ phía trên -> đặt hộp sát bên cạnh cột (phải, hết chỗ thì trái) để không che cột.
+                        ty = BP_T;
+                        tx = cx + barW + 6 + tw <= BW - BP_R ? cx + barW + 6 : cx - barW - 6 - tw;
+                    }
                     return (
                         <g pointerEvents="none">
-                            <rect x={tx} y={ty} width={tw} height={th} rx={7} fill="#1a1a2e" opacity="0.95" />
-                            <text x={tx + tw / 2} y={ty + 16} textAnchor="middle" fontSize={10} fill="#cbd5e1">{label}</text>
-                            <text x={tx + tw / 2} y={ty + 31} textAnchor="middle" fontSize={11.5} fill="#ffffff" fontWeight="700">{fmtVnd(total)}</text>
+                            <rect x={tx} y={ty} width={tw} height={th} rx={8} fill="#1a1a2e" opacity="0.96" />
+                            <text x={tx + 10} y={ty + 15} fontSize={9} fill="#9ca3af">{d.label}</text>
+                            {dong.map(([ten, v, mau], k) => (
+                                <g key={ten}>
+                                    <rect x={tx + 10} y={ty + 22 + k * 15} width={7} height={7} rx={1.5} fill={mau} />
+                                    <text x={tx + 22} y={ty + 28.5 + k * 15} fontSize={9.5} fill="#cbd5e1">{ten}</text>
+                                    <text x={tx + tw - 10} y={ty + 28.5 + k * 15} textAnchor="end" fontSize={10} fill="#ffffff" fontWeight="700">{fmtVnd(v)}</text>
+                                </g>
+                            ))}
                         </g>
                     );
                 };
@@ -629,77 +714,48 @@ const RevenueDashboard = () => {
 
                         {/* Bar Chart */}
                         <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
-                            <div className="flex items-center justify-between mb-3">
-                                <div>
-                                    <h3 className="text-base font-black text-[#1a1a2e]">Doanh thu từng ngày</h3>
-                                    <p className="text-gray-400 text-xs mt-0.5">
-                                        {dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime ? 'Khoảng đã lọc' : '14 ngày gần nhất'}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="w-3 h-3 rounded-sm bg-[#e63946] inline-block" />
-                                    Biểu đồ cột
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                <h3 className="text-base font-black text-[#1a1a2e]">Doanh thu từng ngày</h3>
+                                <div className="flex items-center gap-3 text-xs font-semibold text-gray-500">
+                                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: MAU_THU }} />Doanh thu</span>
+                                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: MAU_VOUCHER }} />Voucher</span>
                                 </div>
                             </div>
                             <svg viewBox={`0 0 ${BW} ${BH}`} className="block w-full" style={{ aspectRatio: `${BW} / ${BH}` }} preserveAspectRatio="xMidYMid meet" onMouseLeave={() => setChartHover(null)}>
-                                <defs>
-                                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#e63946" stopOpacity="0.9" />
-                                        <stop offset="100%" stopColor="#84a98c" stopOpacity="0.7" />
-                                    </linearGradient>
-                                    <linearGradient id="barGradToday" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#1a1a2e" stopOpacity="0.85" />
-                                        <stop offset="100%" stopColor="#e63946" stopOpacity="0.7" />
-                                    </linearGradient>
-                                </defs>
-                                {yTicks.map((r, i) => {
-                                    const y = BP_T + bPlotH - r * bPlotH;
+                                {/* Lưới: nét mảnh liền, nhạt — chỉ để dóng mắt, không tranh với cột */}
+                                {Array.from({ length: soBuoc + 1 }, (_, k) => {
+                                    const y = day - (k / soBuoc) * bPlotH;
                                     return (
-                                        <g key={i}>
-                                            <line x1={BP_L} y1={y} x2={BW - BP_R} y2={y} stroke={r === 0 ? '#e5e7eb' : '#f3f4f6'} strokeWidth={r === 0 ? 1.5 : 1} strokeDasharray={r > 0 ? '4 3' : '0'} />
-                                            <text x={BP_L - 6} y={y + 4} textAnchor="end" fontSize={9} fill="#9ca3af">{formatK(Math.round(yMax * r))}</text>
+                                        <g key={k}>
+                                            <line x1={BP_L} y1={y} x2={BW - BP_R} y2={y} stroke={k === 0 ? '#e5e7eb' : '#f1f2f4'} strokeWidth={1} />
+                                            <text x={BP_L - 6} y={y + 3} textAnchor="end" fontSize={8} fill="#9ca3af">{formatK(k * yStep)}</text>
                                         </g>
                                     );
                                 })}
                                 {chartData.map((d, i) => {
-                                    const bx = BP_L + (n === 1 ? bPlotW / 2 : (i / (n - 1)) * bPlotW);
-                                    const barH = Math.max(d.total > 0 ? 3 : 0, (d.total / yMax) * bPlotH);
-                                    const by = BP_T + bPlotH - barH;
+                                    const bx = BP_L + (i + 0.5) * oW;
+                                    const thuH = d.total > 0 ? Math.max(2, (d.total / yMax) * bPlotH) : 0;
+                                    const vH = d.voucher > 0 ? Math.max(2, (d.voucher / yMax) * bPlotH) : 0;
                                     const isToday = d.key === todayKey;
-                                    const showLabel = i === 0 || i === n - 1 || isToday || i % bLabelStep === 0;
+                                    const showLabel = isToday || (n - 1 - i) % bLabelStep === 0; // đếm lùi từ ngày cuối -> nhãn "Hôm nay" không dính nhãn bên cạnh
                                     return (
-                                        <g key={d.key}>
-                                            <rect
-                                                x={bx - barW / 2} y={by}
-                                                width={barW} height={barH}
-                                                rx={3}
-                                                fill={isToday ? 'url(#barGradToday)' : (d.total > 0 ? 'url(#barGrad)' : '#f3f4f6')}
-                                            />
-                                            {showLabel && <text x={bx} y={BH - 6} textAnchor="middle" fontSize={9} fill={isToday ? '#e63946' : '#b0b7bf'} fontWeight={isToday ? '700' : '400'}>{d.label}</text>}
+                                        <g key={d.key} opacity={hoverI === null || hoverI === i ? 1 : 0.35} style={{ transition: 'opacity 120ms' }}>
+                                            {thuH > 0 && <path d={cot(bx - KHE / 2 - barW, day - thuH, barW, thuH)} fill={MAU_THU} />}
+                                            {vH > 0 && <path d={cot(bx + KHE / 2, day - vH, barW, vH)} fill={MAU_VOUCHER} />}
+                                            {showLabel && <text x={bx} y={BH - 5} textAnchor="middle" fontSize={8} fill={isToday ? '#1a1a2e' : '#9ca3af'} fontWeight={isToday ? '700' : '400'}>{isToday ? 'Hôm nay' : d.label}</text>}
                                         </g>
                                     );
                                 })}
-                                {/* Vùng bắt hover (trong suốt, phủ cả chiều cao) cho từng cột */}
-                                {chartData.map((d, i) => {
-                                    const bx = BP_L + (n === 1 ? bPlotW / 2 : (i / (n - 1)) * bPlotW);
-                                    const colW = n === 1 ? bPlotW : bPlotW / (n - 1);
-                                    return (
-                                        <rect key={`h${d.key}`} x={bx - colW / 2} y={BP_T} width={colW} height={bPlotH}
-                                            fill="transparent" onMouseEnter={() => setChartHover({ chart: 'bar', i })} />
-                                    );
-                                })}
-                                {/* Tooltip */}
-                                {chartHover?.chart === 'bar' && chartData[chartHover.i] && (() => {
-                                    const d = chartData[chartHover.i];
-                                    const bx = BP_L + (n === 1 ? bPlotW / 2 : (chartHover.i / (n - 1)) * bPlotW);
-                                    const barH = Math.max(d.total > 0 ? 3 : 0, (d.total / yMax) * bPlotH);
-                                    const by = BP_T + bPlotH - barH;
-                                    return (
-                                        <g pointerEvents="none">
-                                            <rect x={bx - barW / 2} y={by} width={barW} height={barH} rx={3} fill="#1a1a2e" opacity={0.18} />
-                                            {renderTip(bx, by, d.label, d.total, BP_L, BW - BP_R, BP_T)}
-                                        </g>
-                                    );
+                                {/* Vùng bắt hover/chạm (trong suốt, phủ cả ô ngày) */}
+                                {chartData.map((d, i) => (
+                                    <rect key={`h${d.key}`} x={BP_L + i * oW} y={BP_T} width={oW} height={bPlotH}
+                                        fill="transparent" onMouseEnter={() => setChartHover({ chart: 'bar', i })} onClick={() => setChartHover({ chart: 'bar', i })} />
+                                ))}
+                                {hoverI !== null && chartData[hoverI] && (() => {
+                                    const d = chartData[hoverI];
+                                    const bx = BP_L + (hoverI + 0.5) * oW;
+                                    const cao = Math.max(d.total, d.voucher) > 0 ? (Math.max(d.total, d.voucher) / yMax) * bPlotH + 2 : 0;
+                                    return renderTip(bx, day - cao, d);
                                 })()}
                             </svg>
                         </div>
@@ -724,9 +780,9 @@ const RevenueDashboard = () => {
                             });
                             return (
                                 <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
-                                    <h3 className="text-base font-black text-[#1a1a2e] mb-4">So sánh lượt chụp giữa các booth</h3>
-                                    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
-                                        <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0">
+                                    <h3 className="text-base font-black text-[#1a1a2e] mb-3">Lượt chụp theo booth</h3>
+                                    <div className="flex items-center gap-4 sm:gap-6">
+                                        <svg viewBox="0 0 200 200" className="h-28 w-28 shrink-0 sm:h-40 sm:w-40">
                                             {items.length === 1 ? (
                                                 <>
                                                     <circle cx={cx} cy={cy} r={R} fill={slices[0].color} />
@@ -742,7 +798,7 @@ const RevenueDashboard = () => {
                                             <text x={cx} y={cy - 2} textAnchor="middle" fontSize="20" fontWeight="800" fill="#1a1a2e">{totalCount}</text>
                                             <text x={cx} y={cy + 15} textAnchor="middle" fontSize="10" fill="#9ca3af">lượt chụp</text>
                                         </svg>
-                                        <div className="grid w-full flex-1 grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                                        <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-5 gap-y-2 xl:grid-cols-2">
                                             {slices.map((s) => (
                                                 <div key={s.b.device_id} className="flex items-center gap-2 text-sm">
                                                     <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: s.color }} />
@@ -760,111 +816,17 @@ const RevenueDashboard = () => {
             })()}
 
 
-            <div className="space-y-6 md:space-y-8">
-                {/* Bộ lọc — THANH NGANG gọn (áp cho biểu đồ + booth + giao dịch bên dưới) */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100">
-                    <button
-                        onClick={() => setShowMobileFilter(!showMobileFilter)}
-                        className="lg:hidden w-full flex items-center justify-between p-4 text-[#1a1a2e] font-bold"
-                    >
-                        <span className="flex items-center gap-2"><Filter size={18} className="text-[#e63946]" /> Bộ lọc doanh thu</span>
-                        {showMobileFilter ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                    </button>
-
-                    <div className={`${showMobileFilter ? 'block' : 'hidden'} lg:block p-4 md:p-5`}>
-                        {errorMsg && (
-                            <div className="p-3 mb-3 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-bold animate-fadeIn">
-                                {errorMsg}
-                            </div>
-                        )}
-                        <form onSubmit={handleFilter} className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
-                            <div className="hidden lg:flex items-center gap-2 self-center pr-1 text-[#1a1a2e] font-bold shrink-0">
-                                <Filter size={18} className="text-[#e63946]" /> Bộ lọc
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-40">
-                                <label htmlFor="startDate" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Từ ngày</label>
-                                <input type="date" id="startDate" name="startDate"
-                                    className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
-                                    value={dateRange.startDate}
-                                    onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, startDate: e.target.value }); }} />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-40">
-                                <label htmlFor="endDate" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Đến ngày</label>
-                                <input type="date" id="endDate" name="endDate"
-                                    className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
-                                    value={dateRange.endDate}
-                                    onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, endDate: e.target.value }); }} />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-28">
-                                <label htmlFor="startTime" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Từ giờ</label>
-                                <input type="time" id="startTime" name="startTime"
-                                    className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
-                                    value={dateRange.startTime}
-                                    onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, startTime: e.target.value }); }} />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-28">
-                                <label htmlFor="endTime" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Đến giờ</label>
-                                <input type="time" id="endTime" name="endTime"
-                                    className="w-full box-border bg-gray-50 border border-gray-100 rounded-xl py-2 px-2.5 outline-none focus:bg-white focus:ring-2 focus:ring-[#e63946]/20 focus:border-[#e63946] transition-all font-medium text-xs md:text-sm text-gray-700"
-                                    value={dateRange.endTime}
-                                    onChange={(e) => { setErrorMsg(''); setDateRange({ ...dateRange, endTime: e.target.value }); }} />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-52">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phương thức</label>
-                                <div className="relative" ref={dropdownRef}>
-                                    <button type="button" onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
-                                        className={`w-full bg-gray-50/50 border ${showPaymentDropdown ? 'border-[#e63946] ring-4 ring-[#e63946]/10 bg-white' : 'border-gray-100/80 hover:bg-white hover:border-gray-200'} rounded-xl py-2 pl-3 pr-3 outline-none transition-all flex items-center justify-between group`}>
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className={`shrink-0 transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-gray-400 group-hover:text-gray-500'}`}>{selectedMethod.icon}</div>
-                                            <span className={`truncate font-bold text-xs md:text-sm transition-colors ${showPaymentDropdown ? 'text-[#e63946]' : 'text-[#1a1a2e]'}`}>{selectedMethod.label}</span>
-                                        </div>
-                                        <ChevronDown size={16} className={`shrink-0 text-gray-400 transition-transform duration-200 ${showPaymentDropdown ? 'rotate-180 text-[#e63946]' : ''}`} />
-                                    </button>
-                                    {showPaymentDropdown && (
-                                        <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                                            <div className="p-1.5 space-y-0.5">
-                                                {PAYMENT_METHODS.map((method) => (
-                                                    <button key={method.value} type="button"
-                                                        onClick={() => { setPaymentMethod(method.value); setShowPaymentDropdown(false); }}
-                                                        className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${paymentMethod === method.value ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/20' : 'text-[#1a1a2e] hover:bg-gray-50'}`}>
-                                                        <div className="flex items-center gap-3">{method.icon}<span className="font-bold text-sm">{method.label}</span></div>
-                                                        {paymentMethod === method.value && (<Check size={16} />)}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 sm:ml-auto">
-                                <button type="submit" disabled={loading}
-                                    className="bg-[#e63946] text-white px-5 py-2 rounded-xl font-bold hover:bg-[#c1121f] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#e63946]/20 active:scale-[0.98] disabled:opacity-50 text-sm h-[38px]">
-                                    {loading ? 'Đang tải...' : <><Filter size={16} /> Áp dụng</>}
-                                </button>
-                                {(dateRange.startDate || dateRange.endDate || dateRange.startTime || dateRange.endTime || paymentMethod) && (
-                                    <button type="button"
-                                        onClick={() => { setErrorMsg(''); setDateRange({ startDate: '', endDate: '', startTime: '', endTime: '' }); setPaymentMethod(''); }}
-                                        className="px-3 py-2 text-gray-400 hover:text-red-500 font-bold text-xs transition-colors whitespace-nowrap">
-                                        Đặt lại
-                                    </button>
-                                )}
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
+            <div className="space-y-4 md:space-y-6">
                 {/* Doanh thu theo booth — full chiều rộng */}
                 <div>
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/30">
-                            <h3 className="text-xl font-black text-[#1a1a2e]">Doanh thu theo booth</h3>
-                            <p className="text-gray-400 text-sm font-medium mt-1">
-                                {revenueByBooth.length} booth · tách theo tiền mặt / QR / voucher
-                            </p>
+                        <div className="flex items-baseline gap-2 px-4 pt-4 sm:px-6 sm:pt-5">
+                            <h3 className="text-base font-black text-[#1a1a2e]">Doanh thu theo booth</h3>
+                            <span className="text-xs font-semibold text-gray-400">{revenueByBooth.length}</span>
                         </div>
 
                         {revenueByBooth.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 md:gap-4 md:p-6">
+                            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 md:gap-4 sm:p-6 sm:pt-4">
                                 {revenueByBooth.map((b) => (
                                     <div key={b.device_id} className="rounded-2xl border border-gray-100 bg-[#FFFDF2] p-3.5">
                                         <div className="mb-2 flex items-start justify-between gap-2">
@@ -947,12 +909,10 @@ const RevenueDashboard = () => {
                 {/* Transactions Section — full chiều rộng */}
                 <div>
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
-                            <div>
-                                <h3 className="text-xl font-black text-[#1a1a2e]">Giao dịch</h3>
-                                <p className="text-gray-400 text-sm font-medium mt-1">
-                                    {stats.transactions?.length || 0} giao dịch gần nhất
-                                </p>
+                        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-base font-black text-[#1a1a2e]">Giao dịch</h3>
+                                <span className="text-xs font-semibold text-gray-400">{stats.transactions?.length || 0}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button className="hidden md:block p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-[#e63946]">
@@ -973,7 +933,7 @@ const RevenueDashboard = () => {
                         <div className="md:hidden flex flex-col divide-y divide-gray-100">
                             {stats.transactions?.length > 0 ? (
                                 visibleTransactions.map((tx) => (
-                                    <div key={tx.id} className={`px-4 py-3 flex flex-col gap-1.5 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
+                                    <div key={tx.id} className={`px-4 py-2.5 flex flex-col gap-1 transition-colors ${getMethodStyle(tx).row} ${getMethodStyle(tx).left}`}>
                                         {/* Hàng 1: phương thức + giá trị */}
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="min-w-0 flex items-center gap-2 font-bold text-[#1a1a2e]">
@@ -987,12 +947,15 @@ const RevenueDashboard = () => {
                                                 )}
                                             </div>
                                         </div>
-                                        {/* Hàng 2: mã · phòng + trạng thái + nút xem (status/nút luôn shrink-0 -> không bị cắt) */}
+                                        {/* Hàng 2: mã / NV / booth · giờ + trạng thái + nút xem (trạng thái/nút shrink-0 -> không bị cắt) */}
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-gray-400">
-                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946] truncate">{getMethodDetail(tx)}</span>}
-                                                {tx.staff_name && <span className="shrink-0 text-gray-500">· {tx.staff_name}</span>}
-                                                {tx.device_id && <span className="shrink-0">{boothName(tx.device_id)}</span>}
+                                            <div className="min-w-0 truncate text-[11px] text-gray-500">
+                                                {getMethodDetail(tx) && <span className="font-mono font-bold text-[#e63946]">{getMethodDetail(tx)} · </span>}
+                                                {tx.staff_name && <span>{tx.staff_name} · </span>}
+                                                {tx.device_id && <span>{boothName(tx.device_id)} · </span>}
+                                                <span className="text-gray-400">
+                                                    {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'}
+                                                </span>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
                                                 {statusInfo(tx) && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${statusInfo(tx).cls}`}>{statusInfo(tx).label}</span>}
@@ -1000,11 +963,6 @@ const RevenueDashboard = () => {
                                                     <Eye size={15} />
                                                 </a>
                                             </div>
-                                        </div>
-                                        {/* Hàng 3: ngày giờ (dòng riêng để không đẩy cắt trạng thái) */}
-                                        <div className="flex items-center gap-0.5 text-[11px] text-gray-400">
-                                            <Clock size={11} />
-                                            {tx.used_at ? new Date(tx.used_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'}
                                         </div>
                                     </div>
                                 ))

@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import { getDeviceId } from '../../utils/deviceId';
 import { isLocalHost } from '../../utils/runtime';
 import { authHeader } from '../../utils/auth';
+import MenuChon from '../common/MenuChon';
 
 const defaultHexCodes = ['40', '41', '42', '43', '44', '45', '46', '47'];
 
@@ -275,17 +276,15 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             </div>
 
                             <label className="mb-2 block text-sm font-medium text-gray-700">Chọn thiết bị cấu hình</label>
-                            <select
+                            <MenuChon
                                 value={selectedDeviceId}
-                                onChange={(event) => setSelectedDeviceId(event.target.value)}
-                                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
-                            >
-                                {devices.map((device) => (
-                                    <option key={device.device_id} value={device.device_id}>
-                                        {device.name} {device.device_id === currentDeviceId ? '(Máy này)' : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={setSelectedDeviceId}
+                                ariaLabel="Chọn thiết bị cấu hình"
+                                options={devices.map((device) => ({
+                                    value: device.device_id,
+                                    label: `${device.name}${device.device_id === currentDeviceId ? ' (Máy này)' : ''}`,
+                                }))}
+                            />
 
                             {!selectedIsLocal && selectedDeviceId && (
                                 <div className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600">
@@ -317,21 +316,15 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Cổng COM</label>
                                 {ports.length > 0 ? (
-                                    <select
-                                        name="port"
+                                    <MenuChon
                                         value={config.port}
-                                        onChange={handleConfigChange}
-                                        className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
-                                    >
-                                        {ports.map((port) => (
-                                            <option key={port.device} value={port.device}>
-                                                {port.device} - {port.description}
-                                            </option>
-                                        ))}
-                                        {!ports.some((port) => port.device === config.port) && (
-                                            <option value={config.port}>{config.port}</option>
-                                        )}
-                                    </select>
+                                        onChange={(port) => setConfig((prev) => ({ ...prev, port }))}
+                                        ariaLabel="Cổng COM"
+                                        options={[
+                                            ...ports.map((port) => ({ value: port.device, label: `${port.device} - ${port.description}` })),
+                                            ...(ports.some((port) => port.device === config.port) ? [] : [{ value: config.port, label: config.port }]),
+                                        ]}
+                                    />
                                 ) : (
                                     <input
                                         type="text"
@@ -353,16 +346,12 @@ const BillSettings = ({ forceLocalAdmin = false }) => {
 
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Baudrate</label>
-                                <select
-                                    name="baudrate"
+                                <MenuChon
                                     value={config.baudrate}
-                                    onChange={handleConfigChange}
-                                    className="block w-full rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm focus:border-[#DDBF9B] focus:ring-[#DDBF9B]"
-                                >
-                                    <option value="9600">9600</option>
-                                    <option value="19200">19200</option>
-                                    <option value="115200">115200</option>
-                                </select>
+                                    onChange={(baudrate) => setConfig((prev) => ({ ...prev, baudrate }))}
+                                    ariaLabel="Baudrate"
+                                    options={['9600', '19200', '115200'].map((v) => ({ value: v, label: v }))}
+                                />
                             </div>
 
                             <div className="flex items-center justify-between border-t border-gray-50 pt-4">

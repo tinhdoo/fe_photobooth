@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Zap, DollarSign } from 'lucide-react';
+import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIcon, Monitor, Wifi, XCircle, Banknote, Trash2, Plus, ChevronDown } from 'lucide-react';
 import DeviceManager from './DeviceManager';
-import BoothModeInfo from './BoothModeInfo';
 import { isLocalHost } from '../../utils/runtime';
 import { authHeader } from '../../utils/auth';
-import { useWorkflow } from '../../context/WorkflowContext';
 
 // Cloud chỉ cho admin đã đăng nhập lưu cấu hình (từ 2026-10-06). Lỗi quyền -> nói rõ, không chỉ "Lỗi".
 const loiLuuCauHinh = (error, macDinh) => ([401, 403].includes(error?.response?.status)
@@ -14,7 +12,6 @@ const loiLuuCauHinh = (error, macDinh) => ([401, 403].includes(error?.response?.
 
 const Settings = ({ forceLocalAdmin = false }) => {
     const isLocalAdmin = isLocalHost() || forceLocalAdmin;
-    const { isEventMode } = useWorkflow();
     const [activeTab, setActiveTab] = useState('general');
     const [configs, setConfigs] = useState({
         price: '60000',
@@ -69,7 +66,7 @@ const Settings = ({ forceLocalAdmin = false }) => {
     const [hardwareLoading, setHardwareLoading] = useState(false);
     const [testLoading, setTestLoading] = useState(null);
     const [cameraTestOk, setCameraTestOk] = useState(false);
-    const [modeInfo, setModeInfo] = useState(false); // modal báo chế độ tính tiền (đổi trên cloud)
+    const [moFormLich, setMoFormLich] = useState(false); // form thêm lịch đổi giá: chỉ mở khi bấm "Thêm lịch"
 
     useEffect(() => {
         fetchConfigs();
@@ -714,534 +711,234 @@ const Settings = ({ forceLocalAdmin = false }) => {
         );
     }
 
+    // ---- Trang Cài đặt trên cloud (máy booth đã return trang phần cứng ở trên) ----
+    // Gọn cho điện thoại: mỗi nhóm một khối nhỏ, ô nhập thấp, giá xếp thành bảng 2x2 thay vì 2 thẻ to.
+    const oNhap = 'block w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2.5 text-sm font-bold text-[#1a1a2e] transition-all focus:border-[#e63946] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#e63946]/20';
+    const oGia = (name, placeholder) => (
+        <div className="relative">
+            <input type="number" inputMode="numeric" name={name} value={configs[name] ?? ''} onChange={handleChange} placeholder={placeholder} className={`${oNhap} pr-7`} />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-400">đ</span>
+        </div>
+    );
+    const oGiay = (name, nhan, placeholder, min = 10) => (
+        <label className="block min-w-0">
+            <span className="mb-1.5 block truncate text-xs font-semibold text-gray-600">{nhan}</span>
+            <input type="number" inputMode="numeric" name={name} min={min} placeholder={placeholder} value={configs[name] ?? ''} onChange={handleChange} className={oNhap} />
+        </label>
+    );
+    const khoi = (tieuDe, noiDung, phai = null) => (
+        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-3 flex min-h-[32px] items-center justify-between gap-3">
+                <h2 className="text-base font-bold text-[#1a1a2e]">{tieuDe}</h2>
+                {phai}
+            </div>
+            {noiDung}
+        </section>
+    );
+    const gioLich = (item) => (isNaN(new Date(item.run_at))
+        ? (item.run_at || '--')
+        : item.repeat === 'daily'
+            ? new Date(item.run_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : (() => { const d = new Date(item.run_at); const h = (n) => String(n).padStart(2, '0'); return `${h(d.getHours())}:${h(d.getMinutes())} · ${h(d.getDate())}/${h(d.getMonth() + 1)}`; })());
+    const chinhAnhBat = String(configs.photo_edit_enabled) === 'true';
+    const lich = getPriceSchedule();
+
     return (
         <div className="animate-fadeIn">
-            {/* Header full-width — đồng bộ khuôn với các trang admin khác (tiêu đề trên đầu) */}
-            <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Cài đặt & Thiết bị</h1>
-                    <p className="text-gray-500 mt-1 text-sm md:text-base">Quản lý cấu hình hệ thống và các thiết bị kết nối.</p>
-                </div>
-
-                {!isLocalAdmin && (
-                    <nav className="flex gap-2 shrink-0">
-                        <button
-                            onClick={() => setActiveTab('general')}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'general'
-                                ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
-                                : 'bg-white border border-gray-100 text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            <SettingsIcon size={18} />
-                            <span className="hidden sm:inline">Cài đặt chung</span>
-                        </button>
-
-                        <button
-                            onClick={() => setActiveTab('devices')}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'devices'
-                                ? 'bg-[#e63946] text-white shadow-md shadow-[#e63946]/10'
-                                : 'bg-white border border-gray-100 text-gray-500 hover:text-[#e63946]'
-                                }`}
-                        >
-                            <Monitor size={18} />
-                            <span className="hidden sm:inline">Quản lý Thiết bị</span>
-                        </button>
-                    </nav>
+            <div className="mb-4 flex items-center justify-between gap-3 lg:mb-6">
+                <h1 className="text-2xl font-bold tracking-tight text-[#1a1a2e] md:text-3xl">Cài đặt & Thiết bị</h1>
+                {activeTab === 'general' && (
+                    <button
+                        type="button"
+                        onClick={fetchConfigs}
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-all hover:text-gray-700 active:scale-95"
+                        title="Tải lại cấu hình"
+                    >
+                        <RefreshCw size={18} />
+                    </button>
                 )}
             </div>
 
-            {/* Content full-width */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                {activeTab === 'general' ? (
-                    <div>
-                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
-                            <h2 className="text-xl font-bold text-[#1a1a2e] flex items-center gap-2">
-                                <SettingsIcon size={20} className="text-[#e63946]" />
-                                Cấu hình chung
-                            </h2>
-                            <button
-                                onClick={fetchConfigs}
-                                className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-                                title="Làm mới"
-                            >
-                                <RefreshCw size={20} />
-                            </button>
+            <nav className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-gray-100 p-1 sm:inline-grid sm:min-w-[360px]">
+                {[['general', 'Cài đặt chung', SettingsIcon], ['devices', 'Thiết bị', Monitor]].map(([k, ten, Icon]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        onClick={() => setActiveTab(k)}
+                        className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all ${activeTab === k ? 'bg-white text-[#e63946] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Icon size={16} /> {ten}
+                    </button>
+                ))}
+            </nav>
+
+            {activeTab === 'general' ? (
+                <div className="space-y-4">
+                    {message && (
+                        <div className={`animate-fadeIn rounded-xl border p-3 text-sm font-bold ${message.type === 'success' ? 'border-green-100 bg-green-50 text-green-700' : 'border-red-100 bg-red-50 text-red-700'}`}>
+                            {message.text}
                         </div>
+                    )}
 
-                        <div className="p-4 sm:p-8">
-                            {message && (
-                                <div className={`p-4 mb-8 rounded-xl border ${message.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} animate-fadeIn`}>
-                                    <div className="flex items-center gap-2 font-bold">
-                                        {message.type === 'success' ? <Monitor size={18} /> : <div className="w-2 h-2 rounded-full bg-current" />}
-                                        {message.text}
-                                    </div>
-                                </div>
-                            )}
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        {khoi('Giá', (
+                            <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-x-2 gap-y-2">
+                                <span />
+                                <span className="text-[11px] font-semibold text-gray-400">Mỗi lượt</span>
+                                <span className="text-[11px] font-semibold text-gray-400">In thêm 1 tờ</span>
+                                <span className="pr-1 text-sm font-bold text-[#1a1a2e]">Photobooth</span>
+                                {oGia('price')}
+                                {oGia('print_price')}
+                                <span className="pr-1 text-sm font-bold text-[#1a1a2e]">Ảnh thẻ</span>
+                                {oGia('id_photo_price', 'Như trên')}
+                                {oGia('id_photo_print_price', 'Như trên')}
+                            </div>
+                        ))}
 
-                            <div className="space-y-10 pb-4">
-                                {/* SECTION 1: THANH TOÁN & IN ẤN */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                        <h3 className="flex items-center gap-2.5 text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest"><span className="h-4 w-1.5 rounded-full bg-[#e63946]" />Thanh toán & In ấn</h3>
-                                        {isLocalAdmin && (
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-sm font-bold text-gray-600">
-                                                    Chế độ hoạt động:
-                                                </span>
-                                                <button
-                                                    onClick={() => setModeInfo(true)}
-                                                    title="Chế độ tính tiền (đổi trên trang quản trị cloud)"
-                                                    className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all shadow-sm flex items-center gap-2 ${
-                                                        isEventMode
-                                                            ? 'bg-purple-500 text-white hover:bg-purple-600'
-                                                            : 'bg-blue-500 text-white hover:bg-blue-600'
-                                                    }`}
-                                                >
-                                                    {isEventMode ? (
-                                                        <>Sự kiện <Zap size={14} /></>
-                                                    ) : (
-                                                        <>Trả phí <DollarSign size={14} /></>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {modeInfo && <BoothModeInfo isEventMode={isEventMode} onClose={() => setModeInfo(false)} />}
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Kiosk Flow */}
-                                        <div className="col-span-1 md:col-span-2 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
-                                            <div className="flex items-center gap-3 pb-1">
-                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#354f52]/10 text-2xl">📸</div>
-                                                <div>
-                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Chụp tại quầy</h4>
-                                                    <p className="text-xs font-semibold text-gray-400">Khách chụp trực tiếp tại máy</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                                <div className="group">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                        Giá mỗi lượt chụp
-                                                    </label>
-                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                        <input type="number" name="price" value={configs.price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="group">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                        Giá bản in thêm
-                                                    </label>
-                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                        <input type="number" name="print_price" value={configs.print_price} onChange={handleChange} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {isLocalAdmin && (
-                                                <div className="group">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                        Tên máy in Windows
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        name="printer_name"
-                                                        value={configs.printer_name}
-                                                        onChange={handleChange}
-                                                        placeholder="RX1HS hoặc tên printer trong Windows"
-                                                        className="block w-full rounded-xl border-gray-200 px-4 py-2.5 text-sm focus:border-[#e63946]"
-                                                    />
-                                                    <p className="mt-2 text-xs text-gray-400">Ví dụ: RX1HS, DNP DS-RX1HS, DS-RX1.</p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Ảnh thẻ: giá riêng. Để trống = theo giá photobooth (kể cả lịch đổi giá). */}
-                                        <div className="col-span-1 md:col-span-2 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/40 transition-all hover:-translate-y-0.5 hover:shadow-xl space-y-5">
-                                            <div className="flex items-center gap-3 pb-1">
-                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a6abb]/10 text-2xl">🪪</div>
-                                                <div>
-                                                    <h4 className="text-lg font-extrabold tracking-tight text-[#1a1a2e]">Ảnh thẻ</h4>
-                                                    <p className="text-xs font-semibold text-gray-400">Để trống thì dùng giá chụp tại quầy. Bật ảnh thẻ cho từng máy ở tab Quản lý Thiết bị.</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                                <div className="group">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                        Giá ảnh thẻ
-                                                    </label>
-                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                        <input type="number" name="id_photo_price" value={configs.id_photo_price ?? ''} onChange={handleChange} placeholder={`Theo photobooth: ${configs.price}`} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="group">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                        In thêm ảnh thẻ
-                                                    </label>
-                                                    <div className="relative rounded-xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#e63946]/20">
-                                                        <input type="number" name="id_photo_print_price" value={configs.id_photo_print_price ?? ''} onChange={handleChange} placeholder={`Theo photobooth: ${configs.print_price}`} className="block w-full rounded-2xl border-gray-200 bg-gray-50/70 pl-4 pr-16 py-3.5 text-base font-extrabold text-[#1a1a2e] focus:bg-white focus:border-[#e63946]" />
-                                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                                            <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">VND</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Cân chỉnh ảnh in */}
-                                        {isLocalAdmin && (
-                                            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm col-span-1 md:col-span-2">
-                                                <h4 className="text-base font-bold text-[#e63946] flex items-center gap-2 tracking-wide">
-                                                    🖨️ Cân chỉnh tỉ lệ & Lệch ảnh in
-                                                </h4>
-                                                <p className="text-xs text-gray-500 font-semibold">
-                                                    Điều chỉnh tỉ lệ co giãn (Scale) và vị trí dịch chuyển (Offset) của ảnh vẽ ra máy in nếu bản in thực tế bị cắt lệch viền.
-                                                </p>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                            Tỉ lệ rộng (%)
-                                                        </label>
-                                                        <input 
-                                                            type="number" 
-                                                            name="print_scale_x" 
-                                                            value={configs.print_scale_x ?? 100} 
-                                                            onChange={handleChange} 
-                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
-                                                            min="50" max="150"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                            Tỉ lệ cao (%)
-                                                        </label>
-                                                        <input 
-                                                            type="number" 
-                                                            name="print_scale_y" 
-                                                            value={configs.print_scale_y ?? 100} 
-                                                            onChange={handleChange} 
-                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
-                                                            min="50" max="150"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                            Dịch ngang X (pixel)
-                                                        </label>
-                                                        <input 
-                                                            type="number" 
-                                                            name="print_offset_x" 
-                                                            value={configs.print_offset_x ?? 0} 
-                                                            onChange={handleChange} 
-                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                            Dịch dọc Y (pixel)
-                                                        </label>
-                                                        <input 
-                                                            type="number" 
-                                                            name="print_offset_y" 
-                                                            value={configs.print_offset_y ?? 0} 
-                                                            onChange={handleChange} 
-                                                            className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" 
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <p className="text-[11px] text-gray-400">
-                                                    * Mẹo: Nếu ảnh in bị cắt lệch về bên trái/phía trên, hãy tăng Dịch ngang X / Dịch dọc Y để dịch chuyển ảnh in sang phải/xuống dưới. Nếu ảnh bị co quá mức, hãy giảm tỉ lệ rộng/cao.
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-
-                                    <div className="rounded-2xl border border-[#E7D3B7] bg-white p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
-                                        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <h4 className="text-base font-bold text-[#354f52]">Hẹn giờ đổi giá</h4>
-                                                <p className="text-xs font-semibold text-gray-500">Lưu trên cloud và tự động đồng bộ xuống máy local.</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={addPriceSchedule}
-                                                className="rounded-full bg-[#e63946] px-5 py-2 text-sm font-black text-white"
-                                            >
-                                                Thêm lịch
-                                            </button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                            <input
-                                                type="datetime-local"
-                                                value={priceScheduleForm.run_at}
-                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, run_at: event.target.value }))}
-                                                className="w-full max-w-full min-w-0 box-border rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-xs md:text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
-                                            />
-                                            {[
-                                                ['price', 'Giá chụp'],
-                                                ['print_price', 'In thêm'],
-                                            ].map(([key, label]) => (
+                        {khoi('Hẹn giờ đổi giá', (
+                            <div className="space-y-2">
+                                {moFormLich && (
+                                    <div className="space-y-2 rounded-xl border border-[#e63946]/20 bg-[#e63946]/[0.03] p-3">
+                                        <input
+                                            type="datetime-local"
+                                            value={priceScheduleForm.run_at}
+                                            onChange={(e) => setPriceScheduleForm((prev) => ({ ...prev, run_at: e.target.value }))}
+                                            className={oNhap}
+                                        />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[['price', `Giá chụp (${configs.price})`], ['print_price', `In thêm (${configs.print_price})`]].map(([key, nhan]) => (
                                                 <input
                                                     key={key}
                                                     type="number"
-                                                    placeholder={label}
+                                                    inputMode="numeric"
+                                                    placeholder={nhan}
                                                     value={priceScheduleForm[key]}
-                                                    onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                                                    className="w-full max-w-full min-w-0 box-border rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-xs md:text-sm focus:border-[#e63946] focus:outline-none focus:ring-2 focus:ring-[#e63946]/20 transition-all text-[#1a1a2e]"
+                                                    onChange={(e) => setPriceScheduleForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                                                    className={oNhap}
                                                 />
                                             ))}
                                         </div>
-
-                                        <label className="mt-3 flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1a1a2e] cursor-pointer select-none">
-                                            <input
-                                                type="checkbox"
-                                                checked={!!priceScheduleForm.repeat}
-                                                onChange={(event) => setPriceScheduleForm((prev) => ({ ...prev, repeat: event.target.checked }))}
-                                                className="h-4 w-4 accent-[#e63946]"
-                                            />
-                                            🔁 Lặp lại mỗi ngày (vào đúng giờ đã chọn, tới khi xóa)
-                                        </label>
-
-                                        <div className="mt-5 space-y-2">
-                                            {getPriceSchedule().length === 0 ? (
-                                                <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">Chưa có lịch đổi giá.</div>
-                                            ) : getPriceSchedule().map((item, index) => (
-                                                <div key={item.id || index} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:px-4 sm:py-3">
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-1.5 font-black text-xs sm:text-sm text-[#1a1a2e]">
-                                                            {item.repeat === 'daily' ? (
-                                                                <>
-                                                                    <span>🔁 Hằng ngày lúc {isNaN(new Date(item.run_at)) ? (item.run_at || '--') : new Date(item.run_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                                    <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] text-blue-700 font-bold whitespace-nowrap">Lặp lại mỗi ngày</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <span>{isNaN(new Date(item.run_at)) ? item.run_at || 'Chưa chọn ngày' : new Date(item.run_at).toLocaleString('vi-VN')}</span>
-                                                                    {item.applied ? (
-                                                                        <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-bold whitespace-nowrap">Đã áp dụng</span>
-                                                                    ) : (
-                                                                        <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700 font-bold whitespace-nowrap">Đang chờ</span>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-semibold text-gray-500">
-                                                            <span className="whitespace-nowrap">Chụp: <strong className="text-gray-700">{Number(item.price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="whitespace-nowrap">In: <strong className="text-gray-700">{Number(item.print_price || 0).toLocaleString('vi-VN')}đ</strong></span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-end w-full sm:w-auto border-t sm:border-0 pt-2 sm:pt-0">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removePriceSchedule(index)}
-                                                            className="rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 active:scale-95 transition-all w-full sm:w-auto text-center"
-                                                        >
-                                                            Xóa
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>                                {/* SECTION 2: THỜI GIAN CHỤP */}
-                                <div className="space-y-4">
-                                    <h3 className="text-xs font-extrabold text-[#e63946]/80 uppercase tracking-widest border-b pb-2">Thời gian & Trải nghiệm</h3>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
-                                            <div>
-                                                <span className="block text-xs font-bold text-gray-700">Thời gian từng chặng (giây)</span>
-                                                <span className="mt-1 mb-3 block text-xs text-gray-500">
-                                                    Mỗi chặng có đồng hồ riêng; khách xong sớm thì giờ còn dư cộng sang chặng sau. Hết giờ chặng
-                                                    nào thì bước đó tự hoàn tất (chụp xong, tự chọn ảnh, tự in). Chặng Chỉnh ảnh dùng ô bên phải.
-                                                </span>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chụp</label>
-                                                    <input type="number" name="session_capture_timeout" min="10" placeholder="300" value={configs.session_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chọn ảnh</label>
-                                                    <input type="number" name="session_review_timeout" min="10" placeholder="120" value={configs.session_review_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Chọn khung & in</label>
-                                                    <input type="number" name="session_frame_timeout" min="10" placeholder="180" value={configs.session_frame_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-700 mb-2">Studio ảnh thẻ</label>
-                                                    <input type="number" name="id_studio_timeout" min="10" placeholder="300" value={configs.id_studio_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                                </div>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Đếm ngược mỗi ảnh (giây)
-                                                </label>
-                                                <input type="number" name="countdown" value={configs.countdown} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Chờ ảnh Hot Folder (giây)
-                                                </label>
-                                                <input type="number" name="hotfolder_capture_timeout" value={configs.hotfolder_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Chờ ảnh Canon middleware (giây)
-                                                </label>
-                                                <input type="number" name="canon_capture_timeout" value={configs.canon_capture_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
-                                            </div>
-                                        </div>
-                                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 space-y-6 shadow-sm">
-                                            <label className="flex cursor-pointer select-none items-start gap-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <label className="flex cursor-pointer select-none items-center gap-2 text-xs font-semibold text-gray-700">
                                                 <input
                                                     type="checkbox"
-                                                    checked={String(configs.photo_edit_enabled) === 'true'}
-                                                    onChange={(e) => setConfigs((prev) => ({ ...prev, photo_edit_enabled: e.target.checked ? 'true' : 'false' }))}
-                                                    className="mt-0.5 h-4 w-4 accent-[#e63946]"
+                                                    checked={!!priceScheduleForm.repeat}
+                                                    onChange={(e) => setPriceScheduleForm((prev) => ({ ...prev, repeat: e.target.checked }))}
+                                                    className="h-4 w-4 accent-[#e63946]"
                                                 />
-                                                <span>
-                                                    <span className="block text-xs font-bold text-gray-700">Bước "Chỉnh ảnh" (thử nghiệm)</span>
-                                                    <span className="mt-1 block text-xs text-gray-500">
-                                                        Thêm một màn sau Chọn ảnh để khách chọn kiểu làm đẹp cho từng ảnh. Bật thì các kiểu
-                                                        làm đẹp chuyển hẳn sang màn này, màn chọn khung chỉ còn filter màu. Đây là một
-                                                        chặng của đồng hồ phiên (cộng dồn giờ dư như các chặng khác).
-                                                    </span>
-                                                </span>
+                                                Lặp lại mỗi ngày
                                             </label>
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                                    Thời gian chặng Chỉnh ảnh (giây)
-                                                </label>
-                                                <input type="number" name="photo_edit_timeout" min="30" value={configs.photo_edit_timeout} onChange={handleChange} className="block w-full rounded-xl border-gray-200 py-2.5 px-4 text-sm" />
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={() => setMoFormLich(false)} className="rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100">Huỷ</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { if (priceScheduleForm.run_at) setMoFormLich(false); addPriceSchedule(); }}
+                                                    className="rounded-lg bg-[#e63946] px-4 py-1.5 text-xs font-bold text-white active:scale-95"
+                                                >
+                                                    Thêm
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-
-
-                                {/* Full Width Column */}
-                                {isLocalAdmin && (
-                                    <div className="col-span-1 md:col-span-2 space-y-6 pt-6 border-t border-gray-100">
-                                        {/* Camera Mode */}
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-2">
-                                                Chế độ Camera
-                                            </label>
-                                            <div className="relative rounded-xl shadow-sm">
-                                                <select
-                                                    name="camera_mode"
-                                                    value={configs.camera_mode}
-                                                    onChange={handleChange}
-                                                    className="block w-full rounded-xl border-gray-200 pl-4 pr-10 py-3 focus:border-[#e63946] focus:ring-[#e63946] bg-white"
+                                )}
+                                {lich.length === 0 ? (
+                                    !moFormLich && <p className="rounded-xl bg-gray-50 px-3 py-2.5 text-sm text-gray-400">Chưa có lịch.</p>
+                                ) : (
+                                    <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100">
+                                        {lich.map((item, index) => (
+                                            <div key={item.id || index} className="flex items-center gap-3 px-3 py-2.5">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-[#1a1a2e]">
+                                                        {item.repeat === 'daily' ? `Hằng ngày ${gioLich(item)}` : gioLich(item)}
+                                                        {item.repeat === 'daily'
+                                                            ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Lặp lại</span>
+                                                            : item.applied
+                                                                ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Đã áp dụng</span>
+                                                                : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Đang chờ</span>}
+                                                    </div>
+                                                    <div className="mt-0.5 text-xs text-gray-500">
+                                                        Chụp {Number(item.price || 0).toLocaleString('vi-VN')}đ · In {Number(item.print_price || 0).toLocaleString('vi-VN')}đ
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removePriceSchedule(index)}
+                                                    aria-label="Xoá lịch"
+                                                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 transition-all hover:bg-red-50 hover:text-red-600 active:scale-95"
                                                 >
-                                                    <option value="canon">Canon Direct (Middleware)</option>
-                                                    <option value="hotfolder">Máy ảnh chuyên nghiệp (EOS Utility / Hot Folder)</option>
-                                                </select>
+                                                    <Trash2 size={16} />
+                                                </button>
                                             </div>
-                                        </div>
-
-                                        {/* Hot Folder Settings */}
-                                        {configs.camera_mode === 'hotfolder' && (
-                                            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4 animate-fadeIn">
-                                                <div>
-                                                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                                                        Đường dẫn thư mục ảnh (Hot Folder)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        name="hot_folder"
-                                                        value={configs.hot_folder}
-                                                        onChange={handleChange}
-                                                        className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4"
-                                                        placeholder="C:/Photobooth_Input"
-                                                    />
-                                                    <p className="mt-2 text-xs text-orange-600/80">
-                                                        Thư mục mà EOS Utility sẽ lưu ảnh vào. Backend sẽ giám sát thư mục này.
-                                                    </p>
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                                                        Phím chụp (Trigger Key)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        name="trigger_key"
-                                                        value={configs.trigger_key}
-                                                        onChange={handleChange}
-                                                        className="block w-full rounded-xl border-orange-200 focus:border-orange-400 focus:ring-orange-400 py-3 pl-4 font-mono"
-                                                        placeholder="{F8}"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Canon Middleware Settings */}
-                                        {configs.camera_mode === 'canon' && (
-                                            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 space-y-4 animate-fadeIn">
-                                                <p className="text-sm text-blue-700">
-                                                    <span className="font-bold">Chế độ này yêu cầu chạy Canon Middleware.</span>
-                                                    <br />
-                                                    Hãy đảm bảo bạn đã chạy file <code>canon_middleware.exe</code> và kết nối máy ảnh.
-                                                    <br />
-                                                    LiveView và Capture sẽ hoạt động qua cổng <code>http://localhost:5001</code>.
-                                                </p>
-                                            </div>
-                                        )}
+                                        ))}
                                     </div>
                                 )}
                             </div>
-                        </div>
-
-                        {/* Footer Action — dính đáy để luôn bấm Lưu được, không phải cuộn xuống cuối */}
-                        <div className="p-4 sm:p-6 border-t border-gray-100 bg-white/90 backdrop-blur flex justify-end sticky bottom-0 rounded-b-2xl z-10">
+                        ), !moFormLich && (
                             <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className={`
-                                    flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold text-white shadow-lg shadow-[#e63946]/20
-                                    ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#e63946] hover:bg-[#3f6154] hover:shadow-xl hover:scale-[1.02]'}
-                                    transition-all duration-200
-                                `}
+                                type="button"
+                                onClick={() => setMoFormLich(true)}
+                                className="flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-bold text-[#e63946] transition-all hover:border-[#e63946]/40 active:scale-95"
                             >
-                                {saving ? (
-                                    <>
-                                        <RefreshCw size={20} className="animate-spin" />
-                                        Đang lưu...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save size={20} />
-                                        Lưu thay đổi
-                                    </>
-                                )}
+                                <Plus size={14} /> Thêm lịch
                             </button>
+                        ))}
+                    </div>
+
+                    {khoi('Thời gian (giây)', (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+                                <span className="text-sm font-semibold text-[#1a1a2e]">Bước Chỉnh ảnh</span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={chinhAnhBat}
+                                    onClick={() => setConfigs((prev) => ({ ...prev, photo_edit_enabled: chinhAnhBat ? 'false' : 'true' }))}
+                                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${chinhAnhBat ? 'bg-[#e63946]' : 'bg-gray-300'}`}
+                                >
+                                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${chinhAnhBat ? 'left-[22px]' : 'left-0.5'}`} />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                                {oGiay('session_capture_timeout', 'Chụp', '300')}
+                                {oGiay('session_review_timeout', 'Chọn ảnh', '120')}
+                                {chinhAnhBat && oGiay('photo_edit_timeout', 'Chỉnh ảnh', '200', 30)}
+                                {oGiay('session_frame_timeout', 'Chọn khung & in', '180')}
+                                {oGiay('id_studio_timeout', 'Studio ảnh thẻ', '300')}
+                                {oGiay('countdown', 'Đếm ngược mỗi ảnh', '5', 1)}
+                            </div>
+                            <details className="group">
+                                <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-bold text-gray-500 [&::-webkit-details-marker]:hidden">
+                                    <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+                                    Nâng cao: chờ ảnh từ máy ảnh
+                                </summary>
+                                <div className="mt-3 grid grid-cols-2 gap-3 sm:max-w-md">
+                                    {oGiay('canon_capture_timeout', 'Canon middleware', '30', 1)}
+                                    {oGiay('hotfolder_capture_timeout', 'Hot Folder', '30', 1)}
+                                </div>
+                            </details>
                         </div>
+                    ))}
+
+                    {/* Điện thoại: nút Lưu nổi ngay trên thanh menu dưới (sticky không dính được vì <main> của
+                        AdminLayout có overflow-x-hidden) -> luôn bấm được, không phải cuộn xuống cuối. */}
+                    <div className="h-14 lg:hidden" />
+                    <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-40 px-4 lg:static lg:flex lg:justify-end lg:px-0">
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className={`flex w-full items-center justify-center gap-2 rounded-xl px-8 py-3 font-bold text-white shadow-lg shadow-[#e63946]/20 transition-all duration-200 sm:w-auto ${saving ? 'cursor-not-allowed bg-gray-400' : 'bg-[#e63946] hover:bg-[#c1121f]'}`}
+                        >
+                            {saving
+                                ? <><RefreshCw size={20} className="animate-spin" /> Đang lưu...</>
+                                : <><Save size={20} /> Lưu thay đổi</>}
+                        </button>
                     </div>
-                ) : (
-                    <div className="p-4 sm:p-8">
-                        <DeviceManager />
-                    </div>
-                )}
-            </div>
+                </div>
+            ) : (
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-8">
+                    <DeviceManager />
+                </div>
+            )}
         </div>
     );
 };

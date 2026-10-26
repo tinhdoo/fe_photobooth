@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket, Search, Pencil, ChevronDown } from 'lucide-react';
+import { RefreshCw, Clock, Hash, DollarSign, Copy, CheckCircle, XCircle, Calendar, ArrowRight, Plus, Trash2, FileSpreadsheet, User, Check, Ticket, Search, Pencil } from 'lucide-react';
 import { authHeader, isStaffRole, getUsername } from '../../utils/auth';
 import { errorMessage } from '../../utils/errorMessage';
+import MenuChon from '../common/MenuChon';
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 const normalizeCode = (code = {}) => ({
@@ -121,51 +122,18 @@ const exportCodesToExcel = (list, fileName) => {
     XLSX.writeFile(wb, fileName);
 };
 
-// Menu lọc mệnh giá tự vẽ: <select> gốc mở ra danh sách hệ điều hành, chữ to viền vuông, lạc tông hẳn.
-const MenuGia = ({ value, options, onChange }) => {
-    const [mo, setMo] = useState(false);
-    const ref = useRef(null);
-    useEffect(() => {
-        if (!mo) return undefined;
-        const dong = (e) => { if (ref.current && !ref.current.contains(e.target)) setMo(false); };
-        document.addEventListener('pointerdown', dong);
-        return () => document.removeEventListener('pointerdown', dong);
-    }, [mo]);
-    return (
-        <div ref={ref} className="relative shrink-0">
-            <button
-                type="button"
-                onClick={() => setMo((m) => !m)}
-                aria-haspopup="listbox"
-                aria-expanded={mo}
-                className={`flex h-[42px] items-center gap-1 rounded-xl border bg-white px-3 text-sm font-semibold transition-all ${value !== 'all' ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}
-            >
-                {value === 'all' ? 'Mọi giá' : denomLabel(value)}
-                <ChevronDown size={14} className={`transition-transform ${mo ? 'rotate-180' : ''}`} />
-            </button>
-            {mo && (
-                <div role="listbox" className="absolute right-0 top-full z-20 mt-1.5 w-32 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1 shadow-xl shadow-black/10">
-                    {['all', ...options.map(String)].map((v) => {
-                        const on = String(value) === v;
-                        return (
-                            <button
-                                key={v}
-                                type="button"
-                                role="option"
-                                aria-selected={on}
-                                onClick={() => { onChange(v); setMo(false); }}
-                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold ${on ? 'bg-[#e63946]/10 text-[#e63946]' : 'text-gray-700 hover:bg-gray-50 active:bg-gray-50'}`}
-                            >
-                                {v === 'all' ? 'Mọi giá' : denomLabel(v)}
-                                {on && <Check size={14} />}
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
+// Lọc mệnh giá: nút nhỏ, viền đỏ khi đang lọc; danh sách dùng chung MenuChon.
+const MenuGia = ({ value, options, onChange }) => (
+    <MenuChon
+        value={String(value)}
+        onChange={onChange}
+        canPhai
+        rongMenu={128}
+        ariaLabel="Lọc mệnh giá"
+        options={[{ value: 'all', label: 'Mọi giá' }, ...options.map((v) => ({ value: String(v), label: denomLabel(v) }))]}
+        nutClassName={`flex h-[42px] shrink-0 items-center gap-1 rounded-xl border bg-white px-3 text-sm font-semibold transition-all ${value !== 'all' ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}
+    />
+);
 
 const CodeManager = () => {
     const staffOnly = isStaffRole(); // nhân viên: chỉ "Lấy mã" từ kho, không tạo mã
