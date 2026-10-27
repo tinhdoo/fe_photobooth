@@ -7,6 +7,7 @@ import { Monitor, Edit2, ArrowLeft, AlertCircle, Sticker, RotateCw, Trash2, Move
 import QRCodeStyling from 'qr-code-styling';
 import { LAYOUTS } from '../../data/layouts';
 import { getDeviceId } from '../../utils/deviceId';
+import { batDauDo, chotDoMuot, daGuiDoMuot, ghiLoi, ghiThoiGian } from '../../utils/doMuot';
 
 // Cấu hình URL API — dùng chung từ config/api
 import { API_URL, CLOUD_API_URL, FRAME_API_URL } from '../../config/api';
@@ -957,6 +958,8 @@ const Edit = () => {
         // Đang áp filter / tải cấu hình khung -> ảnh in thiếu hiệu ứng hoặc lệch ô (0.0.24).
         if (isUploading || isFiltering || dangTaiKhung) return;
         setIsUploading(true);
+        // Đo (doMuot): bấm In -> có ảnh in ('ghep'), gửi máy in ('gui_in'), tới ngay trước khi lưu lượt ('den_qr').
+        const batDauIn = performance.now();
 
         try {
             // 1. Generate Session ID (UUID v4) frontend-side for QR Code.
@@ -1243,6 +1246,7 @@ const Edit = () => {
             // lại cũng theo slider hiện tại, màu KHÔNG bị đóng băng vào file. Ở đây gửi ảnh in
             // GIỮ MÀU GỐC.
             const printBlob = await canvasToBlob(printCanvas, 'image/png');
+            ghiThoiGian('ghep', performance.now() - batDauIn);
 
             // === IN TRƯỚC, UPLOAD CLOUD SAU ===
             // Gửi lệnh in NGAY khi có ảnh in, KHÔNG chờ upload composite/ảnh gốc/tạo session
@@ -1256,7 +1260,9 @@ const Edit = () => {
             let printOk = true;
             if (!sessionData.printedSessionId) {
                 try {
+                    const xongGuiIn = batDauDo('gui_in');
                     const printResult = await sendToPrinter(printBlob, printerCopies, { printMode, cutMode, sessionId });
+                    xongGuiIn();
                     console.log('Print job queued:', printResult);
                     // Đánh dấu ĐÃ IN cho phiên này (sống qua remount Edit, chỉ reset khi reload) -> mọi
                     // lần In sau KHÔNG ra tấm thứ 2; giữ luôn sessionId để QR đã in khớp album tạo sau.
@@ -1275,6 +1281,7 @@ const Edit = () => {
                             ? ` Máy in hiện có: ${data.available_printers.join(', ')}.`
                             : '';
                         const message = data?.error || printError.message || 'Không thể gửi ảnh sang máy in.';
+                        ghiLoi('in_loi', message);
                         setErrorDialog({ show: true, title: 'Không thể in ảnh', message: `${message}${available}` });
                     }
                 }
@@ -1292,6 +1299,7 @@ const Edit = () => {
                 if (!blob || !printBlob) {
                     // Đã in nhưng không xuất được ảnh album (thiếu bộ nhớ...): trước đây chỉ mở khoá nút, màn
                     // đứng yên (nút Quay lại đã ẩn vì đã in). Cho lối ra giống lỗi lưu cloud.
+                    ghiLoi('luu_loi', 'Không xuất được ảnh album');
                     setErrorDialog({
                         show: true,
                         title: 'Không thể lưu ảnh',
@@ -1333,6 +1341,8 @@ const Edit = () => {
                         // Tiền chuyển khoản thực nhận (0.0.23) — lớn hơn phần còn thiếu = khách trả thừa.
                         qr_paid: sessionData.qrPaid || undefined,
                     };
+                    ghiThoiGian('den_qr', performance.now() - batDauIn);
+                    metaData.do_muot = chotDoMuot();
                     const buildSessionPayload = (photosArr) => ({
                         layout_id: layout.id || 'strip_4',
                         composite_url: compositeUrl,
@@ -1351,7 +1361,10 @@ const Edit = () => {
 
                     // 1) Tạo session NGAY với ảnh ghép (composite) -> album có ảnh để quét QR LIỀN,
                     //    KHÔNG phải chờ upload ảnh gốc + video motion (webm nặng) ở nền.
+                    const batDauLuu = performance.now();
                     await axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload([]), { timeout: 20000 });
+                    const luuMs = Math.round(performance.now() - batDauLuu);
+                    daGuiDoMuot();
 
                     updateSessionData('finalImage', compositeUrl);
                     // Giữ NGUYÊN sessionId do FE tạo (đã vẽ vào QR + dùng cho PrintJob local).
@@ -1373,6 +1386,7 @@ const Edit = () => {
                     //    uuid) -> album bổ sung ảnh lẻ + motion khi tải xong. KHÔNG chặn QR.
                     //    Đăng ký promise để resetSession chờ nó xong trước khi reload (không mất ảnh).
                     const rawSource = sessionData.photos || [];
+                    const batDauNen = performance.now();
                     const bgUpload = mapWithConcurrency(photos, 2, async (photoUrl, index) => {
                         let finalPhotoUrl = photoUrl;
                         let finalPhotoPublicId = null;
@@ -1429,11 +1443,16 @@ const Edit = () => {
                             };
                         }
                     })
-                        .then((uploadedPhotos) => axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload(uploadedPhotos.filter(Boolean)), { timeout: 30000 }))
+                        .then((uploadedPhotos) => {
+                            // Lần gửi 2: cloud chỉ nhận thêm do_muot.them (thời gian lưu lượt + tải nền), không đổi meta khác.
+                            metaData.do_muot = { ...metaData.do_muot, them: { luu_ms: luuMs, tai_nen_ms: Math.round(performance.now() - batDauNen) } };
+                            return axios.post(`${sessionBaseUrl}/api/sessions`, buildSessionPayload(uploadedPhotos.filter(Boolean)), { timeout: 30000 });
+                        })
                         .catch((bgErr) => console.error('Cập nhật ảnh gốc/video ở nền thất bại:', bgErr));
                     setPendingMediaUpload(bgUpload);
                 } catch (err) {
                     console.error("Upload process failed:", err);
+                    ghiLoi('luu_loi', err?.message);
                     // Ảnh ĐÃ in (lệnh in đi trước phần cloud). Cho hai lối ra: lưu lại (không in thêm) hoặc kết
                     // thúc lượt. Trước 0.0.24 chỉ có "Đã hiểu" -> booth đứng mãi ở màn này, còn Quay lại ->
                     // Chụp lại thì được in thêm một tấm miễn phí.
@@ -1450,6 +1469,7 @@ const Edit = () => {
 
         } catch (error) {
             console.error("Print logic failed:", error);
+            ghiLoi('ghep_loi', error?.message);
             setIsUploading(false);
         }
     };

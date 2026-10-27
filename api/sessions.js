@@ -96,6 +96,38 @@ const MAX_SESSION_PHOTOS = 24;
 // Kiosk gửi lần 2 (ảnh gốc + video) vài phút sau lần 1. Quá cửa sổ này không còn lần gửi hợp lệ nào.
 const SESSION_FILL_WINDOW_MS = 3 * 60 * 60 * 1000;
 
+// Số đo độ mượt của lượt (booth >= 0.0.32, src/utils/doMuot.js). POST không đăng nhập -> chặn cỡ để không ai
+// nhồi dữ liệu rác vào meta_data: quá cỡ thì bỏ các lượt hỏng gửi kèm (truoc), vẫn quá thì bỏ hẳn.
+const DO_MUOT_TOI_DA = 16000;
+function gonDoMuot(meta) {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {};
+    const dm = meta.do_muot;
+    if (dm === undefined) return meta;
+    if (!dm || typeof dm !== 'object' || Array.isArray(dm)) {
+        const { do_muot: _bo, ...conLai } = meta;
+        return conLai;
+    }
+    let gon = dm;
+    if (JSON.stringify(gon).length > DO_MUOT_TOI_DA) {
+        const { truoc: _boTruoc, ...khongTruoc } = gon;
+        gon = { ...khongTruoc, truoc_bo: true };
+    }
+    if (JSON.stringify(gon).length > DO_MUOT_TOI_DA) {
+        const { do_muot: _bo, ...conLai } = meta;
+        return conLai;
+    }
+    return { ...meta, do_muot: gon };
+}
+
+// Lần gửi 2 của kiosk mang thêm do_muot.them = { luu_ms, tai_nen_ms } (đo được sau lần gửi 1). Chỉ nhận số.
+function themDoMuot(cu, moi) {
+    const dm = cu?.do_muot;
+    const them = moi?.do_muot?.them;
+    if (!dm || typeof dm !== 'object' || dm.them || !them || typeof them !== 'object') return null;
+    const so = (x) => (Number.isFinite(Number(x)) ? Math.max(0, Math.min(3600000, Math.round(Number(x)))) : null);
+    return { ...cu, do_muot: { ...dm, them: { luu_ms: so(them.luu_ms), tai_nen_ms: so(them.tai_nen_ms) } } };
+}
+
 function buildSession(body) {
     const uuid = String(body.session_id || body.uuid || '').trim();
     return {
@@ -106,7 +138,7 @@ function buildSession(body) {
         photos: Array.isArray(body.photos) ? body.photos.slice(0, MAX_SESSION_PHOTOS) : [],
         payment_method: body.payment_method || 'cash',
         amount: Number(body.amount || 0),
-        meta_data: body.meta_data || {},
+        meta_data: gonDoMuot(body.meta_data || {}),
         status: 'active',
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + SESSION_MAX_AGE_MS).toISOString(),
@@ -142,6 +174,8 @@ async function saveSession(supabase, session, retry = true) {
             patch.composite_url = session.composite_url;
             patch.composite_public_id = session.composite_public_id;
         }
+        const metaThem = themDoMuot(existing.meta_data, session.meta_data);
+        if (metaThem) patch.meta_data = metaThem;
         if (!Object.keys(patch).length) return { row: existing, created: false };
         const { data, error } = await supabase
             .from('photo_sessions')

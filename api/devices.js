@@ -11,6 +11,115 @@ async function readFeatures(supabase) {
 }
 const idPhotoOf = (features, deviceId) => features?.[deviceId]?.id_photo === true;
 
+// Độ mượt từng máy: gộp meta_data.do_muot của các lượt N ngày gần nhất (booth >= 0.0.32, src/utils/doMuot.js).
+// Độ trễ chạm gửi lên dạng biểu đồ tần suất theo ROI_TRE (phải khớp doMuot.js) -> cộng dồn chính xác giữa các lượt.
+const ROI_TRE = [16, 32, 50, 75, 100, 150, 200, 300, 500, 1000, 2000];
+const TOI_DA_MAU = 3000;
+
+function phanViBieuDo(h, q, max) {
+    const n = h.reduce((a, x) => a + x, 0);
+    if (!n) return null;
+    const can = Math.ceil(q * n);
+    let tich = 0;
+    for (let i = 0; i < h.length; i++) {
+        tich += h[i];
+        if (tich >= can) return i < ROI_TRE.length ? ROI_TRE[i] : Math.max(max || 0, 2001);
+    }
+    return null;
+}
+function tomTatSo(ds) {
+    if (!ds.length) return null;
+    const s = [...ds].sort((a, b) => a - b);
+    const p = (q) => s[Math.min(s.length - 1, Math.ceil(q * s.length) - 1)];
+    return { n: s.length, p50: p(0.5), p95: p(0.95), max: s[s.length - 1] };
+}
+
+async function tongHopDoMuot(supabase, ngayRaw) {
+    const ngay = Math.min(30, Math.max(1, parseInt(ngayRaw, 10) || 7));
+    const { data, error } = await supabase
+        .from('photo_sessions')
+        .select('created_at, may:meta_data->>device_id, dm:meta_data->do_muot')
+        .gte('created_at', new Date(Date.now() - ngay * 86400000).toISOString())
+        .not('meta_data->do_muot', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(5000);
+    if (error) throw error;
+
+    const rong = () => new Array(ROI_TRE.length + 1).fill(0);
+    const may = {};
+    const lay = (id) => (may[id] ||= { luot: 0, luot_loi: 0, bo_do: 0, h: rong(), max: 0, buoc: {}, tg: {}, dem: {}, dung: 0, loi_gan: [] });
+    const so = (x) => (Number.isFinite(Number(x)) && Number(x) >= 0 ? Number(x) : null);
+    const cong = (m, dm, luc) => {
+        for (const [b, o] of Object.entries(dm.buoc || {})) {
+            if (!o || typeof o !== 'object') continue;
+            const mb = (m.buoc[b] ||= { h: rong(), max: 0, dung: 0 });
+            if (Array.isArray(o.h)) {
+                o.h.slice(0, ROI_TRE.length + 1).forEach((x, i) => { const v = so(x) || 0; m.h[i] += v; mb.h[i] += v; });
+            }
+            const mx = so(o.max) || 0;
+            mb.max = Math.max(mb.max, mx);
+            m.max = Math.max(m.max, mx);
+            const d = so(o.dung) || 0;
+            mb.dung += d;
+            m.dung += d;
+        }
+        const tg = { ...(dm.tg || {}) };
+        if (dm.them && typeof dm.them === 'object') {
+            if (so(dm.them.luu_ms) != null) tg.luu = [dm.them.luu_ms];
+            if (so(dm.them.tai_nen_ms) != null) tg.tai_nen = [dm.them.tai_nen_ms];
+        }
+        for (const [ten, ds] of Object.entries(tg)) {
+            if (!Array.isArray(ds)) continue;
+            const dich = (m.tg[ten] ||= []);
+            for (const x of ds) if (so(x) != null && dich.length < TOI_DA_MAU) dich.push(Number(x));
+        }
+        for (const [ten, x] of Object.entries(dm.dem || {})) {
+            if (so(x) != null) m.dem[ten] = (m.dem[ten] || 0) + Number(x);
+        }
+        for (const l of Array.isArray(dm.loi) ? dm.loi : []) {
+            m.loi_gan.push({ luc, b: String(l?.b || ''), m: String(l?.m || ''), t: String(l?.t || '').slice(0, 120) });
+        }
+    };
+
+    for (const row of data || []) {
+        const dm = row.dm;
+        if (!dm || typeof dm !== 'object') continue;
+        const m = lay(row.may || '?');
+        m.luot += 1;
+        if (Array.isArray(dm.loi) && dm.loi.length) m.luot_loi += 1;
+        cong(m, dm, row.created_at);
+        // Lượt hỏng / bỏ dở trước đó (không lên cloud được) gửi kèm lượt này.
+        for (const t of Array.isArray(dm.truoc) ? dm.truoc : []) {
+            if (!t || typeof t !== 'object') continue;
+            if (!t.sau_luu) m.bo_do += 1;
+            cong(m, t, t.luc || row.created_at);
+        }
+    }
+
+    const ra = {};
+    for (const [id, m] of Object.entries(may)) {
+        const buoc = {};
+        for (const [b, o] of Object.entries(m.buoc)) {
+            const n = o.h.reduce((a, x) => a + x, 0);
+            buoc[b] = { n, p95: phanViBieuDo(o.h, 0.95, o.max), max: o.max, dung: o.dung };
+        }
+        const tg = {};
+        for (const [ten, ds] of Object.entries(m.tg)) tg[ten] = tomTatSo(ds);
+        ra[id] = {
+            luot: m.luot,
+            luot_loi: m.luot_loi,
+            bo_do: m.bo_do,
+            cham: { n: m.h.reduce((a, x) => a + x, 0), p50: phanViBieuDo(m.h, 0.5, m.max), p95: phanViBieuDo(m.h, 0.95, m.max), max: m.max },
+            dung: m.dung,
+            buoc,
+            tg,
+            dem: m.dem,
+            loi_gan: m.loi_gan.sort((a, b) => String(b.luc).localeCompare(String(a.luc))).slice(0, 20),
+        };
+    }
+    return { ngay, may: ra };
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -200,6 +309,10 @@ export default async function handler(req, res) {
 
         // Danh sách booth (kèm báo cáo tiền mặt, tên máy, thư mục cài) chỉ cho admin.
         if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
+
+        if (String(req.query?.resource || '') === 'do-muot') {
+            return json(res, 200, await tongHopDoMuot(supabase, req.query?.ngay));
+        }
 
         const { data, error } = await supabase
             .from('devices')

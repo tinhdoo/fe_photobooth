@@ -4,6 +4,7 @@ import { useWorkflow } from '../../context/WorkflowContext';
 import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react';
 import { FirebaseService } from '../../services/FirebaseService';
+import { demSuKien, ghiLoi, ghiThoiGian } from '../../utils/doMuot';
 
 // Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
 // lại overlay "Đang khởi động camera" mỗi lần chụp lại (Capture remount nhưng live view vẫn chạy).
@@ -118,6 +119,7 @@ const Capture = () => {
     // Đứng hình QUÁ LÂU (máy ảnh không tự hồi) -> overlay đổi sang hướng dẫn nhân viên. Sự cố 2026-10-04:
     // kiosk quay vòng "Đang kết nối lại máy ảnh" mãi, không ai biết phải tắt/bật máy ảnh.
     const stallFromRef = useRef(0);
+    const daBaoStallRef = useRef(0);
     const [stallLau, setStallLau] = useState(false);
     const [wsReconnectToken, setWsReconnectToken] = useState(0); // bump -> effect /ws chạy lại (reconnect)
     // Ghi nhận 1 frame live view vừa tới (gọi ở onLoad của <img> live view). Dùng ref chặn setState
@@ -125,7 +127,10 @@ const Capture = () => {
     const markLiveFrame = () => {
         lastFrameAtRef.current = Date.now();
         if (!hasLiveFrameRef.current) { hasLiveFrameRef.current = true; setHasLiveFrame(true); }
-        if (stalledRef.current) { stalledRef.current = false; setLiveStalled(false); setStallLau(false); }
+        if (stalledRef.current) {
+            stalledRef.current = false; setLiveStalled(false); setStallLau(false);
+            ghiThoiGian('mat_hinh', Date.now() - stallFromRef.current); // đứng hình bao lâu thì tự hồi
+        }
     };
     // Còn mounted không -> chặn các setTimeout sau khi chụp (advance/countdown) chạy MUỘN sau khi
     // đã rời bước (vd hết giờ -> nextStep tự động unmount Capture) -> tránh nextStep() thừa gây
@@ -489,7 +494,11 @@ const Capture = () => {
             const now = Date.now();
             if (shootingRef.current) { lastFrameAtRef.current = now; return; } // đang chụp -> EVF tắt là bình thường
             if (now - lastFrameAtRef.current < STALL_MS) return;                 // vẫn có hình -> ổn
-            if (!stalledRef.current) { stalledRef.current = true; stallFromRef.current = now; setLiveStalled(true); }
+            if (!stalledRef.current) { stalledRef.current = true; stallFromRef.current = now; setLiveStalled(true); demSuKien('mat_hinh'); }
+            if (now - stallFromRef.current > 20000 && stallFromRef.current !== daBaoStallRef.current) {
+                daBaoStallRef.current = stallFromRef.current; // báo một lần cho mỗi lần đứng hình
+                ghiLoi('mat_hinh_lau', 'Máy ảnh không có hình quá 20 s');
+            }
             if (now - stallFromRef.current > 20000) setStallLau(true);
             if (now - lastRecoveryAtRef.current < RECOVER_EVERY_MS) return;
             lastRecoveryAtRef.current = now;
@@ -605,6 +614,7 @@ const Capture = () => {
         if (shootingRef.current) return;
         shootingRef.current = true;
         setIsShooting(true);
+        const batDauChup = performance.now(); // đo: bấm chụp -> ảnh hiện trên màn (doMuot 'chup')
         // Flash chỉ CHỚP nhanh (~200ms) thay vì trắng suốt thời gian chờ Canon /capture.
         // Trong lúc chờ sẽ hiện spinner + vẫn thấy live view (xem overlay isShooting).
         setFlash(true);
@@ -662,6 +672,7 @@ const Capture = () => {
 
                     const count = applyCapture(canonPhoto);
                     setLatestPhoto(finalUrl);
+                    ghiThoiGian('chup', performance.now() - batDauChup);
 
                     // Poll /frame tự cập nhật lại khi live view resume sau /capture -> KHÔNG cần đóng/
                     // đổi token reconnect. scheduleAdvance: hẹn giờ chuyển ô/sang bước, huỷ được khi
@@ -675,6 +686,7 @@ const Capture = () => {
                 setIsShooting(false);
                 setFlash(false);
                 const aborted = error?.name === 'AbortError';
+                ghiLoi('chup_loi', aborted ? 'Máy ảnh không phản hồi (quá giờ)' : error?.message);
                 setCameraError(aborted
                     ? "Máy ảnh không phản hồi, đang thử lại..."
                     : ("Lỗi chụp ảnh Canon: " + error.message));
@@ -722,6 +734,7 @@ const Capture = () => {
                     if (!mountedRef.current) return; // đã rời bước chụp: bỏ ảnh về muộn (như Canon)
                     const count = applyCapture(finalUrl);
                     setLatestPhoto(finalUrl);
+                    ghiThoiGian('chup', performance.now() - batDauChup);
 
                     scheduleAdvance(count);
                 } else {
@@ -730,6 +743,7 @@ const Capture = () => {
 
             } catch (error) {
                 console.error("Hot Folder Capture Failed", error);
+                ghiLoi('chup_loi', error?.message);
                 setIsShooting(false);
                 setFlash(false);
                 const timeout = parseInt(configs.hotfolder_capture_timeout, 10) || 30;

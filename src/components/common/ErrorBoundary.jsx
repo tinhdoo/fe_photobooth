@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { ghiLoi } from '../../utils/doMuot';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -13,6 +14,7 @@ class ErrorBoundary extends Component {
 
     componentDidCatch(error, info) {
         console.error('UI crashed:', error, info);
+        ghiLoi('sap_giao_dien', error?.message);
     }
 
     render() {

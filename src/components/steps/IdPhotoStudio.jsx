@@ -20,6 +20,7 @@ import { tachNenAnhThe } from '../../idPhoto/tachNenBackend';
 import { replaceBackgroundAt, BACKGROUNDS } from '../../idPhoto/replaceBackground';
 import { KIEU_TO_ANH_THE, dungToAnhThe } from '../../idPhoto/toAnhThe';
 import { luuLuotAnhThe } from '../../idPhoto/luuLuotCloud';
+import { batDauDo, ghiLoi } from '../../utils/doMuot';
 import {
     SLIDER_TABS, EMPTY_EDIT, editFromPreset, sliderValue, setEditValue, isNeutral, editKey,
     addSpot, popSpot, clearSpots, MAX_SPOTS,
@@ -308,10 +309,14 @@ const IdPhotoStudio = () => {
                 let prep;
                 const sanSang = tachXongRef.current.has(cur.src);
                 if (!sanSang) { setDangXuLy(true); setTienDo('Đang chuẩn bị…'); }
+                // Khách chờ cắt + tách nền (chỉ khi phải chờ thật; ảnh đã xử lý sẵn thì không tính).
+                const xongTach = sanSang ? null : batDauDo('tach_nen');
                 try {
                     prep = await chuanBiAnh(cur.src);
+                    xongTach?.();
                 } catch (e) {
                     console.error('[IdPhotoStudio]', e);
+                    ghiLoi('tach_nen_loi', e.message);
                     if (latestRef.current.src === cur.src) {
                         ketQuaRef.current = null;
                         setCanhBao('Xử lý ảnh lỗi: ' + e.message);
@@ -353,6 +358,7 @@ const IdPhotoStudio = () => {
             } while (dirtyRef.current);
         } catch (e) {
             console.error('[IdPhotoStudio]', e);
+            ghiLoi('xu_ly_loi', e.message);
             setCanhBao('Xử lý ảnh lỗi: ' + e.message);
         } finally {
             busyRef.current = false;
@@ -424,13 +430,16 @@ const IdPhotoStudio = () => {
             // Đã in ở lần trước (request quá giờ nhưng máy vẫn in, hoặc in xong mà lưu cloud lỗi) -> không gửi
             // lệnh in nữa, chỉ lưu lại.
             if (!sessionData.printedSessionId) {
+                const xongGuiIn = batDauDo('gui_in');
                 await guiLenhIn(to, k, maLanIn);
+                xongGuiIn();
                 updateSessionData('printedSessionId', maLanIn);
             }
             await luuVaSangKetQua(to, cell, maLanIn);
         } catch (e) {
             console.error('[IdPhotoStudio] in lỗi', e);
             const msg = e.response?.data?.error || e.message || 'không rõ';
+            ghiLoi('in_loi', msg);
             setCanhBao('Gửi lệnh in lỗi: ' + msg + (timedOut ? ' — máy sẽ tự về trang chủ sau ít phút.' : ''));
         } finally {
             dangInRef.current = false;
@@ -469,6 +478,7 @@ const IdPhotoStudio = () => {
             });
         } catch (e) {
             console.error('[IdPhotoStudio] lưu cloud lỗi', e);
+            ghiLoi('luu_loi', e.message);
             setCanhBao('Ảnh đã in xong nhưng chưa lưu được lên mạng nên chưa có mã QR (' + (e.message || 'lỗi mạng')
                 + '). Bấm "Lưu lại" để thử lại — không in thêm tấm nào — hoặc "Kết thúc" để về trang chủ.');
             return;

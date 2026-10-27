@@ -1,12 +1,149 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle, IdCard } from 'lucide-react';
+import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle, IdCard, Gauge, ChevronDown } from 'lucide-react';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 import { authHeader } from '../../utils/auth';
 
 // Máy im lặng quá lâu (máy cũ đã cài lại, mã ngẫu nhiên lúc thử) gom vào nút "Hiện N máy cũ" thay vì xoá: trang
 // Doanh thu lấy tên phòng từ danh sách này, xoá đi thì doanh thu cũ của máy đó chỉ còn hiện mã.
 const NGAY_MAY_CU = 14;
+
+// Độ mượt (booth >= 0.0.32): GET /api/devices?resource=do-muot gộp meta_data.do_muot các lượt gần đây.
+const TEN_CHANG = {
+    chao: 'Chào', che_do: 'Chọn chế độ', bo_cuc: 'Bố cục', so_to: 'Số tờ', thanh_toan: 'Thanh toán', chuan_bi: 'Chuẩn bị',
+    chup: 'Chụp', chon_anh: 'Chọn ảnh', chinh_anh: 'Chỉnh ảnh', khung_in: 'Khung & in', ket_qua: 'Kết quả', anh_the: 'Ảnh thẻ',
+};
+const THU_TU_CHANG = Object.keys(TEN_CHANG);
+const TEN_CHO = [
+    ['chup', 'Chụp → hiện ảnh'], ['tao_qr', 'Tạo mã QR'], ['ghep', 'Ghép ảnh'], ['gui_in', 'Gửi lệnh in'],
+    ['den_qr', 'Bấm In → lưu lượt'], ['luu', 'Lưu lượt'], ['tai_nen', 'Tải ảnh gốc'], ['tach_nen', 'Tách nền ảnh thẻ'],
+    ['mat_hinh', 'Máy ảnh mất hình'],
+];
+const TEN_LOI = {
+    chup_loi: 'Chụp lỗi', mat_hinh_lau: 'Máy ảnh mất hình > 20 s', qr_loi: 'Tạo QR lỗi', in_loi: 'In lỗi',
+    luu_loi: 'Lưu album lỗi', ghep_loi: 'Ghép ảnh lỗi', tach_nen_loi: 'Tách nền lỗi', xu_ly_loi: 'Xử lý ảnh lỗi',
+    sap_giao_dien: 'Giao diện sập', tai_chunk: 'Tải trang lỗi', js: 'Lỗi JavaScript',
+};
+// Độ trễ chạm là ngưỡng trên của ô biểu đồ; > 2000 = ô cuối (lâu hơn 2 s).
+const mili = (ms) => (ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} s`);
+const treCham = (ms) => (ms == null ? '—' : ms > 2000 ? '> 2 s' : `≤ ${mili(ms)}`);
+const mauTre = (ms) => (ms == null ? 'text-gray-400' : ms <= 200 ? 'text-emerald-600' : ms <= 500 ? 'text-amber-600' : 'text-red-600');
+
+const TheDoMuot = ({ d }) => {
+    const [mo, setMo] = useState(false);
+    if (!d) {
+        return (
+            <div className="flex items-center gap-1.5 rounded-xl bg-gray-50 px-3 py-2.5 text-xs font-semibold text-gray-400">
+                <Gauge size={14} /> Độ mượt: chưa có số liệu
+            </div>
+        );
+    }
+    const pctLoi = d.luot ? Math.round((100 * d.luot_loi) / d.luot) : 0;
+    const dongLoi = Object.entries(d.dem || {})
+        .filter(([k, v]) => k.startsWith('loi_') && v > 0)
+        .map(([k, v]) => [k.slice(4), v])
+        .sort((a, b) => b[1] - a[1]);
+    const chang = THU_TU_CHANG.filter((b) => d.buoc?.[b]?.n || d.buoc?.[b]?.dung);
+    const cho = TEN_CHO.filter(([k]) => d.tg?.[k]);
+    return (
+        <div className="rounded-xl bg-gray-50 px-3 py-2.5 text-xs">
+            <button type="button" onClick={() => setMo((v) => !v)} className="flex w-full items-center gap-1.5 font-bold text-[#1a1a2e]">
+                <Gauge size={14} className="text-gray-500" /> Độ mượt
+                <span className="font-semibold text-gray-400">{d.luot} lượt</span>
+                <ChevronDown size={14} className={`ml-auto text-gray-400 transition-transform ${mo ? 'rotate-180' : ''}`} />
+            </button>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+                <div>
+                    <p className="text-[11px] text-gray-400">Chạm p95</p>
+                    <p className={`text-sm font-black ${mauTre(d.cham?.p95)}`}>{treCham(d.cham?.p95)}</p>
+                </div>
+                <div>
+                    <p className="text-[11px] text-gray-400">Lượt có lỗi</p>
+                    <p className={`text-sm font-black ${pctLoi > 5 ? 'text-red-600' : pctLoi > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {pctLoi}% <span className="text-[11px] font-semibold text-gray-400">{d.luot_loi}/{d.luot}</span>
+                    </p>
+                </div>
+                <div>
+                    <p className="text-[11px] text-gray-400">Bỏ dở · Đơ</p>
+                    <p className="text-sm font-black text-[#1a1a2e]">{d.bo_do} <span className="text-gray-300">·</span> {d.dung}</p>
+                </div>
+            </div>
+            {mo && (
+                <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
+                    {chang.length > 0 && (
+                        <table className="w-full text-left">
+                            <thead className="text-[11px] text-gray-400">
+                                <tr>
+                                    <th className="font-semibold">Màn</th>
+                                    <th className="text-right font-semibold">Chạm</th>
+                                    <th className="text-right font-semibold">p95</th>
+                                    <th className="text-right font-semibold">Chậm nhất</th>
+                                    <th className="text-right font-semibold">Đơ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="font-semibold text-[#1a1a2e]">
+                                {chang.map((b) => {
+                                    const o = d.buoc[b];
+                                    return (
+                                        <tr key={b}>
+                                            <td className="py-0.5">{TEN_CHANG[b]}</td>
+                                            <td className="text-right text-gray-500">{o.n}</td>
+                                            <td className={`text-right ${mauTre(o.p95)}`}>{treCham(o.p95)}</td>
+                                            <td className={`text-right ${mauTre(o.max)}`}>{mili(o.max || null)}</td>
+                                            <td className={`text-right ${o.dung ? 'text-amber-600' : 'text-gray-300'}`}>{o.dung || 0}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                    {cho.length > 0 && (
+                        <table className="w-full text-left">
+                            <thead className="text-[11px] text-gray-400">
+                                <tr>
+                                    <th className="font-semibold">Chờ</th>
+                                    <th className="text-right font-semibold">Lần</th>
+                                    <th className="text-right font-semibold">p50</th>
+                                    <th className="text-right font-semibold">p95</th>
+                                    <th className="text-right font-semibold">Lâu nhất</th>
+                                </tr>
+                            </thead>
+                            <tbody className="font-semibold text-[#1a1a2e]">
+                                {cho.map(([k, ten]) => (
+                                    <tr key={k}>
+                                        <td className="py-0.5">{ten}</td>
+                                        <td className="text-right text-gray-500">{d.tg[k].n}</td>
+                                        <td className="text-right">{mili(d.tg[k].p50)}</td>
+                                        <td className="text-right">{mili(d.tg[k].p95)}</td>
+                                        <td className="text-right text-gray-500">{mili(d.tg[k].max)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                    {dongLoi.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                            {dongLoi.map(([k, v]) => (
+                                <span key={k} className="rounded-lg bg-red-50 px-2 py-1 font-bold text-red-700">{TEN_LOI[k] || k} · {v}</span>
+                            ))}
+                        </div>
+                    )}
+                    {d.loi_gan?.length > 0 && (
+                        <ul className="space-y-1.5">
+                            {d.loi_gan.slice(0, 8).map((l, i) => (
+                                <li key={i} className="leading-snug">
+                                    <span className="font-bold text-[#1a1a2e]">{TEN_LOI[l.m] || l.m}</span>
+                                    <span className="text-gray-400"> · {TEN_CHANG[l.b] || l.b} · {new Date(l.luc).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                    {l.t && <span className="block truncate text-gray-500" title={l.t}>{l.t}</span>}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const DeviceManager = () => {
     const [devices, setDevices] = useState([]);
@@ -16,11 +153,23 @@ const DeviceManager = () => {
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
     const [deleteTarget, setDeleteTarget] = useState(null); // device to confirm delete
+    const [ngayDo, setNgayDo] = useState(7);
+    const ngayDoRef = useRef(7); // nhịp làm mới 60 s giữ closure cũ -> đọc số ngày đang chọn qua ref
+    const [doMuot, setDoMuot] = useState({});
+
+    const fetchDoMuot = async (ngay = ngayDoRef.current) => {
+        try {
+            const res = await axios.get('/api/devices', { params: { resource: 'do-muot', ngay }, headers: authHeader() });
+            setDoMuot(res.data?.may || {});
+        } catch (error) {
+            console.error('Failed to fetch do-muot:', error);
+        }
+    };
 
     const fetchDevices = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/api/devices', { headers: authHeader() });
+            const [res] = await Promise.all([axios.get('/api/devices', { headers: authHeader() }), fetchDoMuot()]);
             setDevices(Array.isArray(res.data) ? res.data : []);
             setMocMayCu(Date.now() - NGAY_MAY_CU * 86400000);
         } catch (error) {
@@ -165,7 +314,19 @@ const DeviceManager = () => {
                 </div>
             )}
 
-            <div className="flex justify-end items-center">
+            <div className="flex items-center justify-end gap-2">
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 text-xs font-bold">
+                    {[7, 30].map((n) => (
+                        <button
+                            key={n}
+                            type="button"
+                            onClick={() => { setNgayDo(n); ngayDoRef.current = n; fetchDoMuot(n); }}
+                            className={`rounded-lg px-3 py-1.5 transition-all ${ngayDo === n ? 'bg-white text-[#e63946] shadow-sm' : 'text-gray-500'}`}
+                        >
+                            {n} ngày
+                        </button>
+                    ))}
+                </div>
                 <button
                     onClick={fetchDevices}
                     className="p-2 text-gray-500 hover:text-[#e63946] transition-colors"
@@ -222,6 +383,8 @@ const DeviceManager = () => {
                                 Hoạt động gần nhất: {device.last_active ? new Date(device.last_active).toLocaleString() : 'Chưa bao giờ'}
                             </p>
                         </div>
+
+                        <TheDoMuot d={doMuot[device.device_id]} />
 
                         <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
                             <button

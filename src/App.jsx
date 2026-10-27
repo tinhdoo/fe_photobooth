@@ -4,6 +4,7 @@ import { WorkflowProvider, useWorkflow } from './context/WorkflowContext';
 import MainLayout from './layouts/MainLayout';
 import { isLocalHost } from './utils/runtime';
 import { isAuthenticated as checkAuth, isStaffRole } from './utils/auth';
+import { batDo, datBuoc, ghiLoi } from './utils/doMuot';
 
 import Welcome from './components/steps/Welcome';
 import LayoutSelection from './components/steps/LayoutSelection';
@@ -30,6 +31,7 @@ const lazyWithReload = (importer) => lazy(async () => {
     } catch (err) {
         if (!sessionStorage.getItem('ptb_chunk_reloaded')) {
             sessionStorage.setItem('ptb_chunk_reloaded', '1');
+            ghiLoi('tai_chunk', err?.message); // trang sắp tải lại -> doMuot cất lượt dở vào localStorage
             window.location.reload();
             return new Promise(() => { }); // giữ Suspense đến khi trang reload xong
         }
@@ -127,6 +129,11 @@ const AdminOnlyRoute = ({ children }) => {
 
 const StepContent = () => {
     const { currentStep } = useWorkflow();
+    // Đo độ mượt theo chặng (utils/doMuot) — chỉ màn kiosk mới render StepContent.
+    useEffect(() => {
+        batDo();
+        datBuoc(currentStep);
+    }, [currentStep]);
 
     switch (currentStep) {
         case 1:

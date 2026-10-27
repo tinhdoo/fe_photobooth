@@ -6,6 +6,7 @@ import { io } from 'socket.io-client';
 import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
 import { errorMessage } from '../../utils/errorMessage';
+import { batDauDo, ghiLoi } from '../../utils/doMuot';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
 import { API_URL, CLOUD_API_URL } from '../../config/api';
@@ -578,6 +579,7 @@ const Payment = ({ inThem = null } = {}) => {
 
         const createOrder = async () => {
             setLoading(true);
+            const xongTaoQr = batDauDo('tao_qr');
             try {
                 const res = await axios.post(`${CLOUD_API_URL}/api/sepay-orders`, {
                     amount: soTien,
@@ -597,8 +599,10 @@ const Payment = ({ inThem = null } = {}) => {
                         taoLuc: Date.now(),
                     });
                 }
+                xongTaoQr();
                 if (!cancelled && qrRequestRef.current === requestId) setQrOrder(res.data);
             } catch (error) {
+                ghiLoi('qr_loi', error.response?.data?.error || error.message);
                 if (!cancelled && qrRequestRef.current === requestId) {
                     setQrError(error.response?.data?.error || 'Không thể tạo mã QR Tomato trên Vercel.');
                 }

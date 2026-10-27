@@ -6,6 +6,7 @@
 import axios from 'axios';
 import { API_URL, CLOUD_API_URL } from '../config/api';
 import { getDeviceId } from '../utils/deviceId';
+import { chotDoMuot, daGuiDoMuot } from '../utils/doMuot';
 
 const coSo = () => CLOUD_API_URL || API_URL;
 
@@ -62,8 +63,10 @@ export async function luuLuotAnhThe({ to, anh, maLuot, sessionData, soTo }) {
             sepay_order_code: sessionData.sepayOrderCode || null,
             sepay_order_codes: sessionData.sepayOrderCodes || undefined,
             qr_paid: sessionData.qrPaid || undefined,
+            do_muot: chotDoMuot(),
         },
     }, { timeout: 20000 });
+    daGuiDoMuot();
 
     // Gắn mã thanh toán với lượt (admin biết mã dùng cho lượt nào). Lỗi mạng không chặn khách.
     if (sessionData.paymentCodeId) {
