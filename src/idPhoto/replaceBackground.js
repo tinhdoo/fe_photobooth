@@ -12,6 +12,8 @@
 //      ước lượng được màu nền cũ; alpha = khoảng cách màu tới nền / khoảng cách tiền cảnh tới nền.
 //   3. Khử ám màu: gỡ phần màu nền cũ còn dính trên tóc, nếu không tóc sẽ ám xanh trên nền mới.
 
+import { tinhTheoDuongNoi } from './duongNoi.js';
+
 /** Màu nền dựng sẵn. Ảnh hồ sơ VN hay dùng xanh dương; hộ chiếu/GPLX yêu cầu TRẮNG. */
 export const BACKGROUNDS = [
     { id: 'blue',       ten: 'Xanh dương',  rgb: [42, 106, 187] },
@@ -352,8 +354,17 @@ export async function composeOnBackground(source, mask, width, height, newBg, on
     const dungNen = nen && !nen.loi ? nen : null;
 
     if (onTienDo) onTienDo('Đang xử lý viền tóc…');
-    const alpha = refineAlpha(px, mask, width, height, oldBg, dungNen);
+    let alpha = refineAlpha(px, mask, width, height, oldBg, dungNen);
     await nhaLuong();
+    // Không có ảnh nền trống -> tính lại viền tóc theo đường nối nền-tại-chỗ -> tiền-cảnh-tại-chỗ (duongNoi.js):
+    // gỡ khe tóc còn màu tường cũ + sợi tóc bạc phếch. Chỗ nào không tin được màu thì giữ nguyên alpha trên.
+    let nenVung = null;
+    if (oldBg && !dungNen) {
+        const r = tinhTheoDuongNoi(px, mask, width, height, oldBg, alpha);
+        alpha = r.alpha;
+        nenVung = r.nen;
+        await nhaLuong();
+    }
 
     if (onTienDo) onTienDo('Đang ghép nền mới…');
     const [nr, ng, nb] = newBg;
@@ -409,9 +420,10 @@ export async function composeOnBackground(source, mask, width, height, newBg, on
         // còn là xấp xỉ quanh một màu trung bình — đây là chỗ hết sạch quầng sáng ở tóc.
         if ((oldBg || dungNen) && a > 0.02) {
             const t = i * 3;
-            const bR = dungNen ? dungNen.nen[t] : oldBg[0];
-            const bG = dungNen ? dungNen.nen[t + 1] : oldBg[1];
-            const bB = dungNen ? dungNen.nen[t + 2] : oldBg[2];
+            const nenB = dungNen ? dungNen.nen : nenVung;
+            const bR = nenB ? nenB[t] : oldBg[0];
+            const bG = nenB ? nenB[t + 1] : oldBg[1];
+            const bB = nenB ? nenB[t + 2] : oldBg[2];
             let hs = (1 - a) / a;
             if (hs > DESPILL_CAP) hs = DESPILL_CAP;
             r = r + (r - bR) * hs;
