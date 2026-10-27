@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { formidable } from 'formidable';
 import { getSupabaseAdmin, handleOptions, json } from '../lib/supabase.js';
+import { requireActiveAdmin } from '../lib/auth.js';
 
 export const config = {
     api: {
@@ -122,16 +123,52 @@ function thumbPrefix(layout, name) {
     return `frames/${layout}/${name}.thumb.`;
 }
 
+// Thứ tự hiển thị khung do admin kéo thả: dòng riêng app_configs key 'frame_order', config = { [layout]: [tên file] }.
+// Dòng riêng (không nhét vào 'app') để trang Cài đặt lưu cấu hình không ghi đè mất thứ tự, và ngược lại.
+const KHOA_THU_TU = 'frame_order';
+
+async function docThuTu(supabase) {
+    const { data, error } = await supabase
+        .from('app_configs')
+        .select('config')
+        .eq('key', KHOA_THU_TU)
+        .maybeSingle();
+    if (error) return {}; // chưa có bảng/dòng -> như chưa sắp xếp
+    return data?.config && typeof data.config === 'object' ? data.config : {};
+}
+
+async function saveOrder(req, res, supabase, layout) {
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
+    if (!layout) return json(res, 400, { error: 'Missing layout' });
+    const body = await readJsonBody(req);
+    const names = [...new Set((Array.isArray(body?.names) ? body.names : []).map(cleanFrameName).filter(Boolean))].slice(0, 1000);
+
+    const hienTai = await docThuTu(supabase);
+    const { error } = await supabase
+        .from('app_configs')
+        .upsert({
+            key: KHOA_THU_TU,
+            config: { ...hienTai, [layout]: names },
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+    if (error) throw error;
+    await bumpFrameRevision(supabase, layout); // booth đang mở tải lại danh sách theo thứ tự mới
+    return json(res, 200, { success: true });
+}
+
 async function listFrames(req, res, supabase, bucket) {
     const layout = cleanLayout(req.query.layout);
     if (!layout) return json(res, 400, { error: 'Missing layout' });
 
-    const { data, error } = await supabase.storage
-        .from(bucket)
-        .list(`frames/${layout}`, {
-            limit: 1000,
-            sortBy: { column: 'created_at', order: 'desc' },
-        });
+    const [{ data, error }, thuTu] = await Promise.all([
+        supabase.storage
+            .from(bucket)
+            .list(`frames/${layout}`, {
+                limit: 1000,
+                sortBy: { column: 'created_at', order: 'desc' },
+            }),
+        docThuTu(supabase),
+    ]);
 
     if (error) throw error;
 
@@ -180,6 +217,14 @@ async function listFrames(req, res, supabase, bucket) {
             };
         });
 
+    // Theo thứ tự admin đã xếp. Khung chưa có trong danh sách (mới tải lên sau lần xếp) đứng ĐẦU,
+    // mới nhất trước như cũ -> admin thấy ngay để kéo vào chỗ; khung đã xoá thì tên thừa tự bị bỏ qua.
+    const viTri = new Map((Array.isArray(thuTu[layout]) ? thuTu[layout] : []).map((ten, i) => [ten, i]));
+    if (viTri.size > 0) {
+        const moi = frames.filter((f) => !viTri.has(f.name));
+        const daXep = frames.filter((f) => viTri.has(f.name)).sort((a, b) => viTri.get(a.name) - viTri.get(b.name));
+        return json(res, 200, [...moi, ...daXep]);
+    }
     return json(res, 200, frames);
 }
 
@@ -447,6 +492,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
+            if (resource === 'order') return saveOrder(req, res, supabase, layout);
             if (resource === 'config') return saveConfig(req, res, supabase, bucket, layout, name);
             if (resource === 'icon') return uploadIcon(req, res, supabase, bucket, layout, name);
             if (resource === 'thumb') return uploadThumb(req, res, supabase, bucket, layout, name);

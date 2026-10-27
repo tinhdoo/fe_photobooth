@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images, Download, Camera, IdCard, Smile } from 'lucide-react';
+import { Upload, Trash2, Plus, Filter, Settings, CheckSquare, Square, Wand2 as WandIcon, Loader2, BarChart2, Award, TrendingUp, Images, Download, Camera, IdCard, Smile, ArrowUpDown, GripVertical } from 'lucide-react';
 import { LAYOUTS } from '../../data/layouts';
 import FrameConfigEditor from './FrameConfigEditor';
 import { detectFrameSlots } from '../../utils/frameDetection';
@@ -9,6 +9,7 @@ import ConfirmDialog from './ConfirmDialog';
 import IconManager from './IconManager';
 
 import { FRAME_API_URL } from '../../config/api';
+import { authHeader } from '../../utils/auth';
 import { veToMau } from '../../idPhoto/toAnhThe';
 const frameApiPath = (path) => `${FRAME_API_URL}${path}`;
 
@@ -66,6 +67,82 @@ const FrameManager = () => {
     const [topFramesLoading, setTopFramesLoading] = useState(true);
     const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0 });
 
+    // Sắp xếp thứ tự hiển thị khung (booth hiện khung theo đúng thứ tự này, khung đầu là mặc định).
+    // Chế độ riêng: bật "Sắp xếp" -> kéo thả thẻ (chuột hoặc ngón tay) -> "Lưu". Tách chế độ để kéo không
+    // đụng chọn khung / cuộn trang trên điện thoại.
+    const [sapXep, setSapXep] = useState(false);
+    const [keoId, setKeoId] = useState(null);
+    const [dangLuuThuTu, setDangLuuThuTu] = useState(false);
+    const banGocRef = useRef([]);
+    const luoiRef = useRef(null);
+    const keoRef = useRef(null); // { id, x, y, cuon, raf }
+
+    const batDauSapXep = () => { banGocRef.current = frames; setSelectedFrames(new Set()); setSapXep(true); };
+    const huySapXep = () => { setFrames(banGocRef.current); setSapXep(false); };
+    const luuThuTu = async () => {
+        setDangLuuThuTu(true);
+        try {
+            await axios.post(
+                frameApiPath(`/api/frames?resource=order&layout=${encodeURIComponent(selectedLayout)}`),
+                { names: frames.map((f) => f.name) },
+                { headers: authHeader() },
+            );
+            setFramesByLayout((prev) => ({ ...prev, [selectedLayout]: frames }));
+            setSapXep(false);
+            setNotification({ show: true, message: 'Đã lưu thứ tự khung.', type: 'success' });
+        } catch (err) {
+            const st = err?.response?.status;
+            setNotification({ show: true, message: st === 401 || st === 403 ? 'Cần đăng nhập tài khoản admin để lưu thứ tự.' : 'Lưu thứ tự thất bại, thử lại.', type: 'error' });
+        } finally {
+            setDangLuuThuTu(false);
+        }
+    };
+
+    // Kéo bằng Pointer Events (chạy cả chuột lẫn cảm ứng; drag & drop HTML5 không chạy trên điện thoại).
+    // Rê qua thẻ nào thì đổi chỗ luôn với thẻ đó; sát mép trên/dưới khung cuộn thì tự cuộn.
+    const batDauKeo = (e, id) => {
+        if (!sapXep || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        e.preventDefault();
+        let cuon = luoiRef.current?.parentElement;
+        while (cuon && !/(auto|scroll)/.test(getComputedStyle(cuon).overflowY)) cuon = cuon.parentElement;
+        const k = { id, x: e.clientX, y: e.clientY, cuon: cuon || document.scrollingElement, raf: 0 };
+        keoRef.current = k;
+        setKeoId(id);
+
+        const doiCho = () => {
+            const dich = document.elementFromPoint(k.x, k.y)?.closest('[data-frame-id]')?.getAttribute('data-frame-id');
+            if (!dich || dich === String(k.id)) return;
+            setFrames((prev) => {
+                const tu = prev.findIndex((f) => String(f.id) === String(k.id));
+                const den = prev.findIndex((f) => String(f.id) === dich); // data-* luôn là chuỗi
+                if (tu < 0 || den < 0) return prev;
+                const next = [...prev];
+                const [m] = next.splice(tu, 1);
+                next.splice(den, 0, m);
+                return next;
+            });
+        };
+        const di = (ev) => { k.x = ev.clientX; k.y = ev.clientY; doiCho(); };
+        const tuCuon = () => {
+            const r = k.cuon === document.scrollingElement ? { top: 0, bottom: window.innerHeight } : k.cuon.getBoundingClientRect();
+            const v = k.y < r.top + 70 ? -12 : k.y > r.bottom - 110 ? 12 : 0;
+            if (v) { k.cuon.scrollTop += v; doiCho(); }
+            k.raf = requestAnimationFrame(tuCuon);
+        };
+        const tha = () => {
+            cancelAnimationFrame(k.raf);
+            keoRef.current = null;
+            setKeoId(null);
+            window.removeEventListener('pointermove', di);
+            window.removeEventListener('pointerup', tha);
+            window.removeEventListener('pointercancel', tha);
+        };
+        window.addEventListener('pointermove', di);
+        window.addEventListener('pointerup', tha);
+        window.addEventListener('pointercancel', tha);
+        k.raf = requestAnimationFrame(tuCuon);
+    };
+
     // Tab Ảnh thẻ: một loại duy nhất (id_photo_mixed) — cho ô mặc định + ảnh mẫu. Ô thật của từng khung dò / đục lỗ /
     // chỉnh ở Cấu hình lưới như khung photobooth, chỉ là không giới hạn số ô.
     const filteredLayouts = LAYOUTS.filter(l => (activeTab === 'upload' ? l.isMobileOnly
@@ -91,6 +168,7 @@ const FrameManager = () => {
 
     useEffect(() => {
         setSelectedFrames(new Set()); // Reset selection on layout change
+        setSapXep(false);
         const cached = framesByLayout[selectedLayout];
         if (cached) {
             // Đã xem layout này -> hiện lại NGAY từ cache, KHÔNG gọi lại API (tiết kiệm request).
@@ -412,7 +490,7 @@ const FrameManager = () => {
             <h1 className="mb-4 text-2xl md:text-3xl font-bold text-[#1a1a2e] tracking-tight">Khung hình</h1>
 
             {/* Top frame: một hàng cuộn ngang (điện thoại không bị xuống nhiều dòng) */}
-            {(topFramesLoading || topFrames.length > 0) && (
+            {activeTab !== 'icons' && (topFramesLoading || topFrames.length > 0) && (
                 <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex shrink-0 items-center gap-1.5 pr-1 text-xs font-bold text-amber-500">
                         <Award size={14} />
@@ -483,33 +561,68 @@ const FrameManager = () => {
                     {isIdTab ? 'Khung ảnh thẻ' : selectedLayoutDef?.name}
                     <span className="ml-1.5 text-xs font-semibold text-gray-400">{framesLoading ? '…' : frames.length}</span>
                 </h2>
-                {frames.length > 0 && (
-                    <button
-                        type="button"
-                        onClick={toggleSelectAll}
-                        title="Chọn tất cả"
-                        className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${selectedFrames.size === frames.length ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-                    >
-                        {selectedFrames.size === frames.length ? <CheckSquare size={16} /> : <Square size={16} />}
-                        <span className="hidden sm:inline">Chọn tất cả</span>
-                    </button>
+                {sapXep ? (
+                    <>
+                        <button
+                            type="button"
+                            onClick={huySapXep}
+                            disabled={dangLuuThuTu}
+                            className="flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300"
+                        >
+                            Huỷ
+                        </button>
+                        <button
+                            type="button"
+                            onClick={luuThuTu}
+                            disabled={dangLuuThuTu}
+                            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#1a1a2e] px-4 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-60"
+                        >
+                            {dangLuuThuTu && <Loader2 size={16} className="animate-spin" />}
+                            Lưu thứ tự
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        {frames.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={batDauSapXep}
+                                title="Sắp xếp thứ tự hiển thị"
+                                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300"
+                            >
+                                <ArrowUpDown size={16} />
+                                <span className="hidden sm:inline">Sắp xếp</span>
+                            </button>
+                        )}
+                        {frames.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={toggleSelectAll}
+                                title="Chọn tất cả"
+                                className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${selectedFrames.size === frames.length ? 'border-[#e63946] text-[#e63946]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                            >
+                                {selectedFrames.size === frames.length ? <CheckSquare size={16} /> : <Square size={16} />}
+                                <span className="hidden sm:inline">Chọn tất cả</span>
+                            </button>
+                        )}
+                        {isIdTab && (
+                            <button
+                                type="button"
+                                onClick={taiToMau}
+                                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-600 transition-colors hover:border-gray-300"
+                                title="Ảnh mẫu 1200×1800 có sẵn các ô ảnh trong suốt để thiết kế khung"
+                            >
+                                <Download size={16} />
+                                <span>Mẫu</span>
+                            </button>
+                        )}
+                        <label className={`flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#e63946] px-4 text-sm font-bold text-white shadow-md shadow-[#e63946]/15 transition-all hover:bg-[#c1121f] active:scale-95 ${uploading ? 'pointer-events-none opacity-70' : ''}`}>
+                            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                            <span>{uploading ? 'Đang tải' : 'Tải lên'}</span>
+                            <input type="file" className="hidden" accept="image/png" multiple onChange={handleUpload} disabled={uploading} />
+                        </label>
+                    </>
                 )}
-                {isIdTab && (
-                    <button
-                        type="button"
-                        onClick={taiToMau}
-                        className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-600 transition-colors hover:border-gray-300"
-                        title="Ảnh mẫu 1200×1800 có sẵn các ô ảnh trong suốt để thiết kế khung"
-                    >
-                        <Download size={16} />
-                        <span>Mẫu</span>
-                    </button>
-                )}
-                <label className={`flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#e63946] px-4 text-sm font-bold text-white shadow-md shadow-[#e63946]/15 transition-all hover:bg-[#c1121f] active:scale-95 ${uploading ? 'pointer-events-none opacity-70' : ''}`}>
-                    {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                    <span>{uploading ? 'Đang tải' : 'Tải lên'}</span>
-                    <input type="file" className="hidden" accept="image/png" multiple onChange={handleUpload} disabled={uploading} />
-                </label>
             </div>
 
             {isIdTab && (
@@ -607,7 +720,7 @@ const FrameManager = () => {
                             <p className="text-gray-400 font-medium">Đang tải khung hình...</p>
                         </div>
                     ) : frames.length > 0 ? (
-                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 mb-20 animate-fadeIn">
+                        <div ref={luoiRef} className={`grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 mb-20 animate-fadeIn ${sapXep ? 'select-none' : ''}`}>
                             {frames.map((frame) => {
                                 const isSelected = selectedFrames.has(frame.id);
                                 return (
@@ -616,11 +729,18 @@ const FrameManager = () => {
                                         // content-visibility: bỏ qua giải mã/vẽ các card NGOÀI màn hình
                                         // -> mở grid nhiều frame nhẹ hơn hẳn. 'auto 340px' giữ chỗ để
                                         // thanh cuộn không nhảy.
-                                        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 340px' }}
-                                        className={`group relative bg-white rounded-2xl overflow-hidden cursor-pointer transition-shadow
-                                            ${isSelected ? 'ring-2 ring-[#e63946] shadow-md' : 'border border-gray-100 hover:shadow-md'}
+                                        data-frame-id={frame.id}
+                                        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 340px', touchAction: sapXep ? 'none' : undefined }}
+                                        className={`group relative bg-white rounded-2xl overflow-hidden transition-shadow
+                                            ${sapXep ? 'cursor-grab border border-dashed border-gray-300 active:cursor-grabbing' : 'cursor-pointer'}
+                                            ${keoId === frame.id ? 'z-10 scale-[1.03] opacity-80 shadow-xl ring-2 ring-[#1a1a2e]' : ''}
+                                            ${!sapXep && isSelected ? 'ring-2 ring-[#e63946] shadow-md' : ''}
+                                            ${!sapXep && !isSelected ? 'border border-gray-100 hover:shadow-md' : ''}
                                         `}
-                                        onClick={() => toggleSelectFrame(frame.id)}
+                                        onPointerDown={(e) => batDauKeo(e, frame.id)}
+                                        // Ảnh trong thẻ mặc định kéo được kiểu HTML5 -> trình duyệt nuốt pointermove, thẻ không đổi chỗ.
+                                        onDragStart={(e) => { if (sapXep) e.preventDefault(); }}
+                                        onClick={() => { if (!sapXep) toggleSelectFrame(frame.id); }}
                                         onDragOver={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
@@ -659,7 +779,7 @@ const FrameManager = () => {
                                         }}
                                     >
                                         {/* Selection Checkbox (Visible on hover or selected) */}
-                                        <div className={`absolute top-1.5 left-1.5 z-30 transition-all duration-200 ${isSelected || selectedFrames.size > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
+                                        <div className={`absolute top-1.5 left-1.5 z-30 transition-all duration-200 ${sapXep ? 'hidden' : isSelected || selectedFrames.size > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
                                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#e63946] border-[#e63946] text-white' : 'bg-white border-gray-300 text-transparent hover:border-[#e63946]'}`}>
                                                 <CheckSquare size={14} fill="currentColor" />
                                             </div>
@@ -705,6 +825,9 @@ const FrameManager = () => {
                                         {/* Chân thẻ: tên + nút cấu hình lưới / xoá (luôn hiện, không phủ lên ảnh khung) */}
                                         <div className="flex items-center border-t border-gray-100 py-1 pl-2 pr-0.5 sm:pl-3 sm:pr-1">
                                             <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#1a1a2e] sm:text-xs" title={frame.name}>{frame.name}</p>
+                                            {sapXep ? (
+                                                <span className="grid h-8 w-7 shrink-0 place-items-center text-gray-400"><GripVertical size={16} /></span>
+                                            ) : (<>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setEditingFrame(frame); }}
                                                 className="grid h-8 w-7 shrink-0 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#1a1a2e]"
@@ -719,6 +842,7 @@ const FrameManager = () => {
                                             >
                                                 <Trash2 size={16} />
                                             </button>
+                                            </>)}
                                         </div>
                                     </div>
                                 );
@@ -727,7 +851,7 @@ const FrameManager = () => {
                     ) : (
                         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm font-semibold text-gray-400 transition-colors hover:border-[#e63946]/40 hover:text-[#e63946]">
                             <Upload size={28} />
-                            Chưa có khung nào — bấm hoặc thả PNG vào đây
+                            Chưa có khung nào
                             <input type="file" className="hidden" accept="image/png" multiple onChange={handleUpload} disabled={uploading} />
                         </label>
                     )
