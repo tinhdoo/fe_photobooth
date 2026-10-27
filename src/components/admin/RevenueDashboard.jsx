@@ -630,6 +630,12 @@ const RevenueDashboard = () => {
                     <div className="mt-2">
                         <p className="break-words text-3xl font-black leading-tight tracking-tight md:text-4xl">{formatCurrency(periodStats.today)}</p>
                         <p className="mt-1 text-xs text-white/50">{periodStats.todayCount} lượt</p>
+                        {/* Voucher dùng hôm nay nằm cùng thẻ "Hôm nay" (không trộn vào doanh thu, chỉ đặt cạnh để xem một chỗ) */}
+                        <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3 text-sm">
+                            <span className="text-white/60">Voucher</span>
+                            <span className="ml-auto font-bold">{formatCurrency(voucherStats.today)}</span>
+                            <span className="text-xs text-white/50">· {voucherStats.todayCount} lượt</span>
+                        </div>
                     </div>
                 </div>
                 <div className="divide-y divide-gray-100 rounded-3xl border border-gray-100 bg-white px-4 shadow-sm md:px-5">
@@ -637,7 +643,7 @@ const RevenueDashboard = () => {
                         { label: 'Tuần này', value: periodStats.week, icon: <TrendingUp size={15} />, mau: 'bg-blue-50 text-blue-600' },
                         { label: 'Tháng này', value: periodStats.month, icon: <TrendingUp size={15} />, mau: 'bg-purple-50 text-purple-600' },
                         { label: 'Tổng thu', value: realTotalRevenue, icon: <DollarSign size={15} />, mau: 'bg-amber-50 text-amber-600' },
-                        { label: 'Voucher', note: `${voucherStats.count} lượt · hôm nay ${voucherStats.today.toLocaleString('vi-VN')}đ`, value: voucherStats.total, icon: <Hash size={15} />, mau: 'bg-orange-50 text-orange-600', phu: true },
+                        { label: 'Voucher', note: `${voucherStats.count} lượt`, value: voucherStats.total, icon: <Hash size={15} />, mau: 'bg-orange-50 text-orange-600', phu: true },
                     ].map((item) => (
                         <div key={item.label} className="flex items-center gap-3 py-3">
                             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${item.mau}`}>{item.icon}</span>
