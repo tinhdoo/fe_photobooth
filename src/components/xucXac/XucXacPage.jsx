@@ -115,7 +115,7 @@ const XucXacPage = () => {
 
     return (
         <div className="animate-fadeIn mx-auto w-full max-w-xl">
-            <h1 className="mb-3 text-2xl font-bold tracking-tight text-[#1a1a2e]">Xúc xắc ưu đãi</h1>
+            <h1 className="mb-3 text-2xl font-bold tracking-tight text-[#1a1a2e]">{laAdmin ? 'Xúc xắc ưu đãi' : 'Lắc xúc xắc'}</h1>
 
             {laAdmin && (
                 <div className="mb-4">
