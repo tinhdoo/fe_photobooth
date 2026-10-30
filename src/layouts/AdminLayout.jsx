@@ -1,8 +1,16 @@
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, Users } from 'lucide-react';
+import axios from 'axios';
+import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, Users, Dices } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
 import { isLocalHost } from '../utils/runtime';
-import { isStaffRole, getDisplayName, clearAuth } from '../utils/auth';
+import { isStaffRole, getDisplayName, clearAuth, authHeader } from '../utils/auth';
+
+// Admin ẩn mục Xúc xắc với nhân viên (Xúc xắc > Ưu đãi > Hiện cho nhân viên). Nhớ lần đọc trước để menu không nháy.
+const KHOA_HIEN_XX = 'ptb_xuc_xac_hien';
+const docHienXX = () => {
+    try { return localStorage.getItem(KHOA_HIEN_XX) !== '0'; } catch { return true; }
+};
 
 const BrandHeader = ({ compact = false, logoUrl = '/logo_tomato.png' }) => (
     <div className="flex items-center gap-3">
@@ -26,18 +34,31 @@ const AdminLayout = () => {
     const logoUrl = configs?.logo_main || '/logo_tomato.png';
     const staffOnly = isStaffRole();
     const displayName = getDisplayName();
+    const [hienXucXac, setHienXucXac] = useState(docHienXX);
+
+    useEffect(() => {
+        if (!staffOnly || isLocalHost()) return;
+        axios.get('/api/codes', { params: { action: 'dice-config' }, headers: authHeader() })
+            .then((res) => {
+                const hien = res.data?.hien_nv !== false;
+                setHienXucXac(hien);
+                try { localStorage.setItem(KHOA_HIEN_XX, hien ? '1' : '0'); } catch { /* bỏ qua */ }
+            })
+            .catch(() => { /* giữ giá trị cũ */ });
+    }, [staffOnly, location.pathname]);
 
     const menuItems = [
         { to: '/admin/codes', icon: <DollarSign size={22} />, label: 'Mã thanh toán', short: 'Mã TT' },
         { to: '/admin/frames', icon: <Layout size={22} />, label: 'Frame', short: 'Frame' },
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu', short: 'Doanh thu' },
         { to: '/admin/staff', icon: <Users size={22} />, label: 'Nhân viên', short: 'Nhân viên' },
+        { to: '/admin/xuc-xac', icon: <Dices size={22} />, label: 'Xúc xắc', short: 'Xúc xắc' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện', short: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt', short: 'Cài đặt' },
     ].filter((item) => {
         if (isLocalHost()) return ['/admin/settings', '/admin/bill-settings'].includes(item.to);
-        // Nhân viên: chỉ thấy Mã thanh toán. Admin: thấy hết (trừ bill-settings vốn chỉ cho local).
-        if (staffOnly) return item.to === '/admin/codes';
+        // Nhân viên: Mã thanh toán + Xúc xắc. Admin: thấy hết (trừ bill-settings vốn chỉ cho local).
+        if (staffOnly) return item.to === '/admin/codes' || (item.to === '/admin/xuc-xac' && hienXucXac);
         return item.to !== '/admin/bill-settings';
     });
 
@@ -46,6 +67,8 @@ const AdminLayout = () => {
     const mobileNavItems = menuItems.filter(
         (item) => item.to !== '/admin/settings' && item.to !== '/admin/branding'
     );
+    // Nhân viên chỉ còn 1 mục (Xúc xắc bị ẩn) -> không cần thanh nav dưới.
+    const coNavDuoi = !staffOnly || mobileNavItems.length > 1;
 
     const handleLogout = () => {
         clearAuth();
@@ -124,10 +147,9 @@ const AdminLayout = () => {
                     </button>
                 </div>
 
-                {/* Content Area — đệm dưới đủ để nút cuối (vd Lưu) vượt qua thanh nav fixed + safe-area.
-                    Nhân viên KHÔNG có thanh nav dưới -> bỏ đệm để không thừa khoảng trắng. */}
+                {/* Content Area — đệm dưới đủ để nút cuối (vd Lưu) vượt qua thanh nav fixed + safe-area. */}
                 <div
-                    className={`flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${staffOnly ? 'pb-[env(safe-area-inset-bottom)]' : 'pb-[calc(env(safe-area-inset-bottom)+6.5rem)]'}`}
+                    className={`flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${coNavDuoi ? 'pb-[calc(env(safe-area-inset-bottom)+6.5rem)]' : 'pb-[env(safe-area-inset-bottom)]'}`}
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     <main className="p-4 md:p-8 w-full max-w-full overflow-x-hidden box-border">
@@ -135,8 +157,8 @@ const AdminLayout = () => {
                     </main>
                 </div>
 
-                {/* Mobile Bottom Navigation — ẩn hẳn với nhân viên (chỉ 1 mục nên thừa) */}
-                {!staffOnly && (
+                {/* Mobile Bottom Navigation — nhân viên có 2 mục (Mã TT, Xúc xắc), không có Cài đặt */}
+                {coNavDuoi && (
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.08)]">
                     <nav className="flex items-stretch px-1 py-1">
                         {mobileNavItems.map((item) => {

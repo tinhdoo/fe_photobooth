@@ -69,6 +69,7 @@ const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
 const FrameManager = lazy(() => import('./components/admin/FrameManager'));
 const CodeManager = lazy(() => import('./components/admin/CodeManager'));
+const XucXacPage = lazy(() => import('./components/xucXac/XucXacPage')); // three.js chỉ nạp khi mở trang này
 const RevenueDashboard = lazy(() => import('./components/admin/RevenueDashboard'));
 const Settings = lazy(() => import('./components/admin/Settings'));
 const BillSettings = lazy(() => import('./components/admin/BillSettings'));
@@ -258,6 +259,7 @@ const App = () => {
                             <Route index element={<AdminIndex />} />
                             <Route path="frames" element={<CloudAdminRoute><AdminOnlyRoute><FrameManager /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="codes" element={<CloudAdminRoute><CodeManager /></CloudAdminRoute>} />
+                            <Route path="xuc-xac" element={<CloudAdminRoute><XucXacPage /></CloudAdminRoute>} />
                             <Route path="revenue" element={<CloudAdminRoute><AdminOnlyRoute><RevenueDashboard /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="staff" element={<CloudAdminRoute><AdminOnlyRoute><StaffManager /></AdminOnlyRoute></CloudAdminRoute>} />
                             <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />

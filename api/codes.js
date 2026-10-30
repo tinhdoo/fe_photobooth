@@ -3,6 +3,7 @@ import {
     requireAuth, requireActiveAdmin, checkAccount, hashPassword, verifyPassword, signToken, REMEMBER_TTL_SECONDS,
 } from '../lib/auth.js';
 import { clientIp, lockedSeconds, recordFailure, cleanupRateLimits } from '../lib/rateLimit.js';
+import { randomInt } from 'node:crypto';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -536,6 +537,120 @@ async function deleteStaff(req, res, supabase) {
     return json(res, 200, { success: true });
 }
 
+// ---------------- XÚC XẮC ƯU ĐÃI ----------------
+// Trang /admin/xuc-xac: nhân viên lắc 1 viên cho khách. KẾT QUẢ DO SERVER QUYẾT (crypto.randomInt, theo tỉ lệ admin đặt,
+// không đặt thì đều 1/6) và ghi vào bảng dice_rolls TRƯỚC khi trả về -> nhân viên không chọn được mặt trên máy, lắc lại
+// bao nhiêu lần admin cũng thấy hết. Cấu hình: app_configs key 'xuc_xac'
+// { bat, hien_nv, uu_dai: { '1': '...' }, ty_le: { '1': 40, ... } | null }. hien_nv=false: nhân viên không thấy mục
+// Xúc xắc trên menu và không lắc được; admin vẫn vào được để cài.
+// Bảng dice_rolls tạo bằng db/xuc_xac.sql.
+const KHOA_XUC_XAC = 'xuc_xac';
+const thieuBang = (error) => /Could not find the table|schema cache|does not exist|42P01/i.test(String(error?.message || error?.code || ''));
+
+// Tỉ lệ % từng mặt (0..100, lẻ 1 chữ số), cộng lại phải đúng 100. Không hợp lệ -> null (= đều 1/6).
+function tyLeHopLe(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const ra = {};
+    let tong = 0;
+    for (let m = 1; m <= 6; m += 1) {
+        const v = Number(raw[m]);
+        if (!Number.isFinite(v) || v < 0 || v > 100) return null;
+        ra[m] = Math.round(v * 10) / 10;
+        tong += ra[m];
+    }
+    return Math.abs(tong - 100) < 0.05 ? ra : null;
+}
+
+function chonMat(tyLe) {
+    if (!tyLe) return randomInt(1, 7);
+    // Đổi % sang trọng số nguyên (phần nghìn) rồi bốc một số trong [0, tổng).
+    const w = [1, 2, 3, 4, 5, 6].map((m) => Math.round(tyLe[m] * 10));
+    let r = randomInt(0, w.reduce((a, x) => a + x, 0));
+    for (let i = 0; i < 6; i += 1) {
+        if (r < w[i]) return i + 1;
+        r -= w[i];
+    }
+    return 6;
+}
+
+async function docCauHinhXucXac(supabase) {
+    const { data } = await supabase.from('app_configs').select('config').eq('key', KHOA_XUC_XAC).maybeSingle();
+    const c = data?.config && typeof data.config === 'object' && !Array.isArray(data.config) ? data.config : {};
+    const uuDai = {};
+    for (let m = 1; m <= 6; m += 1) uuDai[m] = String(c.uu_dai?.[m] ?? '').slice(0, 80);
+    return { bat: c.bat !== false, hien_nv: c.hien_nv !== false, uu_dai: uuDai, ty_le: tyLeHopLe(c.ty_le) };
+}
+
+async function tenHienThi(supabase, username) {
+    const { data } = await supabase.from('staff_accounts').select('display_name').eq('username', username).maybeSingle();
+    return data?.display_name || username;
+}
+
+async function lacXucXac(req, res, supabase) {
+    const claims = await requireActiveUser(req, res, supabase);
+    if (!claims) return undefined;
+    const cfg = await docCauHinhXucXac(supabase);
+    if (!cfg.bat) return json(res, 403, { success: false, message: 'Chương trình xúc xắc đang tắt.' });
+    if (!cfg.hien_nv && claims.r !== 'admin') return json(res, 403, { success: false, message: 'Mục xúc xắc đang ẩn.' });
+
+    const mat = chonMat(cfg.ty_le);
+    const { data, error } = await supabase
+        .from('dice_rolls')
+        .insert({
+            face: mat,
+            uu_dai: cfg.uu_dai[mat] || null,
+            staff_username: claims.u,
+            staff_name: await tenHienThi(supabase, claims.u),
+        })
+        .select()
+        .single();
+    if (error && thieuBang(error)) return json(res, 503, { success: false, message: 'Chưa tạo bảng dice_rolls (chạy db/xuc_xac.sql).' });
+    if (error) throw error;
+    return json(res, 200, { success: true, roll: data });
+}
+
+async function luuCauHinhXucXac(req, res, supabase) {
+    if (!(await requireActiveAdmin(req, res, supabase))) return undefined;
+    const uuDai = {};
+    for (let m = 1; m <= 6; m += 1) uuDai[m] = String(req.body?.uu_dai?.[m] ?? '').trim().slice(0, 80);
+    // ty_le null/bỏ trống = đều 1/6; có gửi thì phải hợp lệ (đủ 6 mặt, tổng 100%).
+    let tyLe = null;
+    if (req.body?.ty_le != null) {
+        tyLe = tyLeHopLe(req.body.ty_le);
+        if (!tyLe) return json(res, 400, { success: false, message: 'Tỉ lệ 6 mặt phải cộng lại đúng 100%.' });
+    }
+    const config = { bat: req.body?.bat !== false, hien_nv: req.body?.hien_nv !== false, uu_dai: uuDai, ty_le: tyLe };
+    const { error } = await supabase.from('app_configs').upsert(
+        { key: KHOA_XUC_XAC, config, updated_at: new Date().toISOString() },
+        { onConflict: 'key' },
+    );
+    if (error) throw error;
+    return json(res, 200, { success: true, ...config });
+}
+
+// Lịch sử: admin thấy mọi lượt, nhân viên chỉ thấy lượt của mình (admin thêm ?cua_toi=1 để chỉ lấy lượt của mình).
+// ?ngay=1|7|30 (1 = từ 0h hôm nay giờ VN).
+async function lichSuXucXac(req, res, supabase) {
+    const claims = await requireActiveUser(req, res, supabase);
+    if (!claims) return undefined;
+    const ngay = [1, 7, 30].includes(Number(req.query?.ngay)) ? Number(req.query.ngay) : 1;
+    const VN = 7 * 3600000;
+    const dauNgayVn = Math.floor((Date.now() + VN) / 86400000) * 86400000 - VN;
+    const tu = new Date(dauNgayVn - (ngay - 1) * 86400000).toISOString();
+
+    let q = supabase
+        .from('dice_rolls')
+        .select('id, face, uu_dai, staff_username, staff_name, created_at')
+        .gte('created_at', tu)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+    if (claims.r !== 'admin' || req.query?.cua_toi) q = q.eq('staff_username', claims.u);
+    const { data, error } = await q;
+    if (error && thieuBang(error)) return json(res, 200, { thieu_bang: true, ngay, rolls: [] });
+    if (error) throw error;
+    return json(res, 200, { ngay, rolls: data || [] });
+}
+
 export default async function handler(req, res) {
     if (handleOptions(req, res)) return;
 
@@ -553,6 +668,9 @@ export default async function handler(req, res) {
             if (action === 'set-session') return setCodeSession(req, res, supabase);
             if (action === 'set-note') return setCodeNote(req, res, supabase);
             if (action === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
+            // --- xúc xắc ưu đãi ---
+            if (action === 'dice-roll') return lacXucXac(req, res, supabase);
+            if (action === 'dice-config') return luuCauHinhXucXac(req, res, supabase);
             // --- tài khoản nhân viên ---
             if (action === 'login') return login(req, res, supabase);
             if (action === 'staff-list') return listStaff(req, res, supabase);
@@ -570,6 +688,15 @@ export default async function handler(req, res) {
         if (getAction === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
         if (getAction === 'staff-list') return listStaff(req, res, supabase);
         if (getAction === 'stock') return getStock(req, res, supabase);
+        if (getAction === 'dice-list') return lichSuXucXac(req, res, supabase);
+        if (getAction === 'dice-config') {
+            const claims = await requireActiveUser(req, res, supabase);
+            if (!claims) return undefined;
+            const cfg = await docCauHinhXucXac(supabase);
+            // Tỉ lệ chỉ admin xem.
+            if (claims.r !== 'admin') delete cfg.ty_le;
+            return json(res, 200, cfg);
+        }
 
         // Xem danh sách mã BẮT BUỘC đăng nhập + tài khoản còn active (khóa là chặn ngay).
         const claims = await requireActiveUser(req, res, supabase);
