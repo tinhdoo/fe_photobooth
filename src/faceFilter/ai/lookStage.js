@@ -22,6 +22,53 @@ function makeCanvas(w, h) {
     return c;
 }
 
+// MASK DÙNG LẠI. Mask (da, môi, các đa giác mắt/răng/mày) chỉ phụ thuộc hình học khuôn mặt, không phụ thuộc
+// thanh trượt -> dựng một lần rồi dùng lại cho mọi lượt xem trước (bước Chỉnh ảnh vẽ lại mỗi nấc kéo). Trước
+// 0.0.33 mỗi lượt dựng lại rồi đọc điểm ảnh của mask bằng getImageData: canvas để ở card đồ hoạ nên mỗi lần đọc
+// bắt card đồ hoạ dừng chờ — đo trên Intel UHD: ~2/3 thời gian một lượt xem trước, và là phần gây đơ ở booth.
+// Canvas mask để ở CPU (willReadFrequently): lần đọc đầu tiên cũng không phải chờ card đồ hoạ.
+// Khoá theo mã của từng đối tượng mặt: PhotoEdit giữ nguyên `faces` của mỗi ảnh giữa các lượt. Mask là của
+// chung -> bên dùng chỉ đọc / vẽ nó lên chỗ khác, không vẽ đè lên mask.
+const MASK_NHO_MAX = 64;
+const maskNho = new Map();
+const maMat = new WeakMap();
+let soMat = 0;
+const idMat = (f) => {
+    let id = maMat.get(f);
+    if (id === undefined) { soMat += 1; id = soMat; maMat.set(f, id); }
+    return id;
+};
+const khoaHop = (b) => `${b.x},${b.y},${b.w},${b.h}`;
+/** Mã số ổn định của một đối tượng (mặt, ảnh nguồn) để làm khoá bộ nhớ. */
+export const maDoiTuong = idMat;
+function nhoMask(key, build) {
+    let v = maskNho.get(key);
+    if (v !== undefined) {
+        maskNho.delete(key); // dùng gần nhất -> ra cuối, bỏ cái lâu không dùng trước
+        maskNho.set(key, v);
+        return v;
+    }
+    v = build();
+    maskNho.set(key, v);
+    if (maskNho.size > MASK_NHO_MAX) maskNho.delete(maskNho.keys().next().value);
+    return v;
+}
+function makeMaskCanvas(w, h) {
+    const c = makeCanvas(w, h);
+    c.getContext('2d', { willReadFrequently: true });
+    return c;
+}
+const diemMask = new WeakMap();
+/** Điểm ảnh của một mask (đọc một lần cho mỗi mask). */
+function maskPixels(c) {
+    let d = diemMask.get(c);
+    if (!d) {
+        d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        diemMask.set(c, d);
+    }
+    return d;
+}
+
 const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 const clamp8 = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -119,8 +166,11 @@ function maskScale(w, h) {
 /** Mask da ở cỡ nhỏ (cạnh dài <= MASK_MAX_EDGE); bên dùng tự phóng (canvas: đúng phần vùng mặt;
  *  card đồ hoạ: nội suy khi lấy mẫu) — mép đã mờ sẵn nên phóng to không lộ. */
 function buildSkinMaskSmall(w, h, faces) {
+    return nhoMask(`da|${w}x${h}|${faces.map(idMat).join(',')}`, () => dungSkinMaskSmall(w, h, faces));
+}
+function dungSkinMaskSmall(w, h, faces) {
     const { mw, mh } = maskScale(w, h);
-    const c = makeCanvas(mw, mh);
+    const c = makeMaskCanvas(mw, mh);
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff';
     // Toạ độ landmark đều chuẩn hoá 0..1 nên vẽ thẳng ở cỡ nhỏ, không cần quy đổi gì thêm.
@@ -299,7 +349,10 @@ function blurredRegion(srcCanvas, x, y, rw, rh, px) {
 // Mask = viền môi NGOÀI trừ viền môi TRONG -> cười hở răng thì răng/lưỡi không bị đụng.
 // ---------------------------------------------------------------------------
 function buildLipMask(box, f, w, h, feather) {
-    const c = makeCanvas(box.w, box.h);
+    return nhoMask(`moi|${idMat(f)}|${w}x${h}|${khoaHop(box)}|${feather}`, () => dungLipMask(box, f, w, h, feather));
+}
+function dungLipMask(box, f, w, h, feather) {
+    const c = makeMaskCanvas(box.w, box.h);
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff';
 
@@ -340,7 +393,7 @@ function measureLips(canvas, maskCanvas, box, probe = null, enhance = 0) {
     if (box.w < 2 || box.h < 2) return null;
     const pre = probePixels(probe, box);
     const px = pre || canvas.getContext('2d').getImageData(box.x, box.y, box.w, box.h).data;
-    const mk = maskCanvas.getContext('2d').getImageData(0, 0, box.w, box.h).data;
+    const mk = maskPixels(maskCanvas);
     const ke = pre && enhance > 0 ? Math.min(1, enhance) : 0;
     let r = 0, g = 0, b = 0, sat = 0, n = 0;
     for (let i = 0; i < px.length; i += 4) {
@@ -627,7 +680,11 @@ function filteredPatch(ctx, canvas, box, filter, mask, alpha = 1) {
 
 // Mask đa giác (toạ độ px của ảnh) có mép mềm, trong khung box.
 function polyMask(box, pts, feather) {
-    const m = makeCanvas(box.w, box.h);
+    const key = `dg|${khoaHop(box)}|${feather}|${pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';')}`;
+    return nhoMask(key, () => dungPolyMask(box, pts, feather));
+}
+function dungPolyMask(box, pts, feather) {
+    const m = makeMaskCanvas(box.w, box.h);
     const mc = m.getContext('2d');
     mc.filter = `blur(${feather}px)`;
     mc.fillStyle = '#fff';
@@ -688,7 +745,7 @@ function whitenTeeth(canvas, faces, amount, probe = null) {
         if (bb.wPx < 8 || bb.hPx < bb.wPx * 0.08) return; // miệng khép -> không thấy răng
         const box = polyBox(pts, 2, w, h);
         if (box.w < 4 || box.h < 4) return;
-        const mk = polyMask(box, pts, 1).getContext('2d').getImageData(0, 0, box.w, box.h).data;
+        const mk = maskPixels(polyMask(box, pts, 1));
         const px = probePixels(probe, box) || ctx.getImageData(box.x, box.y, box.w, box.h).data;
         const out = new ImageData(box.w, box.h);
         const od = out.data;
@@ -746,7 +803,7 @@ function applyBrows(canvas, faces, amount, probe = null) {
             const feather = Math.max(1, bw * 0.04);
             const box = polyBox(pts, feather * 3, w, h);
             if (box.w < 4 || box.h < 4) return;
-            const mk = polyMask(box, pts, feather).getContext('2d').getImageData(0, 0, box.w, box.h).data;
+            const mk = maskPixels(polyMask(box, pts, feather));
             const px = probePixels(probe, box) || ctx.getImageData(box.x, box.y, box.w, box.h).data;
             // Màu sợi mày = trung bình các điểm tối trong dáng mày.
             const hair = [0, 0, 0];
@@ -970,6 +1027,27 @@ function applyWhiteBalanceAndHighlight(canvas, warmth, amount) {
 // từ đầu (màu da tham chiếu, đo màu môi, dò điểm sáng trong mắt đều lấy ở đó).
 // ---------------------------------------------------------------------------
 
+// Vùng mặt đã đọc của ảnh xem trước, khoá theo nội dung canvas lúc đọc (bên gọi đưa opts.probeKey: ảnh nguồn +
+// cỡ + chấm xoá mụn). Kéo thanh trượt không đổi nội dung đó -> khỏi đọc lại từ card đồ hoạ mỗi lượt. Chỉ nhớ ảnh
+// cỡ xem trước (ảnh gốc to, đọc một lần là xong) và vài ảnh gần nhất.
+const PROBE_NHO_MAX = 6;
+const PROBE_NHO_PX = 2000 * 2000;
+const probeNho = new Map();
+function readFaceRegionNho(canvas, faces, probeKey) {
+    if (!probeKey || canvas.width * canvas.height > PROBE_NHO_PX) return readFaceRegion(canvas, faces);
+    const key = `${probeKey}|${canvas.width}x${canvas.height}|${faces.map(idMat).join(',')}`;
+    if (probeNho.has(key)) {
+        const v = probeNho.get(key);
+        probeNho.delete(key);
+        probeNho.set(key, v);
+        return v;
+    }
+    const v = readFaceRegion(canvas, faces);
+    probeNho.set(key, v);
+    if (probeNho.size > PROBE_NHO_MAX) probeNho.delete(probeNho.keys().next().value);
+    return v;
+}
+
 /** Đọc một lần vùng bao mọi khuôn mặt (ảnh gốc, trước khi chỉnh). */
 function readFaceRegion(canvas, faces) {
     const { width: w, height: h } = canvas;
@@ -1004,7 +1082,7 @@ function probePixels(probe, box) {
 function skinReference(probe, maskSmall, w, h) {
     if (!probe) return null;
     const mw = maskSmall.width, mh = maskSmall.height;
-    const m = maskSmall.getContext('2d').getImageData(0, 0, mw, mh).data;
+    const m = maskPixels(maskSmall);
     let mR = 0, mG = 0, mB = 0, mN = 0;
     const ys = Math.ceil(probe.y / 4) * 4, xs = Math.ceil(probe.x / 4) * 4;
     for (let y = ys; y < probe.y + probe.h; y += 4) {
@@ -1041,7 +1119,7 @@ function colorParams(color) {
     };
 }
 
-function applyLookGPU(gpu, canvas, faces, beauty, makeup, color) {
+function applyLookGPU(gpu, canvas, faces, beauty, makeup, color, probeKey = null) {
     const { width: w, height: h } = canvas;
     const ctx = canvas.getContext('2d');
     const retouch = beauty.retouch ?? beauty.smooth ?? 0;
@@ -1052,7 +1130,7 @@ function applyLookGPU(gpu, canvas, faces, beauty, makeup, color) {
     const blush = faces.length ? buildBlushLayer(w, h, faces, makeup) : null;
     const eye = makeup.eye ?? makeup.eyeBrighten ?? 0;
     const needProbe = faces.length > 0 && (skinOn || eye > 0 || (makeup.lipstick || 0) > 0 || (beauty.teeth || 0) > 0 || (makeup.brows || 0) > 0);
-    const probe = needProbe ? readFaceRegion(canvas, faces) : null;
+    const probe = needProbe ? readFaceRegionNho(canvas, faces, probeKey) : null;
 
     if (skinOn || blush) {
         const mask = skinOn ? buildSkinMaskSmall(w, h, faces) : null;
@@ -1106,6 +1184,7 @@ function scheduleRelease(gpu) {
  *   color:  { saturation, contrast, brightness, warmth, pinkTint, highlight }
  * }
  * opts.gpu = false: ép chạy đường canvas cũ (so sánh / máy có card đồ hoạ chạy sai).
+ * opts.probeKey: chuỗi nhận diện nội dung canvas lúc gọi (cùng chuỗi = cùng điểm ảnh) -> dùng lại vùng mặt đã đọc.
  */
 export function applyLook(canvas, faces, look = {}, opts = {}) {
     const beauty = look.beauty || {};
@@ -1123,7 +1202,7 @@ export function applyLook(canvas, faces, look = {}, opts = {}) {
             backup.getContext('2d').drawImage(canvas, 0, 0);
         }
         try {
-            applyLookGPU(gpu, canvas, faces, beauty, makeup, color);
+            applyLookGPU(gpu, canvas, faces, beauty, makeup, color, opts.probeKey);
             if (canvas.width * canvas.height > GPU_KEEP_PX) scheduleRelease(gpu);
             return;
         } catch (e) {

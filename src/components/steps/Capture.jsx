@@ -5,6 +5,7 @@ import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react';
 import { FirebaseService } from '../../services/FirebaseService';
 import { demSuKien, ghiLoi, ghiThoiGian } from '../../utils/doMuot';
+import { latGuongAnh } from '../../utils/latAnh';
 
 // Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
 // lại overlay "Đang khởi động camera" mỗi lần chụp lại (Capture remount nhưng live view vẫn chạy).
@@ -21,41 +22,6 @@ const releaseReplacedPhoto = (oldPhoto, newPhotos) => {
         if (typeof u === 'string' && u.startsWith('blob:') && !stillUsed(u)) {
             try { URL.revokeObjectURL(u); } catch { /* ignore */ }
         }
-    });
-};
-
-const mirrorImage = async (imageUrl) => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                
-                // Flip horizontally
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
-                ctx.drawImage(img, 0, 0);
-                
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const localUrl = URL.createObjectURL(blob);
-                        resolve(localUrl);
-                    } else {
-                        reject(new Error("Failed to create blob"));
-                    }
-                }, 'image/jpeg', 0.95);
-            } catch (err) {
-                reject(err);
-            }
-        };
-        img.onerror = (err) => {
-            reject(err);
-        };
-        img.src = imageUrl;
     });
 };
 
@@ -646,6 +612,7 @@ const Capture = () => {
                 try {
                     const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`, { signal: ctrl.signal });
                     data = await res.json();
+                    ghiThoiGian('chup_may', performance.now() - batDauChup); // phần của máy ảnh + middleware
                 } finally {
                     clearTimeout(abortTimer);
                 }
@@ -656,7 +623,9 @@ const Capture = () => {
 
                     let finalUrl = url;
                     try {
-                        finalUrl = await mirrorImage(url);
+                        const batDauLat = performance.now();
+                        finalUrl = await latGuongAnh(url);
+                        ghiThoiGian('lat_anh', performance.now() - batDauLat);
                         console.log("📷 [Capture] Mirrored Canon Photo:", finalUrl);
                     } catch (mirrorError) {
                         console.error("Failed to mirror Canon photo, using original:", mirrorError);
@@ -725,7 +694,9 @@ const Capture = () => {
 
                     let finalUrl = url;
                     try {
-                        finalUrl = await mirrorImage(url);
+                        const batDauLat = performance.now();
+                        finalUrl = await latGuongAnh(url);
+                        ghiThoiGian('lat_anh', performance.now() - batDauLat);
                         console.log("🔥 [Capture] Mirrored Hot Folder Photo:", finalUrl);
                     } catch (mirrorError) {
                         console.error("Failed to mirror Hot Folder photo, using original:", mirrorError);

@@ -15,7 +15,7 @@ const TEN_CHANG = {
 };
 const THU_TU_CHANG = Object.keys(TEN_CHANG);
 const TEN_CHO = [
-    ['chup', 'Chụp → hiện ảnh'], ['tao_qr', 'Tạo mã QR'], ['ghep', 'Ghép ảnh'], ['gui_in', 'Gửi lệnh in'],
+    ['chup', 'Chụp → hiện ảnh'], ['chup_may', '· máy ảnh chụp + gửi ảnh'], ['lat_anh', '· lật gương ảnh'], ['tao_qr', 'Tạo mã QR'], ['ghep', 'Ghép ảnh'], ['gui_in', 'Gửi lệnh in'],
     ['den_qr', 'Bấm In → lưu lượt'], ['luu', 'Lưu lượt'], ['tai_nen', 'Tải ảnh gốc'], ['tach_nen', 'Tách nền ảnh thẻ'],
     ['mat_hinh', 'Máy ảnh mất hình'],
 ];

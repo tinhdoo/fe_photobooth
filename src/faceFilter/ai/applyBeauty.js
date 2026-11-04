@@ -5,7 +5,7 @@ import { getFaceLandmarker, MAX_FACES } from '../engine/faceLandmarkerClient.js'
 import { loadAsset } from '../engine/stickerRenderer.js';
 import { buildFaceGeometry, selectFaces } from './geometry.js';
 import { renderAIFilter } from './aiPipeline.js';
-import { applyLookFaces, healSpots } from './lookStage.js';
+import { applyLookFaces, healSpots, maDoiTuong } from './lookStage.js';
 import { faceLook } from './photoEditState.js';
 import { buildSculptPrimitives, hasSculpt } from './sculpt.js';
 import { getWarpEngine } from './warpEngine.js';
@@ -118,7 +118,9 @@ export function renderEdit(source, faces, edit, width, height) {
     const draw = (c) => { c.drawImage(source, 0, 0, width, height); healSpots(c.canvas, spots); };
     draw(ctx);
     const looks = faces.map((_, i) => faceLook(edit, i));
-    applyLookFaces(canvas, faces, looks, edit?.color || {}, { restore: draw });
+    // Nội dung canvas lúc này = ảnh nguồn + chấm xoá mụn -> khoá để dùng lại vùng mặt đã đọc khi chỉ kéo thanh trượt.
+    const probeKey = `${maDoiTuong(source)}|${JSON.stringify(spots)}`;
+    applyLookFaces(canvas, faces, looks, edit?.color || {}, { restore: draw, probeKey });
     if (faces.length && hasSculpt(looks)) {
         try {
             // Card yếu chứa được ít primitive mỗi lượt (có thể chỉ 4) -> chia theo mặt thành nhiều lượt, để không
