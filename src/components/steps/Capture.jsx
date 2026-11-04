@@ -6,6 +6,15 @@ import { Camera } from 'lucide-react';
 import { FirebaseService } from '../../services/FirebaseService';
 import { demSuKien, ghiLoi, ghiThoiGian } from '../../utils/doMuot';
 import { latGuongAnh } from '../../utils/latAnh';
+import { NhanRemote } from '../remote/BoothRemote';
+import { guiRemote, ngheRemote, useKetNoiRemote } from '../../remote/remoteBooth';
+
+// BẤM CHỤP BẰNG ĐIỆN THOẠI (src/remote/): điện thoại đã nối thì mỗi ảnh CHỜ khách bấm (điện thoại hoặc chạm màn
+// hình) và chụp NGAY khi bấm, không đếm ngược. Chờ quá CHO_BAM_MAX_S (hoặc giờ chặng không còn đủ cho số ảnh còn
+// lại) thì tự đếm ngược như thường; mất kết nối điện thoại thì tự chụp sau CHO_KHI_MAT_S.
+const CHO_BAM_MAX_S = 15;
+const CHO_KHI_MAT_S = 5;
+const QUAY_LAI_SAU_MS = 6000; // motion: đang chờ bấm lâu thì quay lại từ đầu (clip ≤ 6 s; bấm ngay sau lúc quay lại thì clip ngắn — chấp nhận, đỡ tốn CPU hơn 2 bộ quay)
 
 // Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
 // lại overlay "Đang khởi động camera" mỗi lần chụp lại (Capture remount nhưng live view vẫn chạy).
@@ -106,6 +115,18 @@ const Capture = () => {
     // chạm chụp lại giữa chừng (nếu không, ô kế vẫn tự bắt đầu chồng lên lượt chụp lại).
     const advanceTimersRef = useRef([]);
 
+    // Chờ khách bấm (điện thoại đã nối) — xem CHO_BAM_MAX_S.
+    const ketNoiRemote = useKetNoiRemote();       // 'chua' | 'on' | 'lost'
+    const [choBam, setChoBam] = useState(false);
+    const [tuChupSau, setTuChupSau] = useState(null);
+    const choBamRef = useRef(false);
+    const hanChoRef = useRef(0);                  // mốc (ms) tự chụp nếu chưa bấm
+    const nhipChoRef = useRef(null);
+    const batDauQuayRef = useRef(0);
+    const quayLaiRef = useRef(null);              // promise đang quay lại motion (chờ xong mới dừng hẳn)
+    const timeLeftRef = useRef(timeLeft);
+    timeLeftRef.current = timeLeft;
+
     useEffect(() => {
         shutterAudioRef.current = new Audio('/shutter.mp3');
         shutterAudioRef.current.preload = 'auto';
@@ -127,6 +148,7 @@ const Capture = () => {
             // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
             // Set src='' với MJPEG nhiều khi không ngắt kết nối -> tích tụ tới trần ~6/host -> đơ.
             const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+            if (nhipChoRef.current) clearInterval(nhipChoRef.current);
             // Huỷ các timer chuyển ô/sang bước còn treo -> tránh startCountdown/nextStep chạy sau khi rời bước.
             try { advanceTimersRef.current.forEach((t) => clearTimeout(t)); advanceTimersRef.current = []; } catch (e) { /* ignore */ }
             try { stopCanonDraw(); } catch (e) { /* ignore */ }
@@ -289,6 +311,7 @@ const Capture = () => {
         if (timedOut) {
             console.log("Session Timeout in Capture Step - Force Proceed...");
             // Stop any ongoing countdown/capture
+            thoatChoBam();
             setIsShooting(false);
             setCountdown(null);
 
@@ -484,7 +507,7 @@ const Capture = () => {
         const canonNeedsFrame = cameraMode === 'canon' && !hasLiveFrame;
 
         if (cameraReady && !canonNeedsFrame && (needsRetake || needsMorePhotos)) {
-            startCountdown();
+            batDauLuotRef.current();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraReady, hasLiveFrame]); // thêm hasLiveFrame: có hình đầu tiên (canon) -> mở đếm ngược
@@ -498,6 +521,101 @@ const Capture = () => {
         // getEffectiveCountdown() + 1: thêm 1s buffer để motion video có đủ thời gian quay
         setCountdown(getEffectiveCountdown() + 1);
     };
+
+    // --- Chờ khách bấm (điện thoại) ---
+    const thoatChoBam = () => {
+        choBamRef.current = false;
+        setChoBam(false);
+        setTuChupSau(null);
+        if (nhipChoRef.current) { clearInterval(nhipChoRef.current); nhipChoRef.current = null; }
+    };
+    // Đang chờ lâu: bỏ đoạn motion cũ, quay lại từ đầu (clip chỉ là vài giây ngay trước lúc bấm).
+    const lamMoiQuay = () => {
+        if (quayLaiRef.current) return;
+        quayLaiRef.current = stopRecording()
+            .then((u) => {
+                if (u) { try { URL.revokeObjectURL(u); } catch { /* bỏ qua */ } }
+                if (choBamRef.current && mountedRef.current) { startRecording(); batDauQuayRef.current = Date.now(); }
+            })
+            .finally(() => { quayLaiRef.current = null; });
+    };
+    // Hết giờ chờ -> tự chụp bằng đếm ngược như thường (đếm ngược tự quay motion lại từ đầu).
+    const hetChoBam = async () => {
+        if (!choBamRef.current) return;
+        thoatChoBam();
+        if (quayLaiRef.current) await quayLaiRef.current;
+        const u = await stopRecording();
+        if (u) { try { URL.revokeObjectURL(u); } catch { /* bỏ qua */ } }
+        if (mountedRef.current) startCountdown();
+    };
+    const vaoChoBam = () => {
+        // Đủ giờ cho các ảnh còn lại (mỗi ảnh ~ đếm ngược + 5 s chụp/xem) rồi mới cho chờ; thiếu thì đếm ngược luôn.
+        const conAnh = isRetakeMode ? 1 : Math.max(1, TOTAL_PHOTOS - photosTaken.length);
+        const du = timeLeftRef.current - conAnh * (getEffectiveCountdown() + 5);
+        const han = Math.min(CHO_BAM_MAX_S, du);
+        if (!(han > 3)) { startCountdown(); return; }
+        shootingRef.current = false;
+        setLatestPhoto(null);
+        setCountdown(null);
+        choBamRef.current = true;
+        setChoBam(true);
+        hanChoRef.current = Date.now() + han * 1000;
+        setTuChupSau(Math.ceil(han));
+        startRecording();
+        batDauQuayRef.current = Date.now();
+        if (nhipChoRef.current) clearInterval(nhipChoRef.current);
+        nhipChoRef.current = setInterval(() => {
+            if (!choBamRef.current) return;
+            const now = Date.now();
+            const con = Math.ceil((hanChoRef.current - now) / 1000);
+            setTuChupSau(Math.max(0, con));
+            if (con <= 0) { hetChoBam(); return; }
+            if (now - batDauQuayRef.current > QUAY_LAI_SAU_MS) lamMoiQuay();
+        }, 1000);
+    };
+    // Khách bấm (điện thoại / chạm màn hình) lúc đang chờ -> chụp ngay.
+    const bamChup = async () => {
+        if (!choBamRef.current || shootingRef.current) return;
+        thoatChoBam();
+        if (quayLaiRef.current) await quayLaiRef.current;
+        if (mountedRef.current) takePhoto();
+    };
+    // Mỗi ảnh bắt đầu ở đây: điện thoại đang nối -> chờ bấm; không thì đếm ngược như cũ.
+    const batDauLuot = () => {
+        if (ketNoiRemote === 'on') vaoChoBam();
+        else startCountdown();
+    };
+    // Hàm gọi từ timer / sự kiện phải là bản mới nhất (state trong closure).
+    const batDauLuotRef = useRef(batDauLuot);
+    batDauLuotRef.current = batDauLuot;
+    const bamChupRef = useRef(bamChup);
+    bamChupRef.current = bamChup;
+
+    useEffect(() => ngheRemote((loai) => {
+        if (loai === 'chup') bamChupRef.current();
+        else if (loai === 'mat' && choBamRef.current) {
+            // Mất điện thoại giữa lúc chờ: không chờ khách bấm nữa, tự chụp sớm.
+            hanChoRef.current = Math.min(hanChoRef.current, Date.now() + CHO_KHI_MAT_S * 1000);
+            setTuChupSau(CHO_KHI_MAT_S);
+        }
+    }), []);
+
+    // Gửi trạng thái cho điện thoại (không có phiên thì guiRemote bỏ qua).
+    const trangThaiRemote = choBam ? 'cho_bam' : (countdown !== null && countdown > 0 ? 'dem_nguoc' : 'dang_chup');
+    useEffect(() => {
+        guiRemote({
+            buoc: 'chup',
+            trangThai: trangThaiRemote,
+            tongAnh: TOTAL_PHOTOS,
+            daChup: photosTaken.filter(Boolean).length,
+            anhHienTai: isRetakeMode ? sessionData.retakeIndex + 1 : Math.min(photosTaken.length + 1, TOTAL_PHOTOS),
+            demNguoc: countdown || 0,
+            tuChupSau: choBam ? tuChupSau : null,
+            conLai: timeLeftRef.current,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [trangThaiRemote, countdown, tuChupSau, photosTaken.length, TOTAL_PHOTOS]);
+    useEffect(() => { guiRemote({ conLai: timeLeft }, { im: true }); }, [timeLeft]);
 
     useEffect(() => {
         if (countdown === null) return;
@@ -531,7 +649,7 @@ const Capture = () => {
             setIsShooting(false);
             const t2 = setTimeout(() => {
                 if (!mountedRef.current) return;
-                if (count < TOTAL_PHOTOS) startCountdown();
+                if (count < TOTAL_PHOTOS) batDauLuotRef.current();
                 else nextStep();
             }, count < TOTAL_PHOTOS ? 2000 : 1500);
             advanceTimersRef.current.push(t2);
@@ -597,6 +715,7 @@ const Capture = () => {
                 // Dừng quay motion TRƯỚC khi /capture (lệnh này tạm dừng liveview để chụp).
                 let videoUrl = null;
                 try {
+                    if (quayLaiRef.current) await quayLaiRef.current;
                     videoUrl = await stopRecording();
                     console.log("🎥 [Motion] Canon motion captured:", videoUrl);
                 } catch (motionErr) {
@@ -664,7 +783,7 @@ const Capture = () => {
                 // từ Review). Lỗi hiện lặp lại (không kẹt cứng) để nhân viên biết mà xử lý. Đẩy timer vào
                 // advanceTimersRef để rời bước giữa lúc chờ vẫn huỷ được.
                 if (isRetakeMode || photosTaken.length < TOTAL_PHOTOS) {
-                    const rt = setTimeout(() => { if (mountedRef.current) startCountdown(); }, 3500);
+                    const rt = setTimeout(() => { if (mountedRef.current) batDauLuotRef.current(); }, 3500);
                     advanceTimersRef.current.push(rt);
                 }
             }
@@ -883,6 +1002,23 @@ const Capture = () => {
                         />
                     )}
 
+
+                    {/* Điện thoại đang điều khiển: nhãn ở mép trên + lời nhắc ở đáy (không che mặt). Đang chờ bấm thì
+                        chạm vào khung hình cũng chụp. */}
+                    {ketNoiRemote !== 'chua' && cameraReady && !latestPhoto && !cameraError && (
+                        <NhanRemote
+                            trangThai={ketNoiRemote === 'lost' ? 'mat_ket_noi' : choBam ? 'cho_bam' : 'dem_nguoc'}
+                            tuChupSau={choBam ? tuChupSau : null}
+                        />
+                    )}
+                    {choBam && (
+                        <button
+                            type="button"
+                            aria-label="Chụp"
+                            onClick={() => bamChupRef.current()}
+                            className="absolute inset-0 z-30 cursor-pointer bg-transparent"
+                        />
+                    )}
 
                     {/* Countdown Overlay - Centered Thin Circle */}
                     <AnimatePresence>

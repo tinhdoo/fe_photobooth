@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle, IdCard, Gauge, ChevronDown } from 'lucide-react';
+import { Monitor, Zap, DollarSign, RefreshCw, Edit2, Check, X, Trash2, AlertTriangle, IdCard, Gauge, ChevronDown, Smartphone } from 'lucide-react';
 import { isSupabaseBrowserConfigured, supabase } from '../../services/supabaseClient';
 import { authHeader } from '../../utils/auth';
 
@@ -22,7 +22,7 @@ const TEN_CHO = [
 const TEN_LOI = {
     chup_loi: 'Chụp lỗi', mat_hinh_lau: 'Máy ảnh mất hình > 20 s', qr_loi: 'Tạo QR lỗi', in_loi: 'In lỗi',
     luu_loi: 'Lưu album lỗi', ghep_loi: 'Ghép ảnh lỗi', tach_nen_loi: 'Tách nền lỗi', xu_ly_loi: 'Xử lý ảnh lỗi',
-    sap_giao_dien: 'Giao diện sập', tai_chunk: 'Tải trang lỗi', js: 'Lỗi JavaScript',
+    remote_loi: 'Không mở được điều khiển bằng điện thoại', sap_giao_dien: 'Giao diện sập', tai_chunk: 'Tải trang lỗi', js: 'Lỗi JavaScript',
 };
 // Độ trễ chạm là ngưỡng trên của ô biểu đồ; > 2000 = ô cuối (lâu hơn 2 s).
 const mili = (ms) => (ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} s`);
@@ -237,14 +237,17 @@ const DeviceManager = () => {
     };
 
     // Ảnh thẻ bật riêng từng máy (máy có máy không). Máy nhận trong <= 60 s, hoặc ngay nếu đang nghe realtime.
+    // Điều khiển bằng điện thoại (remote_dt) bật cùng cách. Máy cần booth >= 0.0.33.
     const [savingIdPhoto, setSavingIdPhoto] = useState(null);
-    const toggleIdPhoto = async (device) => {
-        setSavingIdPhoto(device.id);
+    const toggleFeature = async (device, key) => {
+        setSavingIdPhoto(`${device.id}:${key}`);
         try {
-            const res = await axios.put('/api/devices', { id: device.id, id_photo: !device.id_photo }, { headers: authHeader() });
-            setDevices((prev) => prev.map((d) => (d.id === device.id ? { ...d, id_photo: res.data?.id_photo === true } : d)));
+            const res = await axios.put('/api/devices', { id: device.id, [key]: !device[key] }, { headers: authHeader() });
+            setDevices((prev) => prev.map((d) => (d.id === device.id
+                ? { ...d, id_photo: res.data?.id_photo === true, remote_dt: res.data?.remote_dt === true }
+                : d)));
         } catch (error) {
-            console.error("Failed to update id_photo:", error);
+            console.error(`Failed to update ${key}:`, error);
         } finally {
             setSavingIdPhoto(null);
         }
@@ -388,14 +391,24 @@ const DeviceManager = () => {
 
                         <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
                             <button
-                                onClick={() => toggleIdPhoto(device)}
-                                disabled={savingIdPhoto === device.id}
+                                onClick={() => toggleFeature(device, 'id_photo')}
+                                disabled={savingIdPhoto === `${device.id}:id_photo`}
                                 className={`w-full py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 border disabled:opacity-50 ${device.id_photo
                                     ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                                     : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
                                     }`}
                             >
                                 <IdCard size={16} /> Ảnh thẻ: {device.id_photo ? 'Đang bật' : 'Đang tắt'}
+                            </button>
+                            <button
+                                onClick={() => toggleFeature(device, 'remote_dt')}
+                                disabled={savingIdPhoto === `${device.id}:remote_dt`}
+                                className={`w-full py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 border disabled:opacity-50 ${device.remote_dt
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                    }`}
+                            >
+                                <Smartphone size={16} /> Bấm chụp bằng điện thoại: {device.remote_dt ? 'Đang bật' : 'Đang tắt'}
                             </button>
                             <button
                                 onClick={() => toggleMode(device)}

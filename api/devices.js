@@ -4,12 +4,14 @@ import { requireActiveAdmin } from '../lib/auth.js';
 // Tính năng bật RIÊNG từng máy (máy có máy không), lưu ở app_configs key='device_features' (JSON, không đổi
 // schema) dạng { [device_id]: { id_photo: true } }. Nhịp tim trả về cho booth; admin bật/tắt ở trang Thiết bị.
 //   id_photo: hiện lựa chọn "Ảnh thẻ" ở màn chọn chế độ. Mặc định TẮT (máy không có thì bỏ luôn màn chọn chế độ).
+//   remote_dt: màn Chuẩn bị hiện QR để khách bấm chụp bằng điện thoại (src/remote/). Mặc định TẮT.
 async function readFeatures(supabase) {
     const { data } = await supabase
         .from('app_configs').select('config').eq('key', 'device_features').maybeSingle();
     return (data?.config && typeof data.config === 'object' && !Array.isArray(data.config)) ? data.config : {};
 }
 const idPhotoOf = (features, deviceId) => features?.[deviceId]?.id_photo === true;
+const remoteOf = (features, deviceId) => features?.[deviceId]?.remote_dt === true;
 
 // Độ mượt từng máy: gộp meta_data.do_muot của các lượt N ngày gần nhất (booth >= 0.0.32, src/utils/doMuot.js).
 // Độ trễ chạm gửi lên dạng biểu đồ tần suất theo ROI_TRE (phải khớp doMuot.js) -> cộng dồn chính xác giữa các lượt.
@@ -232,6 +234,7 @@ export default async function handler(req, res) {
             return json(res, 200, {
                 ...data,
                 id_photo: idPhotoOf(features, deviceId),
+                remote_dt: remoteOf(features, deviceId),
                 mode: data.mode || 'payment',
                 name: data.name || `Máy ${deviceId.slice(-6).toUpperCase()}`,
             });
@@ -260,6 +263,10 @@ export default async function handler(req, res) {
             if (idPhoto !== undefined && typeof idPhoto !== 'boolean') {
                 return json(res, 400, { error: 'Invalid id_photo' });
             }
+            const remoteDt = req.body?.remote_dt;
+            if (remoteDt !== undefined && typeof remoteDt !== 'boolean') {
+                return json(res, 400, { error: 'Invalid remote_dt' });
+            }
 
             if (hasName) updates.name = req.body.name.trim();
             if (typeof mode === 'string') updates.mode = mode;
@@ -274,9 +281,14 @@ export default async function handler(req, res) {
             if (error) throw error;
 
             let features = null;
-            if (typeof idPhoto === 'boolean') {
+            if (typeof idPhoto === 'boolean' || typeof remoteDt === 'boolean') {
                 features = await readFeatures(supabase);
-                features[data.device_id] = { ...(features[data.device_id] || {}), id_photo: idPhoto };
+                const cu = features[data.device_id] || {};
+                features[data.device_id] = {
+                    ...cu,
+                    ...(typeof idPhoto === 'boolean' ? { id_photo: idPhoto } : {}),
+                    ...(typeof remoteDt === 'boolean' ? { remote_dt: remoteDt } : {}),
+                };
                 const { error: fErr } = await supabase.from('app_configs').upsert(
                     { key: 'device_features', config: features, updated_at: new Date().toISOString() },
                     { onConflict: 'key' }
@@ -285,7 +297,7 @@ export default async function handler(req, res) {
             } else {
                 try { features = await readFeatures(supabase); } catch { features = {}; }
             }
-            return json(res, 200, { ...data, id_photo: idPhotoOf(features, data.device_id) });
+            return json(res, 200, { ...data, id_photo: idPhotoOf(features, data.device_id), remote_dt: remoteOf(features, data.device_id) });
         }
 
         if (req.method === 'DELETE') {
@@ -336,6 +348,7 @@ export default async function handler(req, res) {
         const list = (Array.isArray(data) ? data : []).map((d) => ({
             ...d,
             id_photo: idPhotoOf(features, d.device_id),
+            remote_dt: remoteOf(features, d.device_id),
             report: reports[d.device_id] || null,
             machines: machinesAll[d.device_id] || null,
         }));

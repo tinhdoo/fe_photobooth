@@ -359,13 +359,22 @@ export const WorkflowProvider = ({ children }) => {
             return false;
         }
     });
+    // Điều khiển máy ảnh bằng điện thoại: bật riêng từng máy như Ảnh thẻ (device_features.remote_dt). Tắt -> màn
+    // Chuẩn bị / Chụp như cũ.
+    const [remoteOn, setRemoteOn] = useState(() => {
+        try {
+            return localStorage.getItem('REMOTE_DT_CLOUD') === 'true';
+        } catch {
+            return false;
+        }
+    });
     // Lưu id (numeric) bản ghi thiết bị trên CLOUD -> để nút gạt Event/Payment ghi bền lên cloud.
     const cloudDeviceIdRef = useRef(null);
 
     // Device Management
     useEffect(() => {
         // Only run device heartbeat for Photobooth and Admin, not public viewers/uploaders
-        const ignorePaths = ['/album/', '/m/upload/'];
+        const ignorePaths = ['/album/', '/m/upload/', '/r/'];
         if (ignorePaths.some(p => window.location.pathname.startsWith(p))) {
             return;
         }
@@ -406,6 +415,15 @@ export const WorkflowProvider = ({ children }) => {
                 // bỏ qua (private mode / đầy bộ nhớ)
             }
             setIdPhotoOn((prev) => (prev === on ? prev : on));
+        };
+        const applyRemote = (on) => {
+            if (typeof on !== 'boolean') return;
+            try {
+                localStorage.setItem('REMOTE_DT_CLOUD', on ? 'true' : 'false');
+            } catch {
+                // bỏ qua
+            }
+            setRemoteOn((prev) => (prev === on ? prev : on));
         };
 
         const syncDevice = async () => {
@@ -468,6 +486,7 @@ export const WorkflowProvider = ({ children }) => {
                         if (data.id) cloudDeviceIdRef.current = data.id;
                         applyDeviceMode(data.mode, true);
                         applyIdPhoto(data.id_photo);
+                        applyRemote(data.remote_dt);
                     }
                 } catch (error) {
                     console.warn("Cloud device sync failed:", error);
@@ -510,6 +529,7 @@ export const WorkflowProvider = ({ children }) => {
                         const all = payload.new?.config;
                         if (!all || typeof all !== 'object') return;
                         applyIdPhoto(all[currentDeviceId]?.id_photo === true);
+                        applyRemote(all[currentDeviceId]?.remote_dt === true);
                     }
                 )
                 .subscribe();
@@ -743,7 +763,7 @@ export const WorkflowProvider = ({ children }) => {
     // và các chế độ camera khác 'canon'.
     useEffect(() => {
         const path = typeof window !== 'undefined' ? window.location.pathname : '';
-        if (['/album/', '/m/upload/'].some((p) => path.startsWith(p))) return;
+        if (['/album/', '/m/upload/', '/r/'].some((p) => path.startsWith(p))) return;
         if ((configs.camera_mode || 'canon') !== 'canon') return;
 
         // Nguồn 'upload' (ảnh từ điện thoại) KHÔNG dùng máy ảnh booth -> luôn tắt LV.
@@ -876,6 +896,7 @@ export const WorkflowProvider = ({ children }) => {
                 isSessionActive,
                 photoEditOn,
                 idPhotoOn,
+                remoteOn,
                 timedOut,
                 savingBeforeReset,
                 idleWarning,

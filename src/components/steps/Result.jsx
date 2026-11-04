@@ -6,6 +6,7 @@ import Payment from './Payment';
 import { luaChonInThem, guiLenhInThem, ghiLuotInThem } from '../../utils/inThem';
 
 import { CLOUD_API_URL } from '../../config/api';
+import { guiRemote } from '../../remote/remoteBooth';
 
 const AUTO_HOME_MS = 5 * 60 * 1000; // 5 phút không ai chạm
 const TRAN_MS = 15 * 60 * 1000; // trần tuyệt đối ở màn QR / màn lỗi (màn cảm ứng chạm ma vẫn về trang chủ)
@@ -63,6 +64,9 @@ const Result = () => {
             const albumBaseUrl = CLOUD_API_URL || window.location.origin;
             setViewUrl(`${albumBaseUrl}/album/${sessionId}`);
         };
+        // Điện thoại đang điều khiển (nếu có): báo xong lượt + MÃ album (đã lưu cloud xong mới có sessionId) -> điện
+        // thoại tự chuyển sang album. Không có mã (lưu lỗi) thì điện thoại nhắc quét QR trên màn booth.
+        guiRemote({ buoc: 'het_luot', tuChupSau: null, albumId: sessionId || null });
         fetchViewUrl();
     }, [sessionId, finalImage]);
 

@@ -5,6 +5,7 @@ import MainLayout from './layouts/MainLayout';
 import { isLocalHost } from './utils/runtime';
 import { isAuthenticated as checkAuth, isStaffRole } from './utils/auth';
 import { batDo, datBuoc, ghiLoi } from './utils/doMuot';
+import { guiRemote } from './remote/remoteBooth';
 
 import Welcome from './components/steps/Welcome';
 import LayoutSelection from './components/steps/LayoutSelection';
@@ -63,6 +64,7 @@ const preloadStepChunks = () => {
 };
 
 const ViewPage = lazy(() => import('./pages/ViewPage'));
+const RemotePage = lazy(() => import('./pages/RemotePage')); // điện thoại khách bấm chụp (remote/)
 const FaceFilterDemo = lazy(() => import('./pages/FaceFilterDemo'));
 const AIFilterDemo = lazy(() => import('./pages/AIFilterDemo'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
@@ -134,6 +136,14 @@ const StepContent = () => {
     useEffect(() => {
         batDo();
         datBuoc(currentStep);
+        // Điện thoại đang điều khiển (nếu có) biết khách đang ở bước nào. Chuẩn bị / Chụp / Kết quả tự gửi chi tiết.
+        const LOI_NHAN = {
+            5: 'Chọn ảnh trên màn hình booth',
+            5.5: 'Chỉnh ảnh trên màn hình booth',
+            6: 'Chọn khung trên màn hình booth',
+            8: 'Chọn ảnh thẻ trên màn hình booth',
+        };
+        if (LOI_NHAN[currentStep]) guiRemote({ buoc: 'tiep_tuc', loiNhan: LOI_NHAN[currentStep], tuChupSau: null, demNguoc: 0 });
     }, [currentStep]);
 
     switch (currentStep) {
@@ -247,6 +257,7 @@ const App = () => {
                         <Route path="/face-filter" element={<FaceFilterDemo />} />
                         <Route path="/ai-filter" element={<AIFilterDemo />} />
                         <Route path="/album/:id" element={<ViewPage />} />
+                        <Route path="/r/:ma" element={<RemotePage />} />
                         <Route path="/admin/login" element={<AdminLogin />} />
                         <Route
                             path="/admin"
