@@ -4,6 +4,7 @@ import { useWorkflow } from '../../context/WorkflowContext';
 import { LAYOUTS } from '../../data/layouts';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentPricing } from '../../utils/pricing';
+import { docGhiChuBoCuc } from '../../utils/ghiChuBoCuc';
 
 const layoutIconUrls = Object.fromEntries(
     Object.entries(import.meta.glob('../../assets/icons/*', { eager: true, query: '?url', import: 'default' }))
@@ -18,6 +19,7 @@ const LayoutSelection = () => {
     const layoutPrice = isUploadFlow ? pricing.mobile_price : pricing.price;
     const primaryTextColor = configs?.brand_text_primary || '#7B5E43';
     const secondaryTextColor = configs?.brand_text_secondary || '#5E6B78';
+    const ghiChu = docGhiChuBoCuc(configs?.layout_notes);
 
     const handleSelect = (layout) => {
         updateSessionData('layout', layout);
@@ -147,6 +149,11 @@ const LayoutSelection = () => {
                                 <p className="text-sm font-sans font-medium uppercase tracking-wider whitespace-nowrap" style={{ color: secondaryTextColor }}>
                                     {layoutPrice.toLocaleString('vi-VN')} VNĐ
                                 </p>
+                                {String(ghiChu[layout.id] || '').trim() && (
+                                    <p className="line-clamp-2 text-sm font-sans leading-snug" style={{ color: secondaryTextColor }}>
+                                        {String(ghiChu[layout.id]).trim()}
+                                    </p>
+                                )}
                             </div>
                         </motion.div>
                     ))}

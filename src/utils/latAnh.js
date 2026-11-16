@@ -30,7 +30,12 @@ function layWorker() {
         if (!viec) return;
         dangCho.delete(data.id);
         clearTimeout(viec.hen);
-        if (data.blob) viec.resolve(URL.createObjectURL(data.blob));
+        if (data.blob) {
+            viec.resolve({
+                url: URL.createObjectURL(data.blob),
+                xem: Object.fromEntries((data.xem || []).map((x) => [x.canh, URL.createObjectURL(x.blob)])),
+            });
+        }
         else viec.reject(new Error(data.loi || 'Worker lật ảnh lỗi'));
     };
     worker.onerror = (ev) => {
@@ -45,7 +50,7 @@ function layWorker() {
     return worker;
 }
 
-function latTrongWorker(url) {
+function latTrongWorker(url, xem) {
     const w = layWorker();
     if (!w) return Promise.reject(new Error('Không có worker'));
     return new Promise((resolve, reject) => {
@@ -57,7 +62,7 @@ function latTrongWorker(url) {
         }, WORKER_QUA_GIO_MS);
         dangCho.set(id, { resolve, reject, hen });
         // URL tương đối phải đổi sang tuyệt đối: trong worker nó tính theo địa chỉ file worker.
-        w.postMessage({ id, url: new URL(url, window.location.href).href, quality: QUALITY });
+        w.postMessage({ id, url: new URL(url, window.location.href).href, quality: QUALITY, xem });
     });
 }
 
@@ -88,12 +93,18 @@ export function latTrenGiaoDien(imageUrl) {
     });
 }
 
-/** Lật gương ảnh -> objectURL JPEG. Lỗi thì ném ra (bên gọi giữ ảnh gốc như trước). */
-export async function latGuongAnh(imageUrl) {
+/** Lật gương ảnh -> { url: objectURL JPEG cỡ gốc, xem: { [cạnh dài]: objectURL bản nhỏ } }. Bản nhỏ chỉ có khi lật
+ *  trong worker (cách cũ thì xem = {}, bên gọi tự dùng ảnh gốc). Lỗi thì ném ra (bên gọi giữ ảnh gốc như trước). */
+export async function latGuongAnhKemXem(imageUrl, xem = []) {
     try {
-        return await latTrongWorker(imageUrl);
+        return await latTrongWorker(imageUrl, xem);
     } catch (e) {
         if (!hong) console.warn('[latAnh] Lật trong worker lỗi, làm lại ở luồng giao diện:', e?.message || e);
-        return latTrenGiaoDien(imageUrl);
+        return { url: await latTrenGiaoDien(imageUrl), xem: {} };
     }
+}
+
+/** Lật gương ảnh -> objectURL JPEG cỡ gốc. */
+export async function latGuongAnh(imageUrl) {
+    return (await latGuongAnhKemXem(imageUrl)).url;
 }

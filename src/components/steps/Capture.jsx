@@ -5,7 +5,7 @@ import { CameraService } from '../../services/CameraService';
 import { Camera } from 'lucide-react';
 import { FirebaseService } from '../../services/FirebaseService';
 import { demSuKien, ghiLoi, ghiThoiGian } from '../../utils/doMuot';
-import { latGuongAnh } from '../../utils/latAnh';
+import { latGuongAnhKemXem } from '../../utils/latAnh';
 import { NhanRemote } from '../remote/BoothRemote';
 import { guiRemote, ngheRemote, useKetNoiRemote } from '../../remote/remoteBooth';
 
@@ -15,6 +15,13 @@ import { guiRemote, ngheRemote, useKetNoiRemote } from '../../remote/remoteBooth
 const CHO_BAM_MAX_S = 15;
 const CHO_KHI_MAT_S = 5;
 const QUAY_LAI_SAU_MS = 6000; // motion: đang chờ bấm lâu thì quay lại từ đầu (clip ≤ 6 s; bấm ngay sau lúc quay lại thì clip ngắn — chấp nhận, đỡ tốn CPU hơn 2 bộ quay)
+// Màn Chụp chỉ hiện bản nhỏ của ảnh vừa chụp (ảnh Canon 24 MP hiện thẳng làm khựng 200-400 ms mỗi tấm, 9 ô dưới
+// mỗi ô giải mã nguyên 24 MP). Ảnh gốc cỡ đầy đủ vẫn đi tiếp xuống Chọn ảnh / in / album.
+const CANH_XEM = 1920;
+const CANH_O = 320;
+const CHO_HINH_MOI_MS = 4000;  // chờ live view chạy lại sau lần chụp trước, quá thì vẫn mở nút
+const THU_LAI_BAN_LAN = 3;     // máy báo bận thì thử lại tối đa 3 lần...
+const THU_LAI_BAN_MS = 800;    // ...cách nhau 0,8 s (mỗi lần middleware còn tốn thêm ~0,7 s)
 
 // Cờ cấp module: camera đã sẵn sàng ít nhất 1 lần trong phiên chạy app. Dùng để KHÔNG hiện
 // lại overlay "Đang khởi động camera" mỗi lần chụp lại (Capture remount nhưng live view vẫn chạy).
@@ -43,6 +50,7 @@ const Capture = () => {
     const [isShooting, setIsShooting] = useState(false);
     const [flash, setFlash] = useState(false);
     const [latestPhoto, setLatestPhoto] = useState(null);
+    const xemRef = useRef(new Map()); // url ảnh gốc -> { xem, o }: bản nhỏ chỉ dùng trên màn Chụp, rời màn là thu hồi
     const isRetakeMode = sessionData.retakeIndex !== undefined && sessionData.retakeIndex !== null;
 
     // Chụp lại chỉ làm từ bước Review (sessionData.retakeIndex). Bản cũ có sẵn xử lý "chạm ô ảnh nhỏ để chụp lại
@@ -86,6 +94,7 @@ const Capture = () => {
     // thời điểm frame cuối; quá lâu không có hình -> hiện "Đang kết nối lại" + ép /start-liveview và
     // dựng lại /ws. Đồng thời CHẶN đếm ngược tới khi có >=1 frame thật -> không bắn /capture vào máy treo.
     const lastFrameAtRef = useRef(Date.now());   // lần cuối nhận được frame live view (onLoad)
+    const soKhungRef = useRef(0);                // đếm frame thật (lastFrameAtRef bị watchdog chỉnh lúc đang chụp)
     const hasLiveFrameRef = useRef(false);       // đã có >=1 frame thật? (gate hot-path setState)
     const stalledRef = useRef(false);            // đang đứng hình?
     const lastRecoveryAtRef = useRef(0);         // lần cuối chạy phục hồi (đừng nhồi liên tục)
@@ -101,6 +110,7 @@ const Capture = () => {
     // thừa vì onLoad bắn ~30 lần/s.
     const markLiveFrame = () => {
         lastFrameAtRef.current = Date.now();
+        soKhungRef.current += 1;
         if (!hasLiveFrameRef.current) { hasLiveFrameRef.current = true; setHasLiveFrame(true); }
         if (stalledRef.current) {
             stalledRef.current = false; setLiveStalled(false); setStallLau(false);
@@ -145,6 +155,8 @@ const Capture = () => {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false; // chặn các advance/countdown hẹn giờ chạy sau khi rời bước
+            xemRef.current.forEach((v) => { try { URL.revokeObjectURL(v.xem); if (v.o) URL.revokeObjectURL(v.o); } catch { /* bỏ qua */ } });
+            xemRef.current.clear();
             // Gán 1 ảnh GIF 1x1 (data URI) buộc trình duyệt HỦY ngay luồng MJPEG đang stream.
             // Set src='' với MJPEG nhiều khi không ngắt kết nối -> tích tụ tới trần ~6/host -> đơ.
             const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
@@ -512,7 +524,8 @@ const Capture = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cameraReady, hasLiveFrame]); // thêm hasLiveFrame: có hình đầu tiên (canon) -> mở đếm ngược
 
-    const getEffectiveCountdown = () => TOTAL_PHOTOS > 4 ? 3 : (parseInt(configs.countdown) || 5);
+    // Mọi khung dùng chung "Đếm ngược mỗi ảnh" trong Cài đặt (trước 0.0.34 khung > 4 ảnh bị ép 3 s).
+    const getEffectiveCountdown = () => parseInt(configs.countdown, 10) || 5;
 
     const startCountdown = () => {
         // Mở lại guard: một lượt đếm ngược mới = một lượt chụp hợp lệ mới được phép.
@@ -581,9 +594,19 @@ const Capture = () => {
         if (mountedRef.current) takePhoto();
     };
     // Mỗi ảnh bắt đầu ở đây: điện thoại đang nối -> chờ bấm; không thì đếm ngược như cũ.
-    const batDauLuot = () => {
-        if (ketNoiRemote === 'on') vaoChoBam();
-        else startCountdown();
+    const batDauLuot = async () => {
+        if (ketNoiRemote !== 'on') { startCountdown(); return; }
+        // Canon: chỉ mở nút khi live view đã chạy lại sau lần chụp trước. Luồng đếm ngược luôn có ít nhất 6,5 s giữa hai
+        // lệnh chụp, còn bấm từ điện thoại có thể chỉ cách 2,5 s -> dễ trúng lúc máy còn bận (0x81).
+        if (cameraMode === 'canon') {
+            const soKhung = soKhungRef.current;
+            const moc = Date.now();
+            while (soKhungRef.current === soKhung && Date.now() - moc < CHO_HINH_MOI_MS) {
+                await new Promise((r) => setTimeout(r, 100));
+                if (!mountedRef.current) return;
+            }
+        }
+        vaoChoBam();
     };
     // Hàm gọi từ timer / sự kiện phải là bản mới nhất (state trong closure).
     const batDauLuotRef = useRef(batDauLuot);
@@ -729,8 +752,14 @@ const Capture = () => {
                 const abortTimer = setTimeout(() => ctrl.abort(), (timeout + 10) * 1000);
                 let data;
                 try {
-                    const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`, { signal: ctrl.signal });
-                    data = await res.json();
+                    for (let lan = 0; ; lan += 1) {
+                        const res = await fetch(`http://localhost:5001/capture?timeout=${timeout}`, { signal: ctrl.signal });
+                        data = await res.json();
+                        // Máy báo bận (0x81) là chưa chụp gì: thử lại ngay, khách không cần thấy lỗi.
+                        if (data.success || !/0x81\b/i.test(data.error || '') || lan >= THU_LAI_BAN_LAN || !mountedRef.current) break;
+                        demSuKien('may_ban');
+                        await new Promise((r) => setTimeout(r, THU_LAI_BAN_MS));
+                    }
                     ghiThoiGian('chup_may', performance.now() - batDauChup); // phần của máy ảnh + middleware
                 } finally {
                     clearTimeout(abortTimer);
@@ -743,7 +772,12 @@ const Capture = () => {
                     let finalUrl = url;
                     try {
                         const batDauLat = performance.now();
-                        finalUrl = await latGuongAnh(url);
+                        const lat = await latGuongAnhKemXem(url, [CANH_XEM, CANH_O]);
+                        finalUrl = lat.url;
+                        if (lat.xem[CANH_XEM]) {
+                            if (mountedRef.current) xemRef.current.set(finalUrl, { xem: lat.xem[CANH_XEM], o: lat.xem[CANH_O] });
+                            else Object.values(lat.xem).forEach((u) => URL.revokeObjectURL(u));
+                        }
                         ghiThoiGian('lat_anh', performance.now() - batDauLat);
                         console.log("📷 [Capture] Mirrored Canon Photo:", finalUrl);
                     } catch (mirrorError) {
@@ -759,7 +793,7 @@ const Capture = () => {
                     const canonPhoto = { id: crypto.randomUUID(), url: finalUrl, videoUrl };
 
                     const count = applyCapture(canonPhoto);
-                    setLatestPhoto(finalUrl);
+                    setLatestPhoto(xemRef.current.get(finalUrl)?.xem || finalUrl);
                     ghiThoiGian('chup', performance.now() - batDauChup);
 
                     // Poll /frame tự cập nhật lại khi live view resume sau /capture -> KHÔNG cần đóng/
@@ -814,7 +848,12 @@ const Capture = () => {
                     let finalUrl = url;
                     try {
                         const batDauLat = performance.now();
-                        finalUrl = await latGuongAnh(url);
+                        const lat = await latGuongAnhKemXem(url, [CANH_XEM, CANH_O]);
+                        finalUrl = lat.url;
+                        if (lat.xem[CANH_XEM]) {
+                            if (mountedRef.current) xemRef.current.set(finalUrl, { xem: lat.xem[CANH_XEM], o: lat.xem[CANH_O] });
+                            else Object.values(lat.xem).forEach((u) => URL.revokeObjectURL(u));
+                        }
                         ghiThoiGian('lat_anh', performance.now() - batDauLat);
                         console.log("🔥 [Capture] Mirrored Hot Folder Photo:", finalUrl);
                     } catch (mirrorError) {
@@ -823,7 +862,7 @@ const Capture = () => {
 
                     if (!mountedRef.current) return; // đã rời bước chụp: bỏ ảnh về muộn (như Canon)
                     const count = applyCapture(finalUrl);
-                    setLatestPhoto(finalUrl);
+                    setLatestPhoto(xemRef.current.get(finalUrl)?.xem || finalUrl);
                     ghiThoiGian('chup', performance.now() - batDauChup);
 
                     scheduleAdvance(count);
@@ -1077,7 +1116,7 @@ const Capture = () => {
                                         <motion.img
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
-                                            src={typeof photoUrl === 'object' ? photoUrl.url : photoUrl}
+                                            src={(() => { const u = typeof photoUrl === 'object' ? photoUrl.url : photoUrl; return xemRef.current.get(u)?.o || u; })()}
                                             className="w-full h-full object-cover"
                                         />
                                     ) : (

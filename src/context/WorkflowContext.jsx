@@ -59,6 +59,8 @@ const CLOUD_SYNC_KEYS = [
     'photo_edit_enabled', 'photo_edit_timeout',
     // Giá riêng ảnh thẻ (trang Cài đặt trên cloud); rỗng = theo giá photobooth (PrintQuantity).
     'id_photo_price', 'id_photo_print_price',
+    // Ghi chú dưới từng bố cục ở màn Chọn bố cục (utils/ghiChuBoCuc.js).
+    'layout_notes',
 ];
 
 const DEFAULT_CONFIGS = {

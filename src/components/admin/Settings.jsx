@@ -4,6 +4,15 @@ import { Camera, CheckCircle2, Printer, Save, RefreshCw, Settings as SettingsIco
 import DeviceManager from './DeviceManager';
 import { isLocalHost } from '../../utils/runtime';
 import { authHeader } from '../../utils/auth';
+import { LAYOUTS } from '../../data/layouts';
+import { docGhiChuBoCuc, GHI_CHU_TOI_DA } from '../../utils/ghiChuBoCuc';
+
+const iconBoCuc = Object.fromEntries(
+    Object.entries(import.meta.glob('../../assets/icons/*', { eager: true, query: '?url', import: 'default' }))
+        .map(([path, url]) => [path.split('/').pop(), url])
+);
+// Đúng các bố cục và thứ tự khách thấy ở màn Chọn bố cục.
+const BO_CUC_KHACH = LAYOUTS.filter((l) => !l.isMobileOnly && !l.idPhoto);
 
 // Cloud chỉ cho admin đã đăng nhập lưu cấu hình (từ 2026-10-06). Lỗi quyền -> nói rõ, không chỉ "Lỗi".
 const loiLuuCauHinh = (error, macDinh) => ([401, 403].includes(error?.response?.status)
@@ -741,6 +750,13 @@ const Settings = ({ forceLocalAdmin = false }) => {
             ? new Date(item.run_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
             : (() => { const d = new Date(item.run_at); const h = (n) => String(n).padStart(2, '0'); return `${h(d.getHours())}:${h(d.getMinutes())} · ${h(d.getDate())}/${h(d.getMonth() + 1)}`; })());
     const chinhAnhBat = String(configs.photo_edit_enabled) === 'true';
+    const ghiChuBoCuc = docGhiChuBoCuc(configs.layout_notes);
+    const doiGhiChu = (id, chu) => setConfigs((prev) => {
+        const o = { ...docGhiChuBoCuc(prev.layout_notes) };
+        if (chu.trim()) o[id] = chu.slice(0, GHI_CHU_TOI_DA);
+        else delete o[id];
+        return { ...prev, layout_notes: JSON.stringify(o) };
+    });
     const lich = getPriceSchedule();
 
     return (
@@ -916,6 +932,25 @@ const Settings = ({ forceLocalAdmin = false }) => {
                                     {oGiay('hotfolder_capture_timeout', 'Hot Folder', '30', 1)}
                                 </div>
                             </details>
+                        </div>
+                    ))}
+
+                    {khoi('Ghi chú bố cục', (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {BO_CUC_KHACH.map((l) => (
+                                <label key={l.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-gray-50 px-3 py-2">
+                                    <img src={iconBoCuc[l.icon]} alt="" className="h-10 w-10 shrink-0 object-contain" />
+                                    <span className="w-14 shrink-0 text-xs font-bold text-gray-600">{l.name}</span>
+                                    <input
+                                        type="text"
+                                        maxLength={GHI_CHU_TOI_DA}
+                                        value={ghiChuBoCuc[l.id] || ''}
+                                        onChange={(e) => doiGhiChu(l.id, e.target.value)}
+                                        placeholder="Ghi chú"
+                                        className={oNhap}
+                                    />
+                                </label>
+                            ))}
                         </div>
                     ))}
 

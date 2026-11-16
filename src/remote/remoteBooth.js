@@ -45,6 +45,16 @@ export function moRemote() {
             return;
         }
         if (id !== p.chu) {
+            // Máy chủ đã mất (đóng trang / tắt màn hình quá MAT_SAU_MS) -> máy đang chào hoặc đang chờ được nhận thay,
+            // không thì khách bị khoá ngoài suốt lượt. Không nhận 'chup' ở đây: nút chỉ hiện sau khi đã được nhận.
+            if (p.ketNoi === 'lost' && loai !== 'chup') {
+                p.chu = id;
+                p.lanCuoiDt = Date.now();
+                doiKetNoi('on');
+                phat('noi');
+                gui();
+                return;
+            }
             if (loai === 'chao') gui(); // máy thứ hai: trả trạng thái (chu khác id) -> nó tự báo "đã có người"
             return;
         }
