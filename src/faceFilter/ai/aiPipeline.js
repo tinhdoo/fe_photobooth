@@ -5,6 +5,7 @@
 
 import { applyLook } from './lookStage.js';
 import { getWarpEngine } from './warpEngine.js';
+import { getLookGL } from './lookGL.js';
 
 function makeCanvas(w, h) {
     const c = document.createElement('canvas');
@@ -54,7 +55,8 @@ export function buildPrimitives(filter, faces) {
  */
 export function renderAIFilter({ image, faces, filter, width, height }) {
     const work = makeCanvas(width, height);
-    const ctx = work.getContext('2d');
+    // Không dùng được card đồ hoạ -> làm đẹp bằng canvas (đọc/ghi điểm ảnh): để canvas ở CPU (xem lookStage makeCanvas).
+    const ctx = work.getContext('2d', getLookGL() ? undefined : { willReadFrequently: true });
     ctx.drawImage(image, 0, 0, width, height);
 
     // 1) Làm đẹp + màu (chỉ khi có mặt thì mới mask/makeup; color grade vẫn áp toàn ảnh).

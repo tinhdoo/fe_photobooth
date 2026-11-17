@@ -49,7 +49,8 @@ async function tongHopDoMuot(supabase, ngayRaw) {
 
     const rong = () => new Array(ROI_TRE.length + 1).fill(0);
     const may = {};
-    const lay = (id) => (may[id] ||= { luot: 0, luot_loi: 0, bo_do: 0, h: rong(), max: 0, buoc: {}, tg: {}, dem: {}, dung: 0, loi_gan: [] });
+    const lay = (id) => (may[id] ||= { luot: 0, luot_loi: 0, bo_do: 0, h: rong(), max: 0, buoc: {}, tg: {}, dem: {}, tt: {}, pc: null, dung: 0, loi_gan: [] });
+    const chu = (x, n) => (x == null ? null : String(x).slice(0, n));
     const so = (x) => (Number.isFinite(Number(x)) && Number(x) >= 0 ? Number(x) : null);
     const cong = (m, dm, luc) => {
         for (const [b, o] of Object.entries(dm.buoc || {})) {
@@ -77,6 +78,17 @@ async function tongHopDoMuot(supabase, ngayRaw) {
         }
         for (const [ten, x] of Object.entries(dm.dem || {})) {
             if (so(x) != null) m.dem[ten] = (m.dem[ten] || 0) + Number(x);
+        }
+        // Thông tin dạng chữ (vd. ve_chinh_anh: gpu/cpu) -> đếm số lượt theo từng giá trị.
+        for (const [ten, x] of Object.entries(dm.tt && typeof dm.tt === 'object' ? dm.tt : {})) {
+            const g = chu(x, 40);
+            if (!g) continue;
+            const o = (m.tt[chu(ten, 40)] ||= {});
+            o[g] = (o[g] || 0) + 1;
+        }
+        // Cấu hình máy (booth >= 0.0.35): lấy lượt mới nhất (data xếp mới -> cũ).
+        if (!m.pc && dm.pc && typeof dm.pc === 'object') {
+            m.pc = { gpu: chu(dm.pc.gpu, 120), cpu: so(dm.pc.cpu), ram: so(dm.pc.ram), man: chu(dm.pc.man, 30) };
         }
         for (const l of Array.isArray(dm.loi) ? dm.loi : []) {
             m.loi_gan.push({ luc, b: String(l?.b || ''), m: String(l?.m || ''), t: String(l?.t || '').slice(0, 120) });
@@ -116,6 +128,8 @@ async function tongHopDoMuot(supabase, ngayRaw) {
             buoc,
             tg,
             dem: m.dem,
+            tt: m.tt,
+            pc: m.pc,
             loi_gan: m.loi_gan.sort((a, b) => String(b.luc).localeCompare(String(a.luc))).slice(0, 20),
         };
     }

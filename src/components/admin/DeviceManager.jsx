@@ -18,7 +18,32 @@ const TEN_CHO = [
     ['chup', 'Chụp → hiện ảnh'], ['chup_may', '· máy ảnh chụp + gửi ảnh'], ['lat_anh', '· lật gương ảnh'], ['tao_qr', 'Tạo mã QR'], ['ghep', 'Ghép ảnh'], ['gui_in', 'Gửi lệnh in'],
     ['den_qr', 'Bấm In → lưu lượt'], ['luu', 'Lưu lượt'], ['tai_nen', 'Tải ảnh gốc'], ['tach_nen', 'Tách nền ảnh thẻ'],
     ['mat_hinh', 'Máy ảnh mất hình'],
+    ['ca_xem', 'Chỉnh ảnh: vẽ xem trước'], ['ca_do_mat', '· dò mặt 1 ảnh'], ['ca_goc', 'Chỉnh ảnh: làm ảnh gốc'],
 ];
+// Card đồ hoạ "phần mềm" = trình duyệt đang vẽ bằng CPU (thiếu driver / bị chặn) -> Chỉnh ảnh, Khung & in chậm.
+const GPU_MEM = /swiftshader|llvmpipe|basic render|microsoft basic|khong_co_webgl/i;
+const gonGpu = (s) => {
+    const t = String(s || '');
+    if (/swiftshader/i.test(t)) return 'SwiftShader — không dùng được card, vẽ bằng CPU';
+    if (/basic render|microsoft basic/i.test(t)) return 'Microsoft Basic Render — thiếu driver card đồ hoạ';
+    if (/khong_co_webgl/.test(t)) return 'Không có WebGL';
+    // "ANGLE (Intel, Intel(R) UHD Graphics (0x00009BC4) Direct3D11 vs_5_0 ps_5_0, D3D11)" -> "Intel(R) UHD Graphics"
+    const m = t.match(/^ANGLE \([^,]*,\s*(.+?)\s*(?:\(0x[0-9a-f]+\)|Direct3D|OpenGL|Vulkan|,|\)$)/i);
+    return (m ? m[1] : t).trim();
+};
+const MayTinh = ({ pc, tt }) => {
+    if (!pc) return null;
+    const ve = tt?.ve_chinh_anh || {};
+    const cpuVe = ve.cpu || 0;
+    const mem = GPU_MEM.test(pc.gpu || '');
+    return (
+        <p className="mt-2 text-[11px] leading-snug text-gray-500" title={pc.gpu || ''}>
+            <span className={mem ? 'font-bold text-red-600' : 'font-semibold text-[#1a1a2e]'}>{gonGpu(pc.gpu) || 'Không rõ card đồ hoạ'}</span>
+            {pc.cpu ? ` · ${pc.cpu} luồng` : ''}{pc.ram ? ` · ${pc.ram} GB+` : ''}{pc.man ? ` · ${pc.man}` : ''}
+            {cpuVe > 0 && <span className="block font-bold text-red-600">Chỉnh ảnh vẽ bằng CPU {cpuVe}/{cpuVe + (ve.gpu || 0)} lượt</span>}
+        </p>
+    );
+};
 const TEN_LOI = {
     chup_loi: 'Chụp lỗi', mat_hinh_lau: 'Máy ảnh mất hình > 20 s', qr_loi: 'Tạo QR lỗi', in_loi: 'In lỗi',
     luu_loi: 'Lưu album lỗi', ghep_loi: 'Ghép ảnh lỗi', tach_nen_loi: 'Tách nền lỗi', xu_ly_loi: 'Xử lý ảnh lỗi',
@@ -68,6 +93,7 @@ const TheDoMuot = ({ d }) => {
                     <p className="text-sm font-black text-[#1a1a2e]">{d.bo_do} <span className="text-gray-300">·</span> {d.dung}</p>
                 </div>
             </div>
+            <MayTinh pc={d.pc} tt={d.tt} />
             {mo && (
                 <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
                     {chang.length > 0 && (

@@ -7,6 +7,7 @@ import {
     isNeutral, editKey, editForOtherPhoto, addSpot, popSpot, clearSpots, MAX_SPOTS,
 } from '../../faceFilter/ai/photoEditState';
 import { facesForMatching, matchPeople } from '../../faceFilter/ai/matchPeople';
+import { ghiThoiGian, ghiThongTin } from '../../utils/doMuot';
 
 // BƯỚC 5.5 — CHỈNH ẢNH. Nằm giữa Chọn ảnh (5) và Chỉnh sửa (6), chỉ có khi admin bật (photo_edit_enabled).
 // Khách chỉnh TỪNG ảnh: chọn kiểu có sẵn làm điểm khởi đầu rồi kéo thanh trượt; chỉnh chung cả ảnh hoặc chạm
@@ -161,8 +162,12 @@ const PhotoEdit = () => {
                 const base = document.createElement('canvas');
                 base.width = Math.round(w * s);
                 base.height = Math.round(h * s);
-                base.getContext('2d').drawImage(img, 0, 0, base.width, base.height);
+                // Máy không dùng được card đồ hoạ: để ảnh nền ở CPU, mỗi lượt vẽ khỏi phải đọc ngược từ card "phần mềm".
+                const cpu = engineRef.current.duongVe?.() === 'cpu';
+                base.getContext('2d', cpu ? { willReadFrequently: true } : undefined).drawImage(img, 0, 0, base.width, base.height);
+                const tDo = performance.now();
                 const faces = await engineRef.current.detectFacesOn(base);
+                ghiThoiGian('ca_do_mat', performance.now() - tDo);
                 const boxes = faces.map(faceBox);
                 const chips = boxes.map((b) => faceChip(base, b));
                 let match = [];
@@ -201,7 +206,12 @@ const PhotoEdit = () => {
                     ctx.drawImage(out, 0, 0);
                     setCanvasSize((p) => (p && p.w === out.width && p.h === out.height ? p : { w: out.width, h: out.height }));
                 }
-                window.__photoEditStats = { ms: Math.round(performance.now() - t0), w: base.width, h: base.height, faces: faces.length };
+                const msVe = performance.now() - t0;
+                window.__photoEditStats = { ms: Math.round(msVe), w: base.width, h: base.height, faces: faces.length };
+                if (!original) {
+                    ghiThoiGian('ca_xem', msVe);
+                    ghiThongTin('ve_chinh_anh', engineRef.current.duongVe?.() || '?');
+                }
                 setPreviewError(false);
                 await nhuong(); // cho sự kiện kéo thanh trượt kịp tới
             } while (dirtyRef.current);
@@ -385,7 +395,9 @@ const PhotoEdit = () => {
                         console.warn('[Chinh anh] Khong do duoc mat, chi lam mau + xoa mun:', e);
                     }
                     const img = await withTimeout(loadImage(url), PHOTO_TIMEOUT_MS, 'Tải ảnh gốc');
+                    const tGoc = performance.now();
                     const out = engineRef.current.renderEdit(img, faces, all[url], img.naturalWidth, img.naturalHeight);
+                    ghiThoiGian('ca_goc', performance.now() - tGoc);
                     const outUrl = await withTimeout(engineRef.current.canvasToObjectUrl(out), PHOTO_TIMEOUT_MS, 'Nén ảnh');
                     if (outUrl) next[url] = { key, url: outUrl };
                 } catch (e) {

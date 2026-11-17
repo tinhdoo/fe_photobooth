@@ -28,7 +28,9 @@ const cham = {};       // chặng -> { n: số lần chạm, h: biểu đồ, ma
 const tuongTac = new Map(); // interactionId -> { b, ms } (gộp các sự kiện của cùng một lần chạm)
 const dung = {};       // chặng -> { n, max } tác vụ > DUNG_MS
 const thoiGian = {};   // tên -> [ms]
+const soMauTG = {};    // tên -> số lần đã ghi (lấy mẫu đều khi quá TOI_DA_MAU_TG)
 const dem = {};
+const thongTin = {};   // tên -> giá trị ngắn (vd. ve_chinh_anh: 'gpu' | 'cpu')
 const loi = [];
 let daGui = false;
 let soLoiLucGui = 0;
@@ -97,8 +99,43 @@ export function datBuoc(step) {
 }
 
 export function ghiThoiGian(ten, ms) {
+    if (!Number.isFinite(ms)) return;
     const ds = (thoiGian[ten] ||= []);
-    if (ds.length < TOI_DA_MAU_TG && Number.isFinite(ms)) ds.push(Math.round(ms));
+    const n = (soMauTG[ten] = (soMauTG[ten] || 0) + 1);
+    if (ds.length < TOI_DA_MAU_TG) { ds.push(Math.round(ms)); return; }
+    // Quá TOI_DA_MAU_TG (vd. vẽ xem trước khi kéo thanh trượt): giữ mẫu ngẫu nhiên đều, không chỉ 20 lần đầu.
+    const i = Math.floor(Math.random() * n);
+    if (i < TOI_DA_MAU_TG) ds[i] = Math.round(ms);
+}
+
+export function ghiThongTin(ten, giaTri) {
+    thongTin[ten] = String(giaTri).slice(0, 40);
+}
+
+// Cấu hình máy để so các phòng với nhau (cùng phần mềm mà phòng này đơ, phòng kia không). Tên card đồ hoạ lấy qua
+// một ngữ cảnh WebGL tạm, đọc xong nhả ngay. SwiftShader / Basic Render = trình duyệt đang vẽ bằng CPU.
+let mayTinh = null;
+function thongTinMay() {
+    if (mayTinh) return mayTinh;
+    const ra = {
+        cpu: navigator.hardwareConcurrency || null,
+        ram: navigator.deviceMemory || null,
+        man: typeof screen !== 'undefined' ? `${screen.width}x${screen.height}@${window.devicePixelRatio || 1}` : null,
+        gpu: null,
+    };
+    try {
+        const c = document.createElement('canvas');
+        const gl = c.getContext('webgl');
+        if (gl) {
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            ra.gpu = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '').slice(0, 120);
+            gl.getExtension('WEBGL_lose_context')?.loseContext();
+        } else {
+            ra.gpu = 'khong_co_webgl';
+        }
+    } catch { /* bỏ qua */ }
+    mayTinh = ra;
+    return ra;
 }
 
 /** Bấm giờ một chặng chờ: const xong = batDauDo('ghep'); ...; xong(); */
@@ -136,6 +173,7 @@ function tomTat() {
         buoc: buocTomTat,
         tg: { ...thoiGian },
         dem: { ...dem },
+        tt: { ...thongTin },
         loi: [...loi],
         tong_s: Math.round(bayGio() / 1000),
         xa_nhat: TEN_BUOC[buocXaNhat] || null,
@@ -154,6 +192,7 @@ function docCho() {
 /** Tóm tắt lượt này để gửi kèm meta_data (kèm các lượt hỏng trước đó chưa gửi được). */
 export function chotDoMuot() {
     const ra = tomTat();
+    ra.pc = thongTinMay(); // chỉ lượt gửi chính kèm cấu hình (lượt cất lúc tải lại trang không cần)
     const truoc = docCho();
     if (truoc.length) ra.truoc = truoc;
     return ra;
@@ -173,8 +212,7 @@ function catLuotChuaGui() {
     if (!chuaGui && !loiSauGui) return;
     try {
         const ban = tomTat();
-        if (loiSauGui) { ban.sau_luu = true; ban.loi = loi.slice(soLoiLucGui); ban.buoc = {}; ban.tg = {}; }
-        ban.luc = new Date().toISOString();
+        if (loiSauGui) { ban.sau_luu = true; ban.loi = loi.slice(soLoiLucGui); ban.buoc = {}; ban.tg = {}; ban.tt = {}; }        ban.luc = new Date().toISOString();
         const ds = [...docCho(), ban].slice(-TOI_DA_CHO);
         localStorage.setItem(KHOA_CHO, JSON.stringify(ds));
     } catch { /* đầy bộ nhớ: bỏ */ }

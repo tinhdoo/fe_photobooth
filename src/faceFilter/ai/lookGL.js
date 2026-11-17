@@ -187,6 +187,17 @@ function compile(gl, type, src) {
     return sh;
 }
 
+/** Card đồ hoạ mà WebGL đang dùng là card "phần mềm" (vẽ bằng CPU). */
+export const CARD_MEM = /swiftshader|llvmpipe|softpipe|basic render|microsoft basic/i;
+export function cardDoHoa(gl) {
+    try {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+    } catch {
+        return '';
+    }
+}
+
 class LookGL {
     constructor() {
         this.canvas = document.createElement('canvas');
@@ -194,6 +205,14 @@ class LookGL {
             premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false, depth: false, stencil: false,
         });
         if (!gl) throw new Error('Không có WebGL');
+        // WebGL "giả" chạy bằng CPU (Chrome rơi về SwiftShader khi card bị chặn / tiến trình đồ hoạ sập nhiều lần,
+        // hoặc Windows thiếu driver -> Microsoft Basic Render) chậm hơn hẳn đường canvas: đo 17/11 kéo thanh trượt
+        // Chỉnh ảnh mỗi khung đứng 0,8-1,5 s, đường canvas ~0,1-0,4 s. Gặp card như vậy thì không dùng đường này.
+        const tenCard = cardDoHoa(gl);
+        if (CARD_MEM.test(tenCard)) {
+            try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* bỏ qua */ }
+            throw new Error(`Card đồ hoạ phần mềm (${tenCard})`);
+        }
         this.gl = gl;
         const vs = compile(gl, gl.VERTEX_SHADER, VERT);
         const link = (fragSrc) => {

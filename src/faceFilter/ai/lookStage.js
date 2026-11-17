@@ -19,6 +19,9 @@ function makeCanvas(w, h) {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
+    // Không dùng được card đồ hoạ (máy thiếu driver, Chrome rơi về SwiftShader): đường canvas đọc/ghi điểm ảnh
+    // liên tục -> để mọi canvas trung gian ở CPU, không để trên card "phần mềm" rồi đọc ngược (đo 17/11).
+    if (!getLookGL()) c.getContext('2d', { willReadFrequently: true });
     return c;
 }
 

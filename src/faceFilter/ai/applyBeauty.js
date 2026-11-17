@@ -9,6 +9,10 @@ import { applyLookFaces, healSpots, maDoiTuong } from './lookStage.js';
 import { faceLook } from './photoEditState.js';
 import { buildSculptPrimitives, hasSculpt } from './sculpt.js';
 import { getWarpEngine } from './warpEngine.js';
+import { getLookGL } from './lookGL.js';
+
+/** Làm đẹp đang chạy bằng card đồ hoạ ('gpu') hay đã rơi về canvas CPU ('cpu') — để đo độ mượt từng máy. */
+export const duongVe = () => (getLookGL() ? 'gpu' : 'cpu');
 
 /** Lấy các preset thuộc nhóm Beauty từ ai-filters.json. */
 export async function loadBeautyPresets() {
@@ -113,7 +117,9 @@ export function renderEdit(source, faces, edit, width, height) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    // Không dùng được card đồ hoạ (lookGL.js) -> làm đẹp bằng canvas, đọc/ghi điểm ảnh liên tục: để canvas ở CPU.
+    // Máy chỉ có card "phần mềm" mà để canvas ở card thì mỗi lần đọc lại qua SwiftShader (đo 17/11: chậm ~4 lần).
+    const ctx = canvas.getContext('2d', getLookGL() ? undefined : { willReadFrequently: true });
     const spots = edit?.spots || [];
     const draw = (c) => { c.drawImage(source, 0, 0, width, height); healSpots(c.canvas, spots); };
     draw(ctx);
