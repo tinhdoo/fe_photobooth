@@ -286,7 +286,7 @@ const Result = () => {
                         )}
                     </div>
 
-                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-3">
+                    <div className="flex min-w-0 flex-1 flex-col gap-3">
                         {daInThem && (
                             <p className="flex items-center justify-center gap-2 text-lg font-bold text-green-700">
                                 <CheckCircle2 size={22} /> Đã in thêm {daInThem} bản
@@ -296,7 +296,7 @@ const Result = () => {
                             <button
                                 type="button"
                                 onClick={() => setMoTichDiem(true)}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
+                                className="flex w-full flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
                                 style={{ color: primaryTextColor }}
                             >
                                 <img src="/tich-diem/logo.png" alt="" className="h-7 w-auto" draggable={false} />
@@ -307,7 +307,7 @@ const Result = () => {
                             <button
                                 type="button"
                                 onClick={() => { setChon(0); setInThem({ buoc: 'chon' }); }}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
+                                className="flex w-full flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
                                 style={{ color: primaryTextColor }}
                             >
                                 <Printer size={24} /> In thêm ảnh
@@ -316,7 +316,7 @@ const Result = () => {
                         <button
                             type="button"
                             onClick={resetSession}
-                            className="w-full rounded-xl bg-[#D5B895] py-5 text-2xl font-bold text-white shadow-lg transition-none active:scale-95"
+                            className="flex w-full flex-1 items-center justify-center rounded-xl bg-[#D5B895] py-5 text-2xl font-bold text-white shadow-lg transition-none active:scale-95"
                         >
                             Về trang chủ
                         </button>
