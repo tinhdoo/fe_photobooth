@@ -1,56 +1,46 @@
-// Thẻ tích điểm hình mèo (vẽ lại đúng thẻ giấy của quán): 10 đầu mèo, ô 5 / 7 / 10 ghi voucher 50K / 70K / 100K.
-// Ô đã có dấu tô đỏ + dấu chân mèo. Dùng chung cho booth (màn Kết quả, Thanh toán) và trang nhân viên.
-export const MAU_THE = { nen: '#FAF4D6', vien: '#B32025', o: '#FBF8EC' };
-const NHAN = { 5: '50K', 7: '70K', 10: '100K' };
-const DAU_MEO = 'M14 44 C9 28 11 10 21 5 C28 2 34 14 39 21 C46 19 54 19 61 21 C66 14 72 2 79 5 C89 10 91 28 86 44 C93 60 90 79 74 86 C62 92 38 92 26 86 C10 79 7 60 14 44 Z';
+// Thẻ tích điểm: nền là ĐÚNG mặt sau thẻ giấy của quán (xuất từ loyal_card.pdf -> public/tich-diem/the.jpg),
+// ô đã tích được đóng logo mèo ôm cà chua (public/tich-diem/logo.png) đè lên. Dùng chung cho booth và trang nhân viên.
+export const MAU_THE = { nen: '#FCF5D7', vien: '#A61018', o: '#FDFAF0' };
 
-const DauChan = () => (
-    <g fill="#fff">
-        <ellipse cx="50" cy="62" rx="13" ry="10" />
-        <circle cx="34" cy="47" r="5.5" />
-        <circle cx="44" cy="40" r="5.5" />
-        <circle cx="56" cy="40" r="5.5" />
-        <circle cx="66" cy="47" r="5.5" />
-    </g>
-);
+// Tâm 10 ô đầu mèo (% chiều rộng / chiều cao thẻ), đo từ vị trí ảnh trong PDF (trang 252 x 144 pt).
+const TAM_O = [
+    [13.91, 43.34], [31.29, 43.34], [48.59, 43.34], [65.89, 43.34], [83.18, 43.34],
+    [13.87, 71.48], [31.25, 71.48], [48.55, 71.48], [65.85, 71.48], [83.14, 71.48],
+];
+// Nghiêng nhẹ mỗi dấu một kiểu cho giống đóng dấu tay.
+const NGHIENG = [-8, 5, -3, 7, -6, 4, -7, 3, -4, 6];
 
-const OMeo = ({ so, coDau, noiBat }) => (
-    <svg viewBox="0 0 100 95" className="h-auto w-full" aria-label={coDau ? `Ô ${so} đã có dấu` : `Ô ${so}`}>
-        <path
-            d={DAU_MEO}
-            fill={coDau ? MAU_THE.vien : MAU_THE.o}
-            stroke={MAU_THE.vien}
-            strokeWidth={noiBat ? 4.5 : 3}
-        />
-        {coDau && <DauChan />}
-        {!coDau && NHAN[so] && (
-            <text x="50" y="62" textAnchor="middle" fontSize="15" fontWeight="900" fill={MAU_THE.vien} fontFamily="inherit">
-                <tspan x="50" dy="-8">Voucher</tspan>
-                <tspan x="50" dy="17">{NHAN[so]}</tspan>
-            </text>
-        )}
-        {coDau && NHAN[so] && (
-            <text x="50" y="86" textAnchor="middle" fontSize="11" fontWeight="900" fill="#fff" fontFamily="inherit">{NHAN[so]}</text>
-        )}
-    </svg>
-);
-
-/** dau: số dấu hiện có (0..10). nho: bản nhỏ cho trang nhân viên. */
-const TheMeo = ({ dau = 0, nho = false }) => (
+/** dau: số dấu hiện có (0..10). nho: bản nhỏ cho trang nhân viên. moi: dấu vừa cộng -> hiệu ứng đóng dấu. */
+const TheMeo = ({ dau = 0, nho = false, moi = false }) => (
     <div
-        className={`w-full rounded-3xl ${nho ? 'max-w-sm p-3' : 'max-w-xl p-5'} shadow-inner`}
-        style={{ backgroundColor: MAU_THE.nen }}
+        className={`relative w-full overflow-hidden ${nho ? 'max-w-sm rounded-xl' : 'max-w-2xl rounded-3xl'} shadow-md`}
+        style={{ aspectRatio: '252 / 144', backgroundColor: MAU_THE.nen }}
     >
-        <div className={`grid grid-cols-5 ${nho ? 'gap-1.5' : 'gap-3'}`}>
-            {Array.from({ length: 10 }, (_, i) => (
-                <OMeo key={i} so={i + 1} coDau={i < dau} noiBat={i === dau - 1} />
-            ))}
-        </div>
-        {!nho && (
-            <p className="mt-3 text-center text-xs font-bold" style={{ color: MAU_THE.vien }}>
-                *Voucher không quy đổi thành tiền mặt hay vật phẩm có giá trị tương đương khác
-            </p>
-        )}
+        <img src="/tich-diem/the.jpg" alt="Thẻ tích điểm" className="absolute inset-0 h-full w-full" draggable={false} />
+        {TAM_O.slice(0, Math.max(0, Math.min(10, dau))).map(([x, y], i) => (
+            <img
+                key={i}
+                src="/tich-diem/logo.png"
+                alt=""
+                draggable={false}
+                className={`absolute ${moi && i === dau - 1 ? 'tich-diem-dong-dau' : ''}`}
+                style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    width: '13.5%',
+                    transform: `translate(-50%, -52%) rotate(${NGHIENG[i]}deg)`,
+                    filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))',
+                }}
+            />
+        ))}
+        <style>{`
+            @keyframes tichDiemDongDau {
+                0% { opacity: 0; scale: 2.2; }
+                60% { opacity: 1; scale: 0.92; }
+                100% { opacity: 1; scale: 1; }
+            }
+            .tich-diem-dong-dau { animation: tichDiemDongDau 0.5s ease-out 0.25s both; }
+        `}</style>
     </div>
 );
 

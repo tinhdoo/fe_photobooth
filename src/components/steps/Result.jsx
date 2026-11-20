@@ -293,7 +293,7 @@ const Result = () => {
                     <button
                         type="button"
                         onClick={() => setMoTichDiem(true)}
-                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#B32025]/40 bg-[#FAF4D6] py-4 text-xl font-bold text-[#B32025] shadow-sm transition-none active:scale-95"
+                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#A61018]/40 bg-[#FCF5D7] py-4 text-xl font-bold text-[#A61018] shadow-sm transition-none active:scale-95"
                     >
                         <span aria-hidden="true">🐱</span> {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm bằng số điện thoại'}
                     </button>

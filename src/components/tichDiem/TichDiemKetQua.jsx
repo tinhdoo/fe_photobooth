@@ -87,7 +87,7 @@ const TichDiemKetQua = ({ maLuot, mau, onDong, onDaTich }) => {
                             type="button"
                             disabled={sdt.length !== 10 || dangGui}
                             onClick={() => gui()}
-                            className="flex items-center gap-2 rounded-full bg-[#B32025] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
+                            className="flex items-center gap-2 rounded-full bg-[#A61018] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
                         >
                             {dangGui && <Loader2 className="animate-spin" size={22} />} Tích điểm
                         </button>
@@ -110,7 +110,7 @@ const TichDiemKetQua = ({ maLuot, mau, onDong, onDaTich }) => {
                     <>
                         <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>{loiNhan()}</h3>
                         <p className="text-lg" style={{ color: mau }}>Số {kq?.sdt} đang có <strong>{kq?.dau || 0}/10</strong> dấu</p>
-                        <TheMeo dau={kq?.dau || 0} />
+                        <TheMeo dau={kq?.dau || 0} moi={kq?.them === 1} />
                         <p className="max-w-lg text-center text-lg font-semibold" style={{ color: mau }}>{goiY()}</p>
                         <p className="text-sm opacity-70" style={{ color: mau }}>Dấu hết hạn nếu 6 tháng không quay lại.</p>
                         <button type="button" onClick={onDong} className="rounded-full bg-[#D5B895] px-12 py-4 text-xl font-bold text-white shadow-lg active:scale-95">

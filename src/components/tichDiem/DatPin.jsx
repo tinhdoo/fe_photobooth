@@ -42,7 +42,7 @@ const DatPin = ({ sdtAn, mau, dangGui, onXong }) => {
                     type="checkbox"
                     checked={dongY}
                     onChange={(e) => setDongY(e.target.checked)}
-                    className="mt-1 h-6 w-6 shrink-0 accent-[#B32025]"
+                    className="mt-1 h-6 w-6 shrink-0 accent-[#A61018]"
                 />
                 <span>Tôi đồng ý cho Tomato Photobooth lưu số điện thoại này để tích điểm và gửi ưu đãi.</span>
             </label>
@@ -50,7 +50,7 @@ const DatPin = ({ sdtAn, mau, dangGui, onXong }) => {
                 type="button"
                 disabled={!xong || !dongY || dangGui}
                 onClick={() => onXong(pin)}
-                className="rounded-full bg-[#B32025] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
+                className="rounded-full bg-[#A61018] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
             >
                 {dangGui ? 'Đang lưu...' : 'Xác nhận'}
             </button>

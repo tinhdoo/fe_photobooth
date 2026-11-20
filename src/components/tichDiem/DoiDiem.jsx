@@ -69,7 +69,7 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
                         type="button"
                         disabled={sdt.length !== 10}
                         onClick={() => { setLoi(''); setBuoc('pin'); }}
-                        className="rounded-full bg-[#B32025] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
+                        className="rounded-full bg-[#A61018] px-12 py-4 text-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-40"
                     >
                         Tiếp tục
                     </button>

@@ -800,7 +800,7 @@ const Payment = ({ inThem = null } = {}) => {
                     type="button"
                     onClick={() => selectMethod('diem')}
                     disabled={dangKiemMayIn}
-                    className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border-2 border-[#B32025]/40 bg-[#FAF4D6] py-5 text-xl font-bold text-[#B32025] shadow-md active:scale-95 disabled:opacity-60"
+                    className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border-2 border-[#A61018]/40 bg-[#FCF5D7] py-5 text-xl font-bold text-[#A61018] shadow-md active:scale-95 disabled:opacity-60"
                 >
                     <span aria-hidden="true">🐱</span> Dùng điểm thẻ mèo
                 </button>
