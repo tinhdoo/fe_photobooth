@@ -47,8 +47,8 @@ const Result = () => {
         if (viewUrl && qrRef.current) {
             qrRef.current.innerHTML = '';
             const qrCode = new QRCodeStyling({
-                width: 200,
-                height: 200,
+                width: 250,
+                height: 250,
                 data: viewUrl,
                 margin: 10,
                 qrOptions: { errorCorrectionLevel: 'L' },
@@ -276,7 +276,7 @@ const Result = () => {
                             {viewUrl ? (
                                 <div ref={qrRef} />
                             ) : (
-                                <div className="flex h-[200px] w-[200px] items-center justify-center rounded bg-[#F6E6C9]/35" style={{ color: `${primaryTextColor}80` }}>
+                                <div className="flex h-[250px] w-[250px] items-center justify-center rounded bg-[#F6E6C9]/35" style={{ color: `${primaryTextColor}80` }}>
                                     <QrCode size={64} />
                                 </div>
                             )}
@@ -296,7 +296,7 @@ const Result = () => {
                             <button
                                 type="button"
                                 onClick={() => setMoTichDiem(true)}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
                                 style={{ color: primaryTextColor }}
                             >
                                 <img src="/tich-diem/logo.png" alt="" className="h-7 w-auto" draggable={false} />
@@ -307,7 +307,7 @@ const Result = () => {
                             <button
                                 type="button"
                                 onClick={() => { setChon(0); setInThem({ buoc: 'chon' }); }}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-5 text-2xl font-bold shadow-sm transition-none active:scale-95"
                                 style={{ color: primaryTextColor }}
                             >
                                 <Printer size={24} /> In thêm ảnh
@@ -316,7 +316,7 @@ const Result = () => {
                         <button
                             type="button"
                             onClick={resetSession}
-                            className="w-full rounded-xl bg-[#D5B895] py-4 text-xl font-bold text-white shadow-lg transition-none active:scale-95"
+                            className="w-full rounded-xl bg-[#D5B895] py-5 text-2xl font-bold text-white shadow-lg transition-none active:scale-95"
                         >
                             Về trang chủ
                         </button>
