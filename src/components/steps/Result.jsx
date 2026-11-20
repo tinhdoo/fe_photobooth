@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCodeStyling from 'qr-code-styling';
-import { QrCode, Printer, Loader2, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { QrCode, Printer, Loader2, CheckCircle2, AlertTriangle, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useWorkflow, themViecNen } from '../../context/WorkflowContext';
 import Payment from './Payment';
 import { luaChonInThem, guiLenhInThem, ghiLuotInThem } from '../../utils/inThem';
@@ -289,35 +289,45 @@ const Result = () => {
                     </p>
                 )}
 
+                {/* Tích điểm: thẻ nhỏ riêng (ảnh thẻ thu nhỏ + lời mời), tách khỏi nhóm nút điều hướng bên dưới. */}
                 {coTichDiem && (
                     <button
                         type="button"
                         onClick={() => setMoTichDiem(true)}
-                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
-                        style={{ color: primaryTextColor }}
+                        className="mb-4 flex w-full items-center gap-4 rounded-2xl border border-[#E9D9B5] bg-[#FCF5D7] p-3 pr-5 text-left shadow-sm transition-none active:scale-[0.98]"
                     >
-                        <img src="/tich-diem/logo.png" alt="" className="h-7 w-auto" draggable={false} /> {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm bằng số điện thoại'}
+                        <img src="/tich-diem/the.jpg" alt="" className="h-16 w-auto shrink-0 rounded-lg shadow" draggable={false} />
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-xl font-bold text-[#A61018]">
+                                {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm lượt chụp này'}
+                            </span>
+                            <span className="block text-base" style={{ color: primaryTextColor }}>
+                                {daTichDiem ? 'Đã cộng dấu cho lượt này' : 'Nhập số điện thoại để nhận 1 dấu'}
+                            </span>
+                        </span>
+                        <ChevronRight size={28} className="shrink-0 text-[#A61018]" />
                     </button>
                 )}
 
-                {coInThem && (
+                <div className={`grid w-full gap-3 ${coInThem ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {coInThem && (
+                        <button
+                            type="button"
+                            onClick={() => { setChon(0); setInThem({ buoc: 'chon' }); }}
+                            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
+                            style={{ color: primaryTextColor }}
+                        >
+                            <Printer size={24} /> In thêm ảnh
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={() => { setChon(0); setInThem({ buoc: 'chon' }); }}
-                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
-                        style={{ color: primaryTextColor }}
+                        onClick={resetSession}
+                        className="rounded-xl bg-[#D5B895] py-4 text-xl font-bold text-white shadow-lg transition-none active:scale-95"
                     >
-                        <Printer size={24} /> In thêm ảnh
+                        Về trang chủ
                     </button>
-                )}
-
-                <button
-                    type="button"
-                    onClick={resetSession}
-                    className="w-full rounded-xl bg-[#D5B895] py-4 text-xl font-bold text-white shadow-lg transition-none active:scale-95"
-                >
-                    Về trang chủ
-                </button>
+                </div>
             </div>
             {moTichDiem && (
                 <TichDiemKetQua
