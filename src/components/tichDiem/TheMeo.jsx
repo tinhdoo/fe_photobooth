@@ -38,8 +38,8 @@ const TheMeo = ({ dau = 0, nho = false, moi = false }) => (
                 style={{
                     left: `${x}%`,
                     top: `${y}%`,
-                    width: '9.2%',
-                    transform: `translate(-50%, -40%) rotate(${NGHIENG[i]}deg)`,
+                    width: '8%',
+                    transform: `translate(-50%, -38%) rotate(${NGHIENG[i]}deg)`,
                     filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))',
                 }}
             />
