@@ -8,7 +8,7 @@ const TAM_O = [
     [13.87, 71.48], [31.25, 71.48], [48.55, 71.48], [65.85, 71.48], [83.14, 71.48],
 ];
 // Nghiêng nhẹ mỗi dấu một kiểu cho giống đóng dấu tay.
-const NGHIENG = [-8, 5, -3, 7, -6, 4, -7, 3, -4, 6];
+const NGHIENG = [-5, 3, -2, 4, -4, 2, -4, 2, -3, 4];
 
 /** dau: số dấu hiện có (0..10). nho: bản nhỏ cho trang nhân viên. moi: dấu vừa cộng -> hiệu ứng đóng dấu. */
 const TheMeo = ({ dau = 0, nho = false, moi = false }) => (
@@ -17,6 +17,17 @@ const TheMeo = ({ dau = 0, nho = false, moi = false }) => (
         style={{ aspectRatio: '252 / 144', backgroundColor: MAU_THE.nen }}
     >
         <img src="/tich-diem/the.jpg" alt="Thẻ tích điểm" className="absolute inset-0 h-full w-full" draggable={false} />
+        {/* Ô đã tích: tô lại phần ruột ô (che chữ Voucher của ô 5 / 7 / 10, không đè viền) rồi đóng logo lên trên. */}
+        {TAM_O.slice(0, Math.max(0, Math.min(10, dau))).map(([x, y], i) => (
+            <img
+                key={`o${i}`}
+                src="/tich-diem/o.png"
+                alt=""
+                draggable={false}
+                className="absolute"
+                style={{ left: `${x}%`, top: `${y}%`, width: '20.54%', transform: 'translate(-50%, -50%)' }}
+            />
+        ))}
         {TAM_O.slice(0, Math.max(0, Math.min(10, dau))).map(([x, y], i) => (
             <img
                 key={i}
@@ -27,8 +38,8 @@ const TheMeo = ({ dau = 0, nho = false, moi = false }) => (
                 style={{
                     left: `${x}%`,
                     top: `${y}%`,
-                    width: '13.5%',
-                    transform: `translate(-50%, -52%) rotate(${NGHIENG[i]}deg)`,
+                    width: '9.2%',
+                    transform: `translate(-50%, -40%) rotate(${NGHIENG[i]}deg)`,
                     filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))',
                 }}
             />
