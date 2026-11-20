@@ -18,6 +18,7 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
     const [the, setThe] = useState(null);
     const [dangGui, setDangGui] = useState(false);
     const [loi, setLoi] = useState('');
+    const [xacNhan, setXacNhan] = useState(null); // mốc đang chờ khách xác nhận
 
     const goi = async (them) => {
         setDangGui(true);
@@ -118,7 +119,7 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
                                             type="button"
                                             key={m.dau}
                                             disabled={!duoc || dangGui}
-                                            onClick={() => doi(m)}
+                                            onClick={() => setXacNhan(m)}
                                             className="flex flex-col items-center rounded-3xl border-4 bg-white px-3 py-5 shadow-md active:scale-95 disabled:opacity-35"
                                             style={{ borderColor: MAU_THE.vien, color: MAU_THE.vien }}
                                         >
@@ -129,12 +130,46 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
                                 })}
                             </div>
                             <p className="max-w-lg text-center text-base font-semibold" style={{ color: mau }}>
-                                Đổi xong thẻ về 0 dấu. Lượt dùng voucher không được cộng dấu.
-                                {gia < 100000 ? ` Voucher lớn hơn giá lượt (${gia.toLocaleString('vi-VN')}đ) thì phần dư không được hoàn lại.` : ''}
+                                Đổi xong thẻ về 0 dấu.
                             </p>
                         </>
                     )}
                 </>
+            )}
+            {xacNhan && the && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
+                        <img src="/tich-diem/logo.png" alt="" className="mx-auto mb-3 h-20 w-auto" draggable={false} />
+                        <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>Đổi voucher {xacNhan.giaTri / 1000}K?</h3>
+                        <p className="mt-3 text-lg" style={{ color: mau }}>
+                            Thẻ của bạn sẽ về <strong>0 dấu</strong> (đang có {the.dau} dấu).
+                        </p>
+                        <p className="mt-1 text-base" style={{ color: mau }}>Lượt này không được cộng dấu.</p>
+                        {xacNhan.giaTri > gia && (
+                            <p className="mt-1 text-base font-semibold" style={{ color: mau }}>
+                                Voucher lớn hơn giá lượt ({gia.toLocaleString('vi-VN')}đ), phần dư không được hoàn lại.
+                            </p>
+                        )}
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                type="button"
+                                disabled={dangGui}
+                                onClick={() => setXacNhan(null)}
+                                className="flex-1 rounded-full bg-gray-200 py-4 text-lg font-bold text-gray-700 active:scale-95"
+                            >
+                                Không đổi
+                            </button>
+                            <button
+                                type="button"
+                                disabled={dangGui}
+                                onClick={async () => { await doi(xacNhan); setXacNhan(null); }}
+                                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#A61018] py-4 text-lg font-black text-white shadow-lg active:scale-95 disabled:opacity-60"
+                            >
+                                {dangGui && <Loader2 className="animate-spin" size={20} />} Đổi voucher
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -800,9 +800,10 @@ const Payment = ({ inThem = null } = {}) => {
                     type="button"
                     onClick={() => selectMethod('diem')}
                     disabled={dangKiemMayIn}
-                    className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border-2 border-[#A61018]/40 bg-[#FCF5D7] py-5 text-xl font-bold text-[#A61018] shadow-md active:scale-95 disabled:opacity-60"
+                    className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border border-[#F6E6C9] bg-white/90 py-5 text-xl font-bold shadow-md active:scale-95 disabled:opacity-60"
+                    style={{ color: primaryTextColor }}
                 >
-                    <span aria-hidden="true">🐱</span> Đổi điểm thẻ tích điểm
+                    <img src="/tich-diem/logo.png" alt="" className="h-8 w-auto" draggable={false} /> Đổi điểm thẻ tích điểm
                 </button>
             )}
             </>

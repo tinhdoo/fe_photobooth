@@ -293,9 +293,10 @@ const Result = () => {
                     <button
                         type="button"
                         onClick={() => setMoTichDiem(true)}
-                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#A61018]/40 bg-[#FCF5D7] py-4 text-xl font-bold text-[#A61018] shadow-sm transition-none active:scale-95"
+                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#D5B895] bg-white py-4 text-xl font-bold shadow-sm transition-none active:scale-95"
+                        style={{ color: primaryTextColor }}
                     >
-                        <span aria-hidden="true">🐱</span> {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm bằng số điện thoại'}
+                        <img src="/tich-diem/logo.png" alt="" className="h-7 w-auto" draggable={false} /> {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm bằng số điện thoại'}
                     </button>
                 )}
 
