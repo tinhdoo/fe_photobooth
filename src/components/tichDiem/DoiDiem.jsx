@@ -43,7 +43,7 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
     };
 
     const datPin = async (p) => {
-        const d = await goi({ pin_moi: p, dong_y: true });
+        const d = await goi({ pin_moi: p });
         if (!d) return;
         setPin(p);
         setThe(d);

@@ -101,7 +101,7 @@ const TichDiemKetQua = ({ maLuot, mau, onDong, onDaTich }) => {
                             sdtAn={kq?.sdt}
                             mau={mau}
                             dangGui={dangGui}
-                            onXong={(pin) => gui({ pin_moi: pin, dong_y: true })}
+                            onXong={(pin) => gui({ pin_moi: pin })}
                         />
                     </>
                 )}
