@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, Users, Dices } from 'lucide-react';
+import { Layout, DollarSign, TrendingUp, Settings, Banknote, LogOut, Palette, Users, Dices, Stamp } from 'lucide-react';
 import { useWorkflow } from '../context/WorkflowContext';
 import { isLocalHost } from '../utils/runtime';
 import { isStaffRole, getDisplayName, clearAuth, authHeader } from '../utils/auth';
@@ -53,12 +53,13 @@ const AdminLayout = () => {
         { to: '/admin/revenue', icon: <TrendingUp size={22} />, label: 'Doanh thu', short: 'Doanh thu' },
         { to: '/admin/staff', icon: <Users size={22} />, label: 'Nhân viên', short: 'Nhân viên' },
         { to: '/admin/xuc-xac', icon: <Dices size={22} />, label: 'Xúc xắc', short: 'Xúc xắc' },
+        { to: '/admin/tich-diem', icon: <Stamp size={22} />, label: 'Tích điểm', short: 'Tích điểm' },
         { to: '/admin/branding', icon: <Palette size={22} />, label: 'Giao diện', short: 'Giao diện' },
         { to: '/admin/settings', icon: <Settings size={22} />, label: 'Cài đặt', short: 'Cài đặt' },
     ].filter((item) => {
         if (isLocalHost()) return ['/admin/settings', '/admin/bill-settings'].includes(item.to);
         // Nhân viên: Mã thanh toán + Xúc xắc. Admin: thấy hết (trừ bill-settings vốn chỉ cho local).
-        if (staffOnly) return item.to === '/admin/codes' || (item.to === '/admin/xuc-xac' && hienXucXac);
+        if (staffOnly) return item.to === '/admin/codes' || item.to === '/admin/tich-diem' || (item.to === '/admin/xuc-xac' && hienXucXac);
         return item.to !== '/admin/bill-settings';
     });
 

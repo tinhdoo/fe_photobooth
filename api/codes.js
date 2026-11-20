@@ -4,6 +4,7 @@ import {
 } from '../lib/auth.js';
 import { clientIp, lockedSeconds, recordFailure, cleanupRateLimits } from '../lib/rateLimit.js';
 import { randomInt } from 'node:crypto';
+import { congDau, doiDiem, truDauKhiDungMa, nvXem, nvSuaDau, nvXoaPin, adminTongQuan } from '../lib/tichDiem.js';
 
 const PAYMENT_CODE_RETENTION_DAYS = 15;
 
@@ -162,6 +163,8 @@ async function markCodeUsed(req, res, supabase) {
     if (error) throw error;
     // 0 dòng khớp = một lượt khác vừa dùng trước (race) -> trả 400 rõ ràng, KHÔNG để 500.
     if (!data) return json(res, 400, { success: false, message: 'Mã thanh toán đã được sử dụng.' });
+    // Mã voucher tích điểm SĐT: dùng xong thì thẻ của khách về 0 (dấu chỉ trừ khi mã thật sự được dùng).
+    if (data.loyalty_phone) await truDauKhiDungMa(supabase, data, sessionId);
     return json(res, 200, { success: true, code: data });
 }
 
@@ -670,6 +673,21 @@ export default async function handler(req, res) {
             if (action === 'cleanup') return cleanupPaymentCodes(req, res, supabase);
             // --- xúc xắc ưu đãi ---
             if (action === 'dice-roll') return lacXucXac(req, res, supabase);
+            // --- tích điểm SĐT (lib/tichDiem.js). Booth không đăng nhập: td-cong / td-doi tự kiểm lượt chụp, PIN. ---
+            if (action === 'td-cong' || action === 'td-doi') {
+                const kq = action === 'td-cong' ? await congDau(supabase, req.body) : await doiDiem(supabase, req);
+                return json(res, kq.status, kq.body);
+            }
+            if (action === 'td-nv-xem' || action === 'td-nv-sua' || action === 'td-nv-pin' || action === 'td-tong') {
+                const claims = await requireActiveUser(req, res, supabase);
+                if (!claims) return undefined;
+                if (action === 'td-tong' && claims.r !== 'admin') return json(res, 403, { error: 'Chỉ admin.' });
+                const kq = action === 'td-nv-xem' ? await nvXem(supabase, req.body?.phone)
+                    : action === 'td-nv-sua' ? await nvSuaDau(supabase, req.body, claims.u)
+                        : action === 'td-nv-pin' ? await nvXoaPin(supabase, req.body, claims.u)
+                            : await adminTongQuan(supabase);
+                return json(res, kq.status, kq.body);
+            }
             if (action === 'dice-config') return luuCauHinhXucXac(req, res, supabase);
             // --- tài khoản nhân viên ---
             if (action === 'login') return login(req, res, supabase);
@@ -725,7 +743,7 @@ export default async function handler(req, res) {
             (accs || []).forEach((a) => { nameMap[a.username] = a.display_name || a.username; });
             rows = rows.map((r) => ({
                 ...r,
-                claimed_by_name: r.claimed_by ? (nameMap[r.claimed_by] || r.claimed_by) : '',
+                claimed_by_name: r.claimed_by === 'tich_diem' ? 'Thẻ tích điểm' : r.claimed_by ? (nameMap[r.claimed_by] || r.claimed_by) : '',
             }));
         }
 

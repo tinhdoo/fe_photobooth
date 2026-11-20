@@ -7,6 +7,7 @@ import { useWorkflow } from '../../context/WorkflowContext';
 import { getDeviceId } from '../../utils/deviceId';
 import { errorMessage } from '../../utils/errorMessage';
 import { batDauDo, ghiLoi } from '../../utils/doMuot';
+import DoiDiem from '../tichDiem/DoiDiem';
 
 const formatVnd = (value) => `${Math.max(value, 0).toLocaleString('vi-VN')} VNĐ`;
 import { API_URL, CLOUD_API_URL } from '../../config/api';
@@ -189,6 +190,8 @@ const Payment = ({ inThem = null } = {}) => {
                 updateSessionData('paymentCodeApplied', activeVoucherValue);
                 // Lưu ID mã đã dùng -> Edit sẽ gắn nó với sessionId (album) để biết "mã dùng cho lượt nào".
                 if (activeVoucher.id) updateSessionData('paymentCodeId', activeVoucher.id);
+                // Voucher đổi từ thẻ tích điểm -> màn Kết quả ẩn nút tích điểm (lượt này không được cộng dấu).
+                updateSessionData('paymentCodeLoyalty', activeVoucher.tichDiem ? true : null);
             } else {
                 // Không dùng mã (tiền mặt đủ cả giá, hoặc khách đã bỏ mã): xoá mọi dấu mã còn sót trong phiên.
                 // Trước 0.0.22 applyCode ghi mã vào phiên ngay lúc kiểm tra; khách rời bước Thanh toán rồi
@@ -197,6 +200,7 @@ const Payment = ({ inThem = null } = {}) => {
                 updateSessionData('paymentCodeValue', null);
                 updateSessionData('paymentCodeApplied', null);
                 updateSessionData('paymentCodeId', null);
+                updateSessionData('paymentCodeLoyalty', null);
             }
             if (cashInserted > 0) updateSessionData('cashInserted', cashInserted);
             if (cashInserted > 0 && cashTraceRef.current) updateSessionData('cashTrace', cashTraceRef.current);
@@ -303,6 +307,21 @@ const Payment = ({ inThem = null } = {}) => {
         }
     }, []);
 
+    // Áp một mã đã kiểm (khách nhập mã, hoặc voucher đổi từ thẻ tích điểm). Mã chỉ ghi vào phiên khi thanh toán
+    // XONG (handlePaymentSuccess), không ghi lúc kiểm tra.
+    const apDungVoucher = (appliedVoucher) => {
+        setVoucher(appliedVoucher);
+        setCode('');
+        setMethod(null);
+        // GIỮ tiền mặt đã nhét (trước đây đặt về 0 -> khách mất số tiền đó). Mã + tiền mặt đủ giá
+        // -> xong luôn ('code+cash'), mã chỉ che phần còn thiếu.
+        setQrOrder(null);
+        setQrError('');
+        if (appliedVoucher.value + cashInserted + qrDaTra >= price) {
+            handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code', { voucher: appliedVoucher });
+        }
+    };
+
     const applyCode = async () => {
         if (code.length !== 6 || voucher || loading) return;
 
@@ -314,24 +333,12 @@ const Payment = ({ inThem = null } = {}) => {
                 return;
             }
 
-            const appliedVoucher = {
+            apDungVoucher({
                 id: res.data.id,
                 code,
                 value: res.data.value,
                 used: false
-            };
-            // Mã chỉ ghi vào phiên khi thanh toán XONG (handlePaymentSuccess), không ghi lúc kiểm tra.
-            setVoucher(appliedVoucher);
-            setCode('');
-            setMethod(null);
-            // GIỮ tiền mặt đã nhét (trước đây đặt về 0 -> khách mất số tiền đó). Mã + tiền mặt đủ giá
-            // -> xong luôn ('code+cash'), mã chỉ che phần còn thiếu.
-            setQrOrder(null);
-            setQrError('');
-
-            if (res.data.value + cashInserted + qrDaTra >= price) {
-                handlePaymentSuccess(cashInserted > 0 ? 'cash' : 'code', { voucher: appliedVoucher });
-            }
+            });
         } catch (error) {
             setErrorModal({
                 show: true,
@@ -710,7 +717,7 @@ const Payment = ({ inThem = null } = {}) => {
                 <div className="mt-5 space-y-2 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
                     {voucher && (
                         <div className="flex justify-between">
-                            <span>Mã {voucher.code}</span>
+                            <span>{voucher.tichDiem ? `Voucher thẻ mèo (${voucher.muc} dấu)` : `Mã ${voucher.code}`}</span>
                             <strong>-{formatVnd(voucherValue)}</strong>
                         </div>
                     )}
@@ -788,6 +795,16 @@ const Payment = ({ inThem = null } = {}) => {
                     );
                 })}
             </div>
+            {!inThem && !voucher && (
+                <button
+                    type="button"
+                    onClick={() => selectMethod('diem')}
+                    disabled={dangKiemMayIn}
+                    className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border-2 border-[#B32025]/40 bg-[#FAF4D6] py-5 text-xl font-bold text-[#B32025] shadow-md active:scale-95 disabled:opacity-60"
+                >
+                    <span aria-hidden="true">🐱</span> Dùng điểm thẻ mèo
+                </button>
+            )}
             </>
             )}
         </div>
@@ -953,6 +970,7 @@ const Payment = ({ inThem = null } = {}) => {
                 {method === 'cash' && renderCash()}
                 {method === 'qr' && renderQr()}
                 {method === 'code' && renderCode()}
+                {method === 'diem' && <DoiDiem gia={price} mau={primaryTextColor} onApDung={apDungVoucher} />}
             </div>
         );
     };

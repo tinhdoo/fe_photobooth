@@ -7,6 +7,7 @@ import { luaChonInThem, guiLenhInThem, ghiLuotInThem } from '../../utils/inThem'
 
 import { CLOUD_API_URL } from '../../config/api';
 import { guiRemote } from '../../remote/remoteBooth';
+import TichDiemKetQua from '../tichDiem/TichDiemKetQua';
 
 const AUTO_HOME_MS = 5 * 60 * 1000; // 5 phút không ai chạm
 const TRAN_MS = 15 * 60 * 1000; // trần tuyệt đối ở màn QR / màn lỗi (màn cảm ứng chạm ma vẫn về trang chủ)
@@ -34,6 +35,11 @@ const Result = () => {
     const coInThem = !isEventMode && sessionData.paymentStatus === 'completed' && !!sessionData.printedSessionId;
     const luaChon = luaChonInThem(configs, sessionData.layout, sessionData.source === 'upload');
     const [chon, setChon] = useState(0);
+    // Tích điểm thẻ mèo: lượt đã trả tiền (không phải Sự kiện), đã lưu cloud, không trả bằng voucher tích điểm.
+    const coTichDiem = String(configs?.tich_diem_bat) === 'true' && !isEventMode
+        && sessionData.paymentStatus === 'completed' && !!sessionId && !sessionData.paymentCodeLoyalty;
+    const [moTichDiem, setMoTichDiem] = useState(false);
+    const [daTichDiem, setDaTichDiem] = useState(false);
     const inThemRef = useRef(inThem);
     inThemRef.current = inThem;
 
@@ -283,6 +289,16 @@ const Result = () => {
                     </p>
                 )}
 
+                {coTichDiem && (
+                    <button
+                        type="button"
+                        onClick={() => setMoTichDiem(true)}
+                        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#B32025]/40 bg-[#FAF4D6] py-4 text-xl font-bold text-[#B32025] shadow-sm transition-none active:scale-95"
+                    >
+                        <span aria-hidden="true">🐱</span> {daTichDiem ? 'Xem thẻ tích điểm' : 'Tích điểm bằng số điện thoại'}
+                    </button>
+                )}
+
                 {coInThem && (
                     <button
                         type="button"
@@ -302,6 +318,14 @@ const Result = () => {
                     Về trang chủ
                 </button>
             </div>
+            {moTichDiem && (
+                <TichDiemKetQua
+                    maLuot={sessionId}
+                    mau={primaryTextColor}
+                    onDong={() => setMoTichDiem(false)}
+                    onDaTich={() => setDaTichDiem(true)}
+                />
+            )}
         </div>
     );
 };

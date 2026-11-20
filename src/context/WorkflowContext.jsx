@@ -61,6 +61,8 @@ const CLOUD_SYNC_KEYS = [
     'id_photo_price', 'id_photo_print_price',
     // Ghi chú dưới từng bố cục ở màn Chọn bố cục (utils/ghiChuBoCuc.js).
     'layout_notes',
+    // Tích điểm SĐT (thẻ mèo): admin bật ở trang Tích điểm trên cloud sau khi đã chạy db/tich_diem.sql.
+    'tich_diem_bat',
 ];
 
 const DEFAULT_CONFIGS = {

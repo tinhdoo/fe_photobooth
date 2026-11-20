@@ -20,12 +20,12 @@ const TEN_CHO = [
     ['mat_hinh', 'Máy ảnh mất hình'],
     ['ca_xem', 'Chỉnh ảnh: vẽ xem trước'], ['ca_do_mat', '· dò mặt 1 ảnh'], ['ca_goc', 'Chỉnh ảnh: làm ảnh gốc'],
 ];
-// Card đồ hoạ "phần mềm" = trình duyệt đang vẽ bằng CPU (thiếu driver / bị chặn) -> Chỉnh ảnh, Khung & in chậm.
+// Card đồ hoạ "phần mềm" = trình duyệt đang vẽ bằng CPU (Chrome không dùng được card: bị chặn / tắt tăng tốc / driver) -> Chỉnh ảnh, Khung & in chậm.
 const GPU_MEM = /swiftshader|llvmpipe|basic render|microsoft basic|khong_co_webgl/i;
 const gonGpu = (s) => {
     const t = String(s || '');
     if (/swiftshader/i.test(t)) return 'SwiftShader — không dùng được card, vẽ bằng CPU';
-    if (/basic render|microsoft basic/i.test(t)) return 'Microsoft Basic Render — thiếu driver card đồ hoạ';
+    if (/basic render|microsoft basic/i.test(t)) return 'Microsoft Basic Render — Chrome không dùng card đồ hoạ';
     if (/khong_co_webgl/.test(t)) return 'Không có WebGL';
     // "ANGLE (Intel, Intel(R) UHD Graphics (0x00009BC4) Direct3D11 vs_5_0 ps_5_0, D3D11)" -> "Intel(R) UHD Graphics"
     const m = t.match(/^ANGLE \([^,]*,\s*(.+?)\s*(?:\(0x[0-9a-f]+\)|Direct3D|OpenGL|Vulkan|,|\)$)/i);
