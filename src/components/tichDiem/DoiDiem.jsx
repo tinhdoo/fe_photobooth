@@ -57,7 +57,7 @@ const DoiDiem = ({ gia, mau, onApDung }) => {
 
     return (
         <div className="flex w-full flex-col items-center gap-5">
-            <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>Dùng điểm thẻ mèo</h3>
+            <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>Đổi điểm thẻ tích điểm</h3>
 
             {buoc === 'sdt' && (
                 <>

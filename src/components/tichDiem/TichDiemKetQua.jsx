@@ -66,7 +66,7 @@ const TichDiemKetQua = ({ maLuot, mau, onDong, onDaTich }) => {
             return `Còn ${con} dấu nữa là đổi được voucher 50K.`;
         }
         const cao = muc[muc.length - 1];
-        return `Lần sau ở bước Thanh toán, bấm "Dùng điểm" để đổi voucher ${cao.giaTri / 1000}K (hoặc tích tiếp lên mốc cao hơn).`;
+        return `Lần sau ở bước Thanh toán, bấm "Đổi điểm thẻ tích điểm" để lấy voucher ${cao.giaTri / 1000}K (hoặc tích tiếp lên mốc cao hơn).`;
     };
 
     return (
@@ -78,7 +78,7 @@ const TichDiemKetQua = ({ maLuot, mau, onDong, onDaTich }) => {
 
                 {buoc === 'sdt' && (
                     <>
-                        <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>Tích điểm thẻ mèo</h3>
+                        <h3 className="text-3xl font-bold" style={{ color: MAU_THE.vien }}>Tích điểm</h3>
                         <p className="text-center text-lg" style={{ color: mau }}>Nhập số điện thoại để được 1 dấu cho lượt chụp này.</p>
                         <p className="min-h-[2.5rem] text-4xl font-bold tracking-wider" style={{ color: MAU_THE.vien }}>{hienSdt(sdt) || ' '}</p>
                         {loi && <p className="text-center text-lg font-bold text-red-600">{loi}</p>}

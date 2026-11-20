@@ -717,7 +717,7 @@ const Payment = ({ inThem = null } = {}) => {
                 <div className="mt-5 space-y-2 rounded-2xl bg-[#F6E6C9]/45 p-4 text-left" style={{ color: secondaryTextColor }}>
                     {voucher && (
                         <div className="flex justify-between">
-                            <span>{voucher.tichDiem ? `Voucher thẻ mèo (${voucher.muc} dấu)` : `Mã ${voucher.code}`}</span>
+                            <span>{voucher.tichDiem ? `Voucher tích điểm (${voucher.muc} dấu)` : `Mã ${voucher.code}`}</span>
                             <strong>-{formatVnd(voucherValue)}</strong>
                         </div>
                     )}
@@ -802,7 +802,7 @@ const Payment = ({ inThem = null } = {}) => {
                     disabled={dangKiemMayIn}
                     className="mt-6 flex w-full max-w-3xl items-center justify-center gap-3 rounded-3xl border-2 border-[#A61018]/40 bg-[#FCF5D7] py-5 text-xl font-bold text-[#A61018] shadow-md active:scale-95 disabled:opacity-60"
                 >
-                    <span aria-hidden="true">🐱</span> Dùng điểm thẻ mèo
+                    <span aria-hidden="true">🐱</span> Đổi điểm thẻ tích điểm
                 </button>
             )}
             </>
