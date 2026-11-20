@@ -47,10 +47,10 @@ const Result = () => {
         if (viewUrl && qrRef.current) {
             qrRef.current.innerHTML = '';
             const qrCode = new QRCodeStyling({
-                width: 250,
-                height: 250,
+                width: 264,
+                height: 264,
                 data: viewUrl,
-                margin: 10,
+                margin: 8, // chừa lề trắng cho điện thoại quét dễ (cùng p-3 của khung)
                 qrOptions: { errorCorrectionLevel: 'L' },
                 dotsOptions: { color: secondaryTextColor, type: 'square' },
                 cornersSquareOptions: { type: 'extra-rounded', color: primaryTextColor },
@@ -272,11 +272,11 @@ const Result = () => {
                 {/* QR bên trái, các nút xếp dọc bên phải (cùng cỡ). */}
                 <div className="flex w-full items-stretch gap-8">
                     <div className="flex shrink-0 flex-col items-center">
-                        <div className="rounded-2xl border border-[#F6E6C9] bg-white p-4 shadow-inner">
+                        <div className="rounded-xl border-2 border-[#D5B895] bg-white p-3 shadow-sm">
                             {viewUrl ? (
                                 <div ref={qrRef} />
                             ) : (
-                                <div className="flex h-[250px] w-[250px] items-center justify-center rounded bg-[#F6E6C9]/35" style={{ color: `${primaryTextColor}80` }}>
+                                <div className="flex h-[264px] w-[264px] items-center justify-center rounded bg-[#F6E6C9]/35" style={{ color: `${primaryTextColor}80` }}>
                                     <QrCode size={64} />
                                 </div>
                             )}
